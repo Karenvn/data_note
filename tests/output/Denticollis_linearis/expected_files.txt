@@ -1,0 +1,8 @@
+Typical live runs for this species folder may also produce files such as:
+
+- Fig_2_Gscope.gif
+- Fig_3_Pretext.gif
+- Fig_4_Merqury.gif
+- Fig_5_Snail.gif
+- Fig_6_Blob.gif
+- icDenLine1.yaml

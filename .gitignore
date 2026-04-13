@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.pycache/
+.env
+.venv/
+venv/
+.DS_Store
+.vscode/
+error_log.txt
+*.code-workspace
+Icon?
+
+# Local run artifacts
+yaml_cache/

@@ -1,0 +1,9 @@
+key,value
+bioproject,PRJEB59796
+tax_id,333879
+species,Denticollis linearis
+tolid,icDenLine1
+assemblies_type,prim_alt
+assembly_name,icDenLine1.1
+jira,GRIT-781
+formatted_parent_projects,"Darwin Tree of Life Project (PRJEB40665) and Sanger Institute Tree of Life Programme (PRJEB43745)"
