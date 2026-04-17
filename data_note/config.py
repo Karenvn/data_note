@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import getpass
 import os
 from pathlib import Path
 from typing import Mapping
@@ -15,6 +16,11 @@ def _env_bool(value: str | None, *, default: bool = False) -> bool:
 
 def _expand_path(value: str) -> Path:
     return Path(value).expanduser()
+
+
+def _assets_root_from_env(env: Mapping[str, str], home: Path) -> Path:
+    value = env.get("DATA_NOTE_GN_ASSETS") or env.get("DATA_NOTE_SERVER_DATA") or str(home / "gn_assets")
+    return _expand_path(value)
 
 
 @dataclass(slots=True)
@@ -50,7 +56,7 @@ class AppConfig:
             entrez_email=env.get("ENTREZ_EMAIL", "default_email"),
             entrez_api_key=env.get("ENTREZ_API_KEY", "default_api_key"),
             debug_ensembl=_env_bool(env.get("GN_DEBUG_ENSEMBL"), default=False),
-            server_data_root=_expand_path(env.get("DATA_NOTE_SERVER_DATA", str(home / "server_data"))),
+            server_data_root=_assets_root_from_env(env, home),
             corrections_file=_expand_path(
                 env.get(
                     "DATA_NOTE_CORRECTIONS_FILE",
@@ -69,8 +75,8 @@ class AppConfig:
             jira_base_url=jira_base_url.rstrip("/") if jira_base_url else None,
             jira_domain=jira_domain,
             yaml_cache_dir=_expand_path(env.get("YAML_CACHE_DIR", "yaml_cache")),
-            yaml_ssh_user=env.get("YAML_SSH_USER"),
-            yaml_ssh_host=env.get("YAML_SSH_HOST"),
+            yaml_ssh_user=env.get("YAML_SSH_USER") or getpass.getuser(),
+            yaml_ssh_host=env.get("YAML_SSH_HOST") or "tol22",
             yaml_ssh_identity_file=_expand_path(
                 env.get("YAML_SSH_IDENTITY_FILE", str(home / ".ssh" / "newkey"))
             ),
@@ -80,6 +86,7 @@ class AppConfig:
         self._set("ENTREZ_EMAIL", self.entrez_email)
         self._set("ENTREZ_API_KEY", self.entrez_api_key)
         self._set("GN_DEBUG_ENSEMBL", "1" if self.debug_ensembl else "0")
+        self._set("DATA_NOTE_GN_ASSETS", self.server_data_root)
         self._set("DATA_NOTE_SERVER_DATA", self.server_data_root)
         self._set("DATA_NOTE_CORRECTIONS_FILE", self.corrections_file)
         self._set("DATA_NOTE_LR_SAMPLE_PREP_TSV", self.lr_sample_prep_tsv)

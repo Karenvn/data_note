@@ -49,7 +49,7 @@ class RenderingService:
         with open(output_path, "w") as handle:
             handle.write(rendered_markdown)
 
-        print(f"Markdown data note created: {output_path}")
+        print(f"Markdown genome note created: {output_path}")
         return output_dir
 
     def _populate_images(

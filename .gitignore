@@ -1,3 +1,17 @@
+# Ignore all top-level files and directories by default
+/*
+
+# Keep the package and selected top-level files
+!/data_note/
+!/data_note/**
+!/.gitignore
+!/.env.example
+!/README.md
+!/pyproject.toml
+!/tests/
+!/tests/**
+
+.DS_Store
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -6,11 +20,9 @@ __pycache__/
 .env
 .venv/
 venv/
-.DS_Store
 .vscode/
+.claude/
+yaml_cache/
 error_log.txt
 *.code-workspace
 Icon?
-
-# Local run artifacts
-yaml_cache/

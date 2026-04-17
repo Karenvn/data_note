@@ -374,21 +374,21 @@ def create_ensembl_dict(assembly: str, species: str, tax_id: Union[str, int]) ->
     # Strategy 1: Try Ensembl Organisms first (most genomes are here)
     organisms_result = search_ensembl_organisms(assembly, species)
     if organisms_result:
-        url, method = organisms_result
+        annotation_file_url, method = organisms_result
         source = "ensembl_organisms"
     else:
         # Strategy 2: Try main Ensembl only if organisms failed
         main_result = search_ensembl_main(species)
         if main_result:
-            url, method = main_result
+            annotation_file_url, method = main_result
             source = "ensembl_main"
         else:
             debug_print(f"No annotation found for {species} ({assembly})")
             return {}
     
-    debug_print(f"SUCCESS: Found annotation at {url} using {method}")
+    debug_print(f"SUCCESS: Found annotation at {annotation_file_url} using {method}")
 
-    resolved_assembly = _extract_assembly_from_url(url) or assembly
+    resolved_assembly = _extract_assembly_from_url(annotation_file_url) or assembly
 
     # Try to get beta site metadata if we have a tax_id
     beta_metadata = {}
@@ -397,6 +397,9 @@ def create_ensembl_dict(assembly: str, species: str, tax_id: Union[str, int]) ->
         beta_metadata = fetch_beta_metadata(tax_id, resolved_assembly)
         if beta_metadata:
             debug_print(f"Got beta metadata: {beta_metadata['annot_url']}")
+
+    # Prefer a human-readable beta Ensembl species page for readers.
+    reader_annotation_url = beta_metadata.get("annot_url", annotation_file_url)
     
     # Download and process the GTF file
     try:
@@ -404,7 +407,7 @@ def create_ensembl_dict(assembly: str, species: str, tax_id: Union[str, int]) ->
         with tempfile.TemporaryDirectory() as tempdirname:
             gtf_path = os.path.join(tempdirname, "annotation.gtf.gz")
             
-            response = requests.get(url, timeout=120)  # Longer timeout for large files
+            response = requests.get(annotation_file_url, timeout=120)  # Longer timeout for large files
             if response.status_code == 200:
                 with open(gtf_path, "wb") as f:
                     f.write(response.content)
@@ -417,7 +420,8 @@ def create_ensembl_dict(assembly: str, species: str, tax_id: Union[str, int]) ->
                 
                 # Add metadata
                 result.update({
-                    "ensembl_annotation_url": url,  # Keep the GTF URL for reference
+                    "ensembl_annotation_url": reader_annotation_url,
+                    "ensembl_annotation_file_url": annotation_file_url,
                     "ensembl_source": source,
                     "ensembl_species": species,
                     "ensembl_search_strategy": "Ensembl Organisms" if source == "ensembl_organisms" else "Ensembl Main Site",
@@ -432,7 +436,7 @@ def create_ensembl_dict(assembly: str, species: str, tax_id: Union[str, int]) ->
 
                 # Fallback so templates can render even without beta metadata
                 if "annot_url" not in result:
-                    result["annot_url"] = url
+                    result["annot_url"] = reader_annotation_url
                     result["annot_accession"] = resolved_assembly
                     result["source"] = "ensembl_ftp"
                 
@@ -442,7 +446,8 @@ def create_ensembl_dict(assembly: str, species: str, tax_id: Union[str, int]) ->
                 debug_print(f"Failed to download GTF file: HTTP {response.status_code}")
                 # Return basic info even if download failed
                 result = {
-                    "ensembl_annotation_url": url,
+                    "ensembl_annotation_url": reader_annotation_url,
+                    "ensembl_annotation_file_url": annotation_file_url,
                     "ensembl_source": source,
                     "ensembl_species": species,
                     "ensembl_search_strategy": "Ensembl Organisms" if source == "ensembl_organisms" else "Ensembl Main Site",
@@ -457,7 +462,7 @@ def create_ensembl_dict(assembly: str, species: str, tax_id: Union[str, int]) ->
 
                 # Fallback so templates can render even without beta metadata
                 if "annot_url" not in result:
-                    result["annot_url"] = url
+                    result["annot_url"] = reader_annotation_url
                     result["annot_accession"] = resolved_assembly
                     result["source"] = "ensembl_ftp"
                 
@@ -467,7 +472,8 @@ def create_ensembl_dict(assembly: str, species: str, tax_id: Union[str, int]) ->
         debug_print(f"Error processing GTF file: {e}")
         # Return basic info even if processing failed
         result = {
-            "ensembl_annotation_url": url,
+            "ensembl_annotation_url": reader_annotation_url,
+            "ensembl_annotation_file_url": annotation_file_url,
             "ensembl_source": source,
             "ensembl_species": species,
             "ensembl_search_strategy": "Ensembl Organisms" if source == "ensembl_organisms" else "Ensembl Main Site",
@@ -482,7 +488,7 @@ def create_ensembl_dict(assembly: str, species: str, tax_id: Union[str, int]) ->
 
         # Fallback so templates can render even without beta metadata
         if "annot_url" not in result:
-            result["annot_url"] = url
+            result["annot_url"] = reader_annotation_url
             result["annot_accession"] = resolved_assembly
             result["source"] = "ensembl_ftp"
         

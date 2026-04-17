@@ -7,7 +7,7 @@ from .pipeline import DataNotePipeline
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Generate data notes for a list of BioProject IDs.")
+    parser = argparse.ArgumentParser(description="Generate genome notes for a list of BioProject IDs.")
     parser.add_argument(
         "bioproject_file",
         nargs="?",

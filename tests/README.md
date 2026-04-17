@@ -4,7 +4,7 @@ This directory contains three kinds of colleague-facing material:
 
 - small unit tests that run without external services
 - fixture files for a lightweight smoke-test run
-- representative output folders that show the expected shape of a generated data-note folder
+- representative output folders that show the expected shape of a generated genome-note folder
 
 The fixture command is:
 

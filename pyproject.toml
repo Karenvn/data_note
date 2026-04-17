@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "data-note"
 version = "0.1.0"
-description = "Generate data note markdown from BioProject metadata"
+description = "Generate genome note markdown from BioProject metadata"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

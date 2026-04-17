@@ -15,6 +15,7 @@ import requests
 import pandas as pd
 import csv
 import io
+import os
 import xml.etree.ElementTree as ET
 from .formatting_utils import format_with_nbsp, bytes_to_gb, format_scientific
 
@@ -141,7 +142,7 @@ def fetch_read_runs_for_bioproject(bioproject):
         lines = resp.text.strip().splitlines()
         if len(lines) < 2:
             return []
-        return list(csv.DictReader(io.StringIO(resp.text), delimiter="\\t"))
+        return list(csv.DictReader(io.StringIO(resp.text), delimiter="\t"))
     except Exception as e:
         print(f"Filereport request failed for {bioproject}: {e}")
         return []
@@ -218,6 +219,121 @@ def fetch_runinfo_rows_for_accession(accession):
         return []
 
 
+def _ncbi_eutils_params(params=None):
+    merged = dict(params or {})
+    api_key = os.getenv("ENTREZ_API_KEY")
+    if api_key:
+        merged["api_key"] = api_key
+    return merged
+
+
+def _parse_sra_summary_result(summary):
+    expxml = summary.get("expxml", "")
+    runs_xml = summary.get("runs", "")
+    if not expxml or not runs_xml:
+        return []
+
+    try:
+        exp_root = ET.fromstring(f"<root>{expxml}</root>")
+        runs_root = ET.fromstring(f"<root>{runs_xml}</root>")
+    except ET.ParseError:
+        return []
+
+    platform_elem = exp_root.find(".//Platform")
+    statistics_elem = exp_root.find(".//Statistics")
+    study_elem = exp_root.find(".//Study")
+
+    instrument_platform = (platform_elem.text or "").strip() if platform_elem is not None and platform_elem.text else ""
+    instrument_model = ""
+    if platform_elem is not None:
+        instrument_model = platform_elem.get("instrument_model", "")
+
+    library_strategy_elem = exp_root.find(".//LIBRARY_STRATEGY")
+    library_name_elem = exp_root.find(".//LIBRARY_NAME")
+    library_protocol_elem = exp_root.find(".//LIBRARY_CONSTRUCTION_PROTOCOL")
+    biosample_elem = exp_root.find(".//Biosample")
+    bioproject_elem = exp_root.find(".//Bioproject")
+
+    read_count = _safe_int(statistics_elem.get("total_spots") if statistics_elem is not None else None, 0)
+    base_count = _safe_int(statistics_elem.get("total_bases") if statistics_elem is not None else None, 0)
+    submitted_bytes = _safe_int(statistics_elem.get("total_size") if statistics_elem is not None else None, 0)
+
+    rows = []
+    for run_elem in runs_root.findall(".//Run"):
+        rows.append({
+            "run_accession": run_elem.get("acc", ""),
+            "sample_accession": biosample_elem.text.strip() if biosample_elem is not None and biosample_elem.text else "",
+            "submitted_bytes": submitted_bytes,
+            "read_count": _safe_int(run_elem.get("total_spots"), read_count),
+            "base_count": _safe_int(run_elem.get("total_bases"), base_count),
+            "library_strategy": library_strategy_elem.text.strip() if library_strategy_elem is not None and library_strategy_elem.text else "",
+            "library_name": library_name_elem.text.strip() if library_name_elem is not None and library_name_elem.text else "",
+            "library_construction_protocol": (
+                library_protocol_elem.text.strip()
+                if library_protocol_elem is not None and library_protocol_elem.text
+                else ""
+            ),
+            "instrument_platform": instrument_platform,
+            "instrument_model": instrument_model,
+            "study_accession": bioproject_elem.text.strip() if bioproject_elem is not None and bioproject_elem.text else "",
+            "secondary_study_accession": study_elem.get("acc", "") if study_elem is not None else "",
+        })
+
+    return rows
+
+
+def fetch_sra_summary_rows_for_accession(accession):
+    """
+    Fetch SRA rows through NCBI E-utilities when the legacy runinfo endpoint is empty.
+    """
+    esearch_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+    esummary_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
+    search_terms = [f"{accession}[BioProject]", accession]
+
+    for term in search_terms:
+        try:
+            search_resp = requests.get(
+                esearch_url,
+                params=_ncbi_eutils_params({
+                    "db": "sra",
+                    "term": term,
+                    "retmode": "json",
+                    "retmax": 500,
+                }),
+                timeout=30,
+            )
+            if search_resp.status_code != 200:
+                continue
+
+            search_data = search_resp.json()
+            id_list = search_data.get("esearchresult", {}).get("idlist", [])
+            if not id_list:
+                continue
+
+            summary_resp = requests.get(
+                esummary_url,
+                params=_ncbi_eutils_params({
+                    "db": "sra",
+                    "id": ",".join(id_list),
+                    "retmode": "json",
+                }),
+                timeout=30,
+            )
+            if summary_resp.status_code != 200:
+                continue
+
+            summary_data = summary_resp.json().get("result", {})
+            rows = []
+            for uid in summary_data.get("uids", []):
+                rows.extend(_parse_sra_summary_result(summary_data.get(uid, {})))
+            if rows:
+                return rows
+        except Exception as e:
+            print(f"SRA E-utilities request failed for {accession} ({term}): {e}")
+
+    return []
+
+
 def fetch_runinfo_for_bioprojects(bioprojects):
     """
     Fetch and combine RunInfo rows for multiple accessions.
@@ -225,7 +341,14 @@ def fetch_runinfo_for_bioprojects(bioprojects):
     """
     rows = []
     for acc in bioprojects:
-        rows.extend(fetch_runinfo_rows_for_accession(acc))
+        accession_rows = fetch_runinfo_rows_for_accession(acc)
+        if not accession_rows:
+            print(f"No SRA RunInfo rows found for {acc}; trying NCBI E-utilities summary.")
+            accession_rows = fetch_sra_summary_rows_for_accession(acc)
+        if not accession_rows:
+            print(f"No SRA summary rows found for {acc}; falling back to ENA filereport.")
+            accession_rows = fetch_read_runs_for_bioproject(acc)
+        rows.extend(accession_rows)
     if not rows:
         return pd.DataFrame()
     # De-duplicate by run_accession if needed

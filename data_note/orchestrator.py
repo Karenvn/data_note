@@ -6,7 +6,7 @@ from typing import Any
 
 from Bio import Entrez
 
-from .models import NoteContext
+from .models import AssemblySelection, NoteContext
 from .services import (
     AssemblyService,
     BtkService,
@@ -93,7 +93,8 @@ class DataNoteOrchestrator:
         child_accessions = get_child_accessions_for_bioproject(umbrella_data)
         context.child_bioprojects = child_accessions
 
-        asm_dict = self.fetch_assembly_data(umbrella_data, tax_id, child_accessions)
+        assembly_selection = self.fetch_assembly_data(umbrella_data, tax_id, child_accessions)
+        asm_dict = assembly_selection.to_context_dict()
         print("These are the assemblies selected ", asm_dict)
         context.update(asm_dict)
         context.update(get_parent_bioprojects(bioproject))
@@ -221,7 +222,7 @@ class DataNoteOrchestrator:
         umbrella_data: dict[str, Any],
         tax_id: str,
         child_accessions: list[str] | None = None,
-    ) -> dict[str, Any]:
+    ) -> AssemblySelection:
         return self.assembly_service.build_context(umbrella_data, tax_id, child_accessions=child_accessions)
 
     def empty_sequencing_context(self) -> dict[str, Any]:

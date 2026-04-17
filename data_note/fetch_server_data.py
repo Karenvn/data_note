@@ -3,7 +3,7 @@
 # 15 January 2025 edited to have different functions for prim_alt assemblies and haplotype assemblies.
 # 16 June updated to use new GenomeScope naming convention and to use the format with nbsp convention
 # 17 June updated to parse the latest Merqury run
-# 10 Sept use absolute paths for server_data
+# 10 Sept use absolute paths for genome note assets
 
 import pandas as pd
 import os
@@ -13,13 +13,16 @@ import re
 import logging
 from .formatting_utils import format_with_nbsp
 
-SERVER_DATA = os.getenv("DATA_NOTE_SERVER_DATA", str(Path.home() / "server_data"))
+GN_ASSETS_ROOT = os.getenv(
+    "DATA_NOTE_GN_ASSETS",
+    os.getenv("DATA_NOTE_SERVER_DATA", str(Path.home() / "gn_assets")),
+)
 
 
 def parse_genomescope(tolid):
     """Parse GenomeScope2 results."""
     script_dir = Path(__file__).resolve().parent
-    gscope_dir = Path(SERVER_DATA) / "gscope_results" / tolid
+    gscope_dir = Path(GN_ASSETS_ROOT) / "gscope_results" / tolid
     # Try both naming conventions
     candidates = [
         gscope_dir / "fastk_genomescope_summary.txt",         # new
@@ -123,8 +126,8 @@ def read_merqury_results(tolid: str):
         format="%(asctime)s - %(levelname)s - %(message)s"
     )
     
-    merqury_dir = Path(SERVER_DATA) / "merqury_results" / tolid
-    #base = Path(__file__).resolve().parent.parent / 'server_data' / 'merqury_results' / tolid
+    merqury_dir = Path(GN_ASSETS_ROOT) / "merqury_results" / tolid
+    #base = Path(__file__).resolve().parent.parent / 'gn_assets' / 'merqury_results' / tolid
     stats_file = merqury_dir / f"{tolid}.completeness.stats"
     qv_file    = merqury_dir / f"{tolid}.qv"
 

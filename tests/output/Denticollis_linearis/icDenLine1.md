@@ -1,5 +1,5 @@
 ---
-title: "Example data note for Denticollis linearis"
+title: "Example genome note for Denticollis linearis"
 ---
 
 # Denticollis linearis
@@ -16,4 +16,4 @@ Darwin Tree of Life Project (PRJEB40665) and Sanger Institute Tree of Life Progr
 
 ## Summary
 
-This is a lightweight, sanitized example output included in the repository to show the structure of a generated markdown data note.
+This is a lightweight, sanitized example output included in the repository to show the structure of a generated markdown genome note.

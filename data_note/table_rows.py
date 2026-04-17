@@ -177,6 +177,7 @@ def make_table3_rows(context: dict) -> dict:
     species = context.get("species", "")
     tolid = context.get("tolid", "")
     assemblies_type = context.get("assemblies_type", "")
+    dual_haplotype_chromosomes = False
 
     def format_row(entry: dict, keys: list) -> list:
         return [flatten_cell(entry.get(k)) for k in keys]
@@ -186,25 +187,33 @@ def make_table3_rows(context: dict) -> dict:
         hap2_chrom = context.get("hap2_assembly_level") == "chromosome"
 
         if hap1_chrom and hap2_chrom:
+            dual_haplotype_chromosomes = True
             chromosome_data = context.get("chromosome_data", [])
             caption = f"Chromosomal pseudomolecules in both haplotypes of the genome assembly of *{species}*, {tolid}"
             alignment = "LLLL|LLLL"
-            rows.append("[**Haplotype 1**, [4] **Haplotype 2**")
-            rows.append("**INSDC accession**,**Name**,**Length (Mb)**,**GC%**,**INSDC accession**,**Name**,**Length (Mb)**,**GC%**")
             native_headers = [
-                "**Haplotype 1 INSDC accession**",
-                "**Haplotype 1 name**",
-                "**Haplotype 1 length (Mb)**",
-                "**Haplotype 1 GC%**",
-                "**Haplotype 2 INSDC accession**",
-                "**Haplotype 2 name**",
-                "**Haplotype 2 length (Mb)**",
-                "**Haplotype 2 GC%**",
+                "**Haplotype 1**",
+                "",
+                "",
+                "",
+                "**Haplotype 2**",
+                "",
+                "",
+                "",
             ]
+            native_rows.append([
+                "**INSDC accession**",
+                "**Name**",
+                "**Length (Mb)**",
+                "**GC%**",
+                "**INSDC accession**",
+                "**Name**",
+                "**Length (Mb)**",
+                "**GC%**",
+            ])
             for row in chromosome_data:
                 row1 = [flatten_cell(row.get(f"hap1_{k}")) for k in ["INSDC", "molecule", "length", "GC"]]
                 row2 = [flatten_cell(row.get(f"hap2_{k}")) for k in ["INSDC", "molecule", "length", "GC"]]
-                rows.append(",".join(row1 + row2))
                 native_rows.append(row1 + row2)
 
         elif hap1_chrom:
@@ -243,7 +252,14 @@ def make_table3_rows(context: dict) -> dict:
         native_headers = ["**Note**"]
         native_rows = [["No chromosome data available."]]
 
-    native_table = build_native_table(native_headers, native_rows)
+    if dual_haplotype_chromosomes:
+        native_table = {
+            "native_headers": native_headers,
+            "native_align": [":--"] * 8,
+            "native_rows": native_rows,
+        }
+    else:
+        native_table = build_native_table(native_headers, native_rows)
 
     return {
         "label": label,

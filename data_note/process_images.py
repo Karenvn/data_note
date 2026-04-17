@@ -10,7 +10,10 @@ from PIL import Image, ImageDraw, ImageFont
 from .process_chromosome_data import extract_chromosomes_only
 
 
-SERVER_DATA = os.getenv("DATA_NOTE_SERVER_DATA", str(Path.home() / "server_data"))
+GN_ASSETS_ROOT = os.getenv(
+    "DATA_NOTE_GN_ASSETS",
+    os.getenv("DATA_NOTE_SERVER_DATA", str(Path.home() / "gn_assets")),
+)
 
 
 
@@ -47,7 +50,7 @@ def convert_png_to_tif_and_gif(png_path, dpi=(300,300), max_width=None):
 def copy_gscope_image(tolid, download_dir):
     # Fetch the specified GenomeScope plot, write .png, then auto-produce .tif & .gif.
     script_dir = Path(__file__).resolve().parent
-    gscope_dir = Path(SERVER_DATA) / "gscope_results" / f"{tolid}" 
+    gscope_dir = Path(GN_ASSETS_ROOT) / "gscope_results" / f"{tolid}" 
 
     # Old and new naming conventions
     candidates = [
@@ -89,7 +92,7 @@ def copy_gscope_image(tolid, download_dir):
 def copy_merqury_image(tolid, download_dir):
     # Fetch the specified Merqury result image, write .png, then auto-produce .tif & .gif.
     script_dir = Path(__file__).resolve().parent
-    merqury_dir = Path(SERVER_DATA) / "merqury_results" / f"{tolid}" 
+    merqury_dir = Path(GN_ASSETS_ROOT) / "merqury_results" / f"{tolid}" 
 
     # Old and new naming conventions
     candidates = [
@@ -322,7 +325,7 @@ def label_pretext_map(
     vertical_label_field: str = "INSDC"
 ) -> tuple[Path,Path,Path]:
     """
-    1) Find server_data/pretext_images/{tolid}*.png
+    1) Find gn_assets/pretext_images/{tolid}*.png
     2) Extract chrom-list + genome length from context
     3) Draw labels
     4) Save Fig_3_Pretext.png/.tif/.gif in output_dir
@@ -338,7 +341,7 @@ def label_pretext_map(
         if font_path is None:
             font_path = "/System/Library/Fonts/Supplemental/Arial.ttf"  # fallback
     script_root = Path(__file__).resolve().parent.parent
-    pretext_dir = Path(SERVER_DATA) / "pretext_images"
+    pretext_dir = Path(GN_ASSETS_ROOT) / "pretext_images"
     logging.debug(f"[Pretext] Looking in {pretext_dir} for files named {tolid}*.png")
 
     matches = list(pretext_dir.glob(f"{tolid}*.png"))
@@ -654,11 +657,11 @@ def download_and_process_btk(accession, output_dir, dpi=(300,300), max_width=120
 
 def copy_merian_image(tolid, download_dir):
     """
-    Locate and copy the Merian plot image from server_data/merian/{tolid}/ to the output directory
+    Locate and copy the Merian plot image from gn_assets/merian/{tolid}/ to the output directory
     with a standard name Fig_3_Merian.png, then auto-produce .tif and .gif.
     Returns (png_path, tif_path, gif_path).
     """
-    merian_dir = Path(SERVER_DATA) / "merian" / tolid
+    merian_dir = Path(GN_ASSETS_ROOT) / "merian" / tolid
     if not merian_dir.exists():
         logging.warning(f"Merian directory not found for {tolid}: {merian_dir}")
         return None

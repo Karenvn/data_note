@@ -1,6 +1,6 @@
-# data_note
+# Genome notes workflow
 
-`data_note` is a Python workflow for generating publication-oriented genome or data note markdown from BioProject accession numbers. It collects assembly, sequencing, taxonomy and quality metadata from public sources, with optional enrichment from local Tree of Life systems, and renders a Pandoc-ready markdown note together with associated figures and context data.
+`data_note` is a Python workflow for generating publication-oriented genome note markdown from BioProject accession numbers. It collects assembly, sequencing, taxonomy and quality metadata from public sources, with optional addition of metadata from local systems, and renders a Pandoc-ready markdown note together with associated figures and context data.
 
 The repository is designed for genome note preparation rather than genome analysis. It treats metadata integration, text generation, figure preparation and standards-aware note assembly as a distinct workflow, separate from upstream pipelines that produce assembly and quality assessment outputs.
 
@@ -65,7 +65,8 @@ Important variables include:
 
 - `ENTREZ_EMAIL`
 - `ENTREZ_API_KEY`
-- `DATA_NOTE_SERVER_DATA`
+- `DATA_NOTE_GN_ASSETS` (preferred)
+- `DATA_NOTE_SERVER_DATA` (legacy alias)
 - `DATA_NOTE_CORRECTIONS_FILE`
 - `DATA_NOTE_LR_SAMPLE_PREP_TSV`
 
@@ -77,15 +78,15 @@ Optional internal variables include:
 - `JIRA_BASE_URL`
 - `JIRA_DOMAIN`
 - `YAML_CACHE_DIR`
-- `YAML_SSH_USER`
-- `YAML_SSH_HOST`
+- `YAML_SSH_USER` (optional; defaults to the current OS username for local server fetches)
+- `YAML_SSH_HOST` (optional; defaults to `tol22` for local server fetches)
 - `YAML_SSH_IDENTITY_FILE`
 
 ## Assumptions and limitations
 
 - The core pipeline is designed to work from public assembly project metadata.
 - Data for each BioProject should be available in ENA using a structure matching the Earth BioGenome Project recommendation for a Species X assembly project (see https://www.earthbiogenome.org/report-on-assembly-standards).
-- Assembly quality assets such as BlobToolKit, GenomeScope, Merqury, and a chromosome map are expected to exist already.
+- Assembly quality assets such as BlobToolKit, GenomeScope, Merqury, a chromosome map, ancestral linkage groups plots, and metagenome analyses are expected to exist already.
 - Templates are expected to be Jinja2-based markdown templates.
 - Some local enrichment paths are institution-specific and are not required for the public core pipeline.
 

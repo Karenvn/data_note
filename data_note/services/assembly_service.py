@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from ..models import AssemblyRecord, AssemblySelection
 from .. import taxonomy_mapper
 from ..fetch_bioproject_assemblies import (
     determine_assembly_type,
@@ -29,8 +30,7 @@ class AssemblyService:
         umbrella_data: dict[str, Any],
         tax_id: str,
         child_accessions: list[str] | None = None,
-    ) -> dict[str, Any]:
-        assembly_context: dict[str, Any] = {}
+    ) -> AssemblySelection:
         bioproject_id = umbrella_data.get("study_accession")
 
         if self.taxonomy_mapper_module.has_assembly_override(bioproject_id):
@@ -49,43 +49,87 @@ class AssemblyService:
         ]
 
         assemblies_type = self.assembly_type_resolver(assembly_dicts, tax_id)
-        assembly_context["assemblies_type"] = assemblies_type
         print(f"This is a {assemblies_type} assembly.")
 
         if assemblies_type == "hap_asm":
             hap1_dict, hap2_dict = self.haplotype_extractor(assembly_dicts, tax_id)
-            assembly_context.update(hap1_dict)
-            assembly_context.update(hap2_dict)
+            selection = AssemblySelection(
+                assemblies_type="hap_asm",
+                hap1=AssemblyRecord.from_legacy_dict(
+                    hap1_dict,
+                    accession_key="hap1_accession",
+                    assembly_name_key="hap1_assembly_name",
+                    role="hap1",
+                ),
+                hap2=AssemblyRecord.from_legacy_dict(
+                    hap2_dict,
+                    accession_key="hap2_accession",
+                    assembly_name_key="hap2_assembly_name",
+                    role="hap2",
+                ),
+            )
         elif assemblies_type == "prim_alt":
             primary_dict, alternate_dict = self.primary_alternate_extractor(
                 assembly_dicts,
                 tax_id,
                 allowed_tax_ids=allowed_tax_ids,
             )
-            assembly_context.update(primary_dict)
-            assembly_context.update(alternate_dict)
+            selection = AssemblySelection(
+                assemblies_type="prim_alt",
+                primary=AssemblyRecord.from_legacy_dict(
+                    primary_dict,
+                    accession_key="prim_accession",
+                    assembly_name_key="prim_assembly_name",
+                    role="primary",
+                ),
+                alternate=AssemblyRecord.from_legacy_dict(
+                    alternate_dict,
+                    accession_key="alt_accession",
+                    assembly_name_key="alt_assembly_name",
+                    role="alternate",
+                ),
+            )
         elif assemblies_type == "multiple_primary":
-            assembly_context.update(self.multiple_extractor(assembly_dicts, tax_id))
+            selection = AssemblySelection(
+                assemblies_type="multiple_primary",
+                extras=self.multiple_extractor(assembly_dicts, tax_id),
+            )
+        else:
+            selection = AssemblySelection(assemblies_type="prim_alt")
 
-        return assembly_context
+        selection.validate()
+        return selection
 
-    def _build_override_context(self, bioproject_id: str) -> dict[str, Any]:
+    def _build_override_context(self, bioproject_id: str) -> AssemblySelection:
         override = self.taxonomy_mapper_module.get_assembly_override(bioproject_id)
         print(f"  → Using manual assembly override for {bioproject_id}")
         print(f"    Reason: {override.get('reason')}")
 
-        assembly_context: dict[str, Any] = {"assemblies_type": "prim_alt"}
+        selection = AssemblySelection(assemblies_type="prim_alt")
         if "primary" in override:
-            assembly_context["prim_accession"] = override["primary"]["accession"]
-            assembly_context["prim_assembly_name"] = override["primary"]["name"]
+            selection.primary = AssemblyRecord(
+                accession=override["primary"]["accession"],
+                assembly_name=override["primary"]["name"],
+                role="primary",
+            )
         if "alternate" in override:
-            assembly_context["alt_accession"] = override["alternate"]["accession"]
-            assembly_context["alt_assembly_name"] = override["alternate"]["name"]
+            selection.alternate = AssemblyRecord(
+                accession=override["alternate"]["accession"],
+                assembly_name=override["alternate"]["name"],
+                role="alternate",
+            )
         if "hap1" in override:
-            assembly_context["assemblies_type"] = "hap_asm"
-            assembly_context["hap1_accession"] = override["hap1"]["accession"]
-            assembly_context["hap1_assembly_name"] = override["hap1"]["name"]
+            selection.assemblies_type = "hap_asm"
+            selection.hap1 = AssemblyRecord(
+                accession=override["hap1"]["accession"],
+                assembly_name=override["hap1"]["name"],
+                role="hap1",
+            )
         if "hap2" in override:
-            assembly_context["hap2_accession"] = override["hap2"]["accession"]
-            assembly_context["hap2_assembly_name"] = override["hap2"]["name"]
-        return assembly_context
+            selection.hap2 = AssemblyRecord(
+                accession=override["hap2"]["accession"],
+                assembly_name=override["hap2"]["name"],
+                role="hap2",
+            )
+        selection.validate()
+        return selection

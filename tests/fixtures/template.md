@@ -1,5 +1,5 @@
 ---
-title: "Example data note for {{ species }}"
+title: "Example genome note for {{ species }}"
 ---
 
 # {{ species }}

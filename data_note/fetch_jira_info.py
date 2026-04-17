@@ -8,8 +8,10 @@
 
 import requests
 from netrc import netrc
+import getpass
 import os
 import re
+import xml.etree.ElementTree as ET
 from .grit_jira_auth import GritJiraAuth
 from .formatting_utils import percentage_change_from_a_to_b, format_with_nbsp
 import yaml
@@ -18,6 +20,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from .yaml_utils import fetch_or_copy_yaml
 from num2words import num2words
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 try:
     from tol.sources.defaults import Defaults
@@ -26,6 +29,8 @@ except Exception:
     DEFAULT_JIRA_BASE_URL = "https://jira.sanger.ac.uk"
 
 YAML_FIELD_ID = "customfield_13408"
+JIRA_RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
+JIRA_TIMEOUT_SECONDS = int(os.getenv("JIRA_TIMEOUT_SECONDS", "30"))
 
 
 def _jira_base_url():
@@ -55,6 +60,76 @@ def _yaml_cache_dir() -> Path:
     return Path(os.getenv("YAML_CACHE_DIR", "yaml_cache"))
 
 
+def _yaml_ssh_target() -> tuple[str, str]:
+    return (
+        os.getenv("YAML_SSH_USER") or getpass.getuser(),
+        os.getenv("YAML_SSH_HOST") or "tol22",
+    )
+
+
+class JiraRequestError(requests.exceptions.RequestException):
+    """Raised when Jira returns an HTTP or transport failure."""
+
+
+def _extract_jira_error_details(response_text: str) -> str | None:
+    if not response_text:
+        return None
+
+    try:
+        root = ET.fromstring(response_text)
+    except ET.ParseError:
+        return None
+
+    message = root.findtext("message")
+    stack_trace = root.findtext("stack-trace") or ""
+    referral_match = re.search(r"referral number:\s*([0-9a-f\-]+)", stack_trace, re.IGNORECASE)
+    referral = referral_match.group(1) if referral_match else None
+
+    details = []
+    if message:
+        details.append(message.strip())
+    if referral:
+        details.append(f"log reference: {referral}")
+    return "; ".join(details) if details else None
+
+
+def _format_jira_error(response: requests.Response) -> str:
+    details = _extract_jira_error_details(response.text)
+    if details:
+        return details
+
+    snippet = response.text.strip().replace("\n", " ")
+    if snippet:
+        return snippet[:300]
+    return response.reason or "Unknown Jira error"
+
+
+@retry(
+    reraise=True,
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=8),
+    retry=retry_if_exception_type((requests.exceptions.RequestException,)),
+)
+def _jira_get(url: str, *, auth, timeout: int = JIRA_TIMEOUT_SECONDS) -> requests.Response:
+    response = requests.get(
+        url,
+        auth=auth,
+        timeout=timeout,
+        headers={"Accept": "application/json"},
+    )
+
+    if response.status_code in JIRA_RETRY_STATUS_CODES:
+        details = _format_jira_error(response)
+        print(f"Retryable JIRA HTTP error {response.status_code}: {details}")
+        raise JiraRequestError(f"HTTP {response.status_code}: {details}")
+
+    if response.status_code >= 400:
+        details = _format_jira_error(response)
+        raise JiraRequestError(f"HTTP {response.status_code}: {details}")
+
+    return response
+
+
 #-------------------------------- utilities-----------------
 
 def get_auth():
@@ -76,8 +151,7 @@ def download_jira_attachment_http(url: str, local_path: str, auth) -> str:
     Fetch a JIRA attachment by HTTP GET (using basic auth),
     save to `local_path`, and return that path.
     """
-    r = requests.get(url, auth=auth)
-    r.raise_for_status()
+    r = _jira_get(url, auth=auth)
     with open(local_path, "wb") as fh:
         fh.write(r.content)
     return local_path
@@ -123,11 +197,7 @@ def get_yaml_for_ticket(ticket, auth):
         return local_path
 
     if kind == "server" and data:
-        ssh_user = os.getenv("YAML_SSH_USER")
-        ssh_host = os.getenv("YAML_SSH_HOST")
-        if not ssh_user or not ssh_host:
-            print("[error] YAML_SSH_USER or YAML_SSH_HOST not configured; cannot fetch YAML from server.")
-            return None
+        ssh_user, ssh_host = _yaml_ssh_target()
 
         return fetch_or_copy_yaml(
             local_base  = str(_yaml_cache_dir()),
@@ -170,17 +240,16 @@ def fetch_jira_issue(jira_ticket_id):
         print(f"JIRA authentication unavailable: {exc}")
         return None
 
-    response = requests.get(url, auth=auth)
+    try:
+        response = _jira_get(url, auth=auth)
+    except requests.exceptions.RequestException as exc:
+        print(f"Failed to fetch JIRA issue {jira_ticket_id}: {exc}")
+        return None
 
-    if response.status_code == 200:
-        try:
-            return response.json()  
-        except requests.exceptions.JSONDecodeError as e:
-            print(f"Error parsing JSON: {e}")
-            print("Response content:", response.text) 
-            return None
-    else:
-        print(f"Failed to fetch JIRA issue: {response.status_code} - {response.reason}")
+    try:
+        return response.json()
+    except requests.exceptions.JSONDecodeError as e:
+        print(f"Error parsing JSON for JIRA issue {jira_ticket_id}: {e}")
         print("Response content:", response.text)
         return None
 
@@ -232,12 +301,11 @@ def fetch_and_parse_jira_data(jira_ticket_id):
             jira_dict[key] = value['value']
 
     # Ensure `chromosome_naming` value is lowercase if it exists
-    if 'chromosome_naming' in jira_dict:
+    if isinstance(jira_dict.get('chromosome_naming'), str):
         jira_dict['chromosome_naming'] = jira_dict['chromosome_naming'].lower()
-        
 
-    assembly_statistics = jira_dict['assembly_statistics']
-    gfastats = jira_dict['gfastats']
+    assembly_statistics = jira_dict.get('assembly_statistics') or ""
+    gfastats = jira_dict.get('gfastats') or ""
 
     stats_lines = assembly_statistics.split('\n')
     contig_data_found = False
@@ -351,24 +419,30 @@ def fetch_and_parse_jira_data(jira_ticket_id):
     jira_dict.pop('gfastats', None)
 
     attachments = response_data['fields'].get('attachment', [])
-    for attachment in attachments:
-        if attachment['filename'].endswith(('.yaml', '.yml')):
-            yaml_url = attachment['content']
-            yaml_response = requests.get(yaml_url, auth=auth)
-            if yaml_response.status_code == 200:
-                yaml_content = yaml_response.text
-                yaml_versions = parse_yaml_attachment(yaml_content)
-                jira_dict.update(yaml_versions)
-            break
+    yaml_attachment = next(
+        (
+            attachment
+            for attachment in attachments
+            if attachment['filename'].endswith(('.yaml', '.yml'))
+        ),
+        None,
+    )
 
-        # no YAML attachment found → fall back to Lustre path
+    if yaml_attachment:
+        yaml_url = yaml_attachment['content']
+        try:
+            yaml_response = _jira_get(yaml_url, auth=auth)
+        except requests.exceptions.RequestException as exc:
+            print(f"Failed to download YAML attachment for {jira_ticket_id}: {exc}")
         else:
-            # **only** one fallback, via get_yaml_for_ticket
-            local_yaml = get_yaml_for_ticket(jira_ticket_id, auth)
-            if local_yaml:
-                with open(local_yaml) as fh:
-                    yaml_versions = parse_yaml_attachment(fh.read())
-                jira_dict.update(yaml_versions)
+            yaml_versions = parse_yaml_attachment(yaml_response.text)
+            jira_dict.update(yaml_versions)
+    else:
+        local_yaml = get_yaml_for_ticket(jira_ticket_id, auth)
+        if local_yaml:
+            with open(local_yaml) as fh:
+                yaml_versions = parse_yaml_attachment(fh.read())
+            jira_dict.update(yaml_versions)
 
     return jira_dict
 
@@ -388,8 +462,7 @@ def download_jira_attachment(jira_ticket_id, directory):
         print(f"JIRA authentication unavailable: {exc}")
         return None
 
-    response = requests.get(url, auth=auth)
-    response.raise_for_status()
+    response = _jira_get(url, auth=auth)
     issue_data = response.json()
     attachments = issue_data['fields'].get('attachment', [])
 
