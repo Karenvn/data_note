@@ -1,6 +1,6 @@
 # Tests
 
-This directory contains three kinds of colleague-facing material:
+This directory contains three kinds of tests:
 
 - small unit tests that run without external services
 - fixture files for a lightweight smoke-test run
