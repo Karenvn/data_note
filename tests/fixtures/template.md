@@ -3,7 +3,8 @@ title: "Example genome note for {{ species }}"
 
 # author yaml block goes here
 
-{{ author_yaml_block }}
+author: []
+affiliation: []
 
 ---
 
