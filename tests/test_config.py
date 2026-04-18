@@ -30,6 +30,10 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.yaml_ssh_user, getpass.getuser())
         self.assertEqual(config.yaml_ssh_host, "tol22")
 
+    def test_author_db_defaults_to_local_sqlite(self) -> None:
+        config = load_config({})
+        self.assertEqual(config.author_db_path, Path.home() / "gn_assets" / "author_db.sqlite3")
+
 
 if __name__ == "__main__":
     unittest.main()

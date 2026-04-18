@@ -8,6 +8,7 @@ from Bio import Entrez
 
 from .models import AssemblySelection, NoteContext
 from .services import (
+    AuthorService,
     AssemblyService,
     BtkService,
     ChromosomeService,
@@ -49,6 +50,7 @@ class DataNoteOrchestrator:
         Entrez.email = os.getenv("ENTREZ_EMAIL", "default_email")
         Entrez.api_key = os.getenv("ENTREZ_API_KEY", "default_api_key")
 
+        self.author_service = AuthorService()
         self.assembly_service = AssemblyService()
         self.btk_service = BtkService()
         self.chromosome_service = ChromosomeService()
@@ -171,6 +173,7 @@ class DataNoteOrchestrator:
 
         context.update(fetch_barcoding_info(tolid))
         context.update(self.fetch_biosample_data(context.get("technology_data", {})))
+        context.update(self.build_author_context(context))
 
         print("Checking for Ensembl annotation...")
         try:
@@ -312,6 +315,9 @@ class DataNoteOrchestrator:
         if isoseq_sample_dict:
             biosample_context.update(isoseq_sample_dict)
         return biosample_context
+
+    def build_author_context(self, context: Mapping[str, Any]) -> dict[str, Any]:
+        return self.author_service.build_context(context)
 
     def fetch_taxonomic_data(self, tax_id: str) -> dict[str, Any]:
         return self.taxonomy_service.build_context(tax_id)

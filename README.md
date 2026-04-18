@@ -69,6 +69,7 @@ Important variables include:
 - `DATA_NOTE_SERVER_DATA` (legacy alias)
 - `DATA_NOTE_CORRECTIONS_FILE`
 - `DATA_NOTE_LR_SAMPLE_PREP_TSV`
+- `DATA_NOTE_AUTHOR_DB`
 
 Optional internal variables include:
 

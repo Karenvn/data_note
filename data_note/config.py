@@ -31,6 +31,7 @@ class AppConfig:
     server_data_root: Path
     corrections_file: Path
     lr_sample_prep_tsv: Path
+    author_db_path: Path
     portal_url: str | None
     portal_api_path: str
     tola_tsv_url: str | None
@@ -45,6 +46,7 @@ class AppConfig:
     def from_env(cls, environ: Mapping[str, str] | None = None) -> "AppConfig":
         env = environ or os.environ
         home = Path.home()
+        server_data_root = _assets_root_from_env(env, home)
 
         jira_base_url = env.get("JIRA_BASE_URL")
         jira_domain = env.get("JIRA_DOMAIN")
@@ -56,7 +58,7 @@ class AppConfig:
             entrez_email=env.get("ENTREZ_EMAIL", "default_email"),
             entrez_api_key=env.get("ENTREZ_API_KEY", "default_api_key"),
             debug_ensembl=_env_bool(env.get("GN_DEBUG_ENSEMBL"), default=False),
-            server_data_root=_assets_root_from_env(env, home),
+            server_data_root=server_data_root,
             corrections_file=_expand_path(
                 env.get(
                     "DATA_NOTE_CORRECTIONS_FILE",
@@ -68,6 +70,9 @@ class AppConfig:
                     "DATA_NOTE_LR_SAMPLE_PREP_TSV",
                     str(home / "genome_note_templates" / "LR_sample_prep.tsv"),
                 )
+            ),
+            author_db_path=_expand_path(
+                env.get("DATA_NOTE_AUTHOR_DB", str(server_data_root / "author_db.sqlite3"))
             ),
             portal_url=env.get("PORTAL_URL"),
             portal_api_path=env.get("PORTAL_API_PATH", "/api/v1"),
@@ -90,6 +95,7 @@ class AppConfig:
         self._set("DATA_NOTE_SERVER_DATA", self.server_data_root)
         self._set("DATA_NOTE_CORRECTIONS_FILE", self.corrections_file)
         self._set("DATA_NOTE_LR_SAMPLE_PREP_TSV", self.lr_sample_prep_tsv)
+        self._set("DATA_NOTE_AUTHOR_DB", self.author_db_path)
         self._set("PORTAL_API_PATH", self.portal_api_path)
         self._set("YAML_CACHE_DIR", self.yaml_cache_dir)
         self._set("YAML_SSH_IDENTITY_FILE", self.yaml_ssh_identity_file)
