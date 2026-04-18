@@ -10,7 +10,8 @@ This repository covers:
 
 - BioProject-driven metadata collection
 - assembly and sequencing summaries
-- fetching local metadata from JIRA / ToL Portal / local files
+- fetching local sample and sequencing metadata from the ToL Portal
+- fetching local quality analysis stats and figures
 - markdown note generation
 - figure and table preparation needed by the markdown note
 
@@ -56,6 +57,7 @@ Optional local integrations may also require:
 - `tol-sdk`
 - JIRA credentials in `~/.netrc`
 - local access to internal YAML and results files
+- access to a local author SQLite database.
 
 ## Environment
 
@@ -89,7 +91,7 @@ Optional internal variables include:
 - Data for each BioProject should be available in ENA using a structure matching the Earth BioGenome Project recommendation for a Species X assembly project (see https://www.earthbiogenome.org/report-on-assembly-standards).
 - Assembly quality assets such as BlobToolKit, GenomeScope, Merqury, a chromosome map, ancestral linkage groups plots, and metagenome analyses are expected to exist already.
 - Templates are expected to be Jinja2-based markdown templates.
-- Some local enrichment paths are institution-specific and are not required for the public core pipeline.
+- Some local metadata lookup steps are institution-specific and are not required for the public core pipeline.
 
 ## Repository Layout
 
