@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
 
-# refactored on 18 Jan 2025
-# Altered on 21 Feb 2025 to safe-convert the dictionary items in process_biosamples_sample_dict
-# For Psyche: added elevation and removed COPO
-# For Psyche: change the way geographic location is obtained from BioSamples.
-# 4 May ensure that the tolid from Biosamples for PacBio matches the assembly tolid
-# 5 May use non-breaking spaces instead of commas, which break pantable's handling of tables for markdown conversion
 
 
 import requests

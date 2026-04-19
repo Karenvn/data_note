@@ -1,9 +1,5 @@
 #! usr/bin/env python3
 
-# Rewritten to use ENA Portal API exclusively
-# Updated to eliminate dependency on ENA Browser API
-# Uses robust field-based queries for all operations
-
 import requests
 import pandas as pd
 import os

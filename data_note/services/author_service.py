@@ -164,6 +164,7 @@ class AuthorService:
                 s.biosample_accession,
                 s.tolid,
                 rt.code AS role,
+                sr.raw_name,
                 p.person_id,
                 p.canonical_name,
                 p.given_names,
@@ -206,7 +207,7 @@ class AuthorService:
             "sample_roles": [],
             "source_slots": [],
             "is_placeholder": False,
-            "raw_name": row["canonical_name"],
+            "raw_name": row["raw_name"] or row["canonical_name"],
         }
 
     def _merge_raw_name_fallbacks(
@@ -235,13 +236,15 @@ class AuthorService:
         existing = authors_by_key.get(key)
 
         if existing is None and author.get("person_id") is not None:
-            raw_key = ("raw", self._normalize_name(author["canonical_name"]))
-            raw_existing = authors_by_key.get(raw_key)
-            if raw_existing is not None and raw_existing.get("is_placeholder"):
-                existing = raw_existing
-                del authors_by_key[raw_key]
+            existing = self._match_existing_alias(author, authors_by_key)
+            if existing is not None and existing.get("is_placeholder"):
                 authors_by_key[key] = existing
                 self._upgrade_placeholder(existing, author)
+
+        if existing is None and author.get("is_placeholder"):
+            existing = self._match_existing_alias(author, authors_by_key)
+            if existing is not None:
+                authors_by_key[key] = existing
 
         if existing is None:
             existing = author
@@ -250,6 +253,8 @@ class AuthorService:
         elif existing is not author and author.get("person_id") is not None and existing.get("is_placeholder"):
             self._upgrade_placeholder(existing, author)
             authors_by_key[key] = existing
+
+        self._register_aliases(existing, authors_by_key)
 
         credit_roles = ROLE_CREDITS.get(slot_ref["role"], ())
         for credit_role in credit_roles:
@@ -268,6 +273,35 @@ class AuthorService:
             return ("person", str(person_id))
         return ("raw", AuthorService._normalize_name(author.get("raw_name") or author.get("canonical_name") or ""))
 
+    def _match_existing_alias(
+        self,
+        author: Mapping[str, Any],
+        authors_by_key: dict[tuple[str, str], dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        for alias_key in self._author_alias_keys(author):
+            existing = authors_by_key.get(alias_key)
+            if existing is not None:
+                return existing
+        return None
+
+    def _register_aliases(
+        self,
+        author: Mapping[str, Any],
+        authors_by_key: dict[tuple[str, str], dict[str, Any]],
+    ) -> None:
+        for alias_key in self._author_alias_keys(author):
+            existing = authors_by_key.get(alias_key)
+            if existing is None or existing.get("is_placeholder"):
+                authors_by_key[alias_key] = author
+
+    def _author_alias_keys(self, author: Mapping[str, Any]) -> set[tuple[str, str]]:
+        keys: set[tuple[str, str]] = set()
+        for field in ("raw_name", "canonical_name"):
+            normalized = self._normalize_name(author.get(field) or "")
+            if normalized:
+                keys.add(("raw", normalized))
+        return keys
+
     @staticmethod
     def _upgrade_placeholder(target: dict[str, Any], source: Mapping[str, Any]) -> None:
         target["person_id"] = source.get("person_id")
@@ -284,7 +318,7 @@ class AuthorService:
         if not normalized:
             return None
 
-        query = """
+        direct_query = """
             SELECT
                 p.person_id,
                 p.canonical_name,
@@ -321,7 +355,7 @@ class AuthorService:
         """
         rows = list(
             connection.execute(
-                query,
+                direct_query,
                 (
                     raw_name.strip(),
                     normalized,
@@ -331,14 +365,63 @@ class AuthorService:
                 ),
             ).fetchall()
         )
-        if not rows:
+        if rows:
+            exact_person_ids = {int(row["person_id"]) for row in rows}
+            if len(exact_person_ids) > 1:
+                return None
+            return self._author_from_person_row(rows[0], raw_name)
+
+        staged_query = """
+            SELECT DISTINCT srn.matched_person_id
+            FROM staging_role_name srn
+            WHERE srn.matched_person_id IS NOT NULL
+              AND srn.match_status != 'unmatched'
+              AND (
+                    lower(srn.raw_name) = lower(?)
+                 OR replace(replace(lower(srn.raw_name), '.', ''), ',', '') = ?
+                 OR lower(srn.cleaned_name) = lower(?)
+                 OR replace(replace(lower(srn.cleaned_name), '.', ''), ',', '') = ?
+              )
+        """
+        staged_person_ids = [
+            int(row[0])
+            for row in connection.execute(
+                staged_query,
+                (raw_name.strip(), normalized, raw_name.strip(), normalized),
+            ).fetchall()
+        ]
+        staged_person_ids = list(dict.fromkeys(staged_person_ids))
+        if len(staged_person_ids) != 1:
             return None
 
-        exact_person_ids = {int(row["person_id"]) for row in rows}
-        if len(exact_person_ids) > 1:
+        person_query = """
+            SELECT
+                p.person_id,
+                p.canonical_name,
+                p.given_names,
+                p.family_name,
+                p.orcid,
+                c.value AS email,
+                a.name AS affiliation
+            FROM person p
+            LEFT JOIN contact c
+                ON c.person_id = p.person_id
+               AND c.type = 'email'
+               AND c.is_primary = 1
+            LEFT JOIN person_affiliation pa
+                ON pa.person_id = p.person_id
+               AND pa.is_current = 1
+            LEFT JOIN affiliation a
+                ON a.affiliation_id = pa.affiliation_id
+            WHERE p.person_id = ?
+              AND p.is_active = 1
+        """
+        row = connection.execute(person_query, (staged_person_ids[0],)).fetchone()
+        if row is None:
             return None
+        return self._author_from_person_row(row, raw_name)
 
-        row = rows[0]
+    def _author_from_person_row(self, row: sqlite3.Row, raw_name: str) -> dict[str, Any]:
         given_names, family_name = self._split_person_name(
             row["given_names"], row["family_name"], row["canonical_name"]
         )
@@ -439,6 +522,16 @@ class AuthorService:
         parts = [part.strip() for part in affiliation_name.split(",") if part.strip()]
         if not parts:
             return {"organization": affiliation_name}
+        if len(parts) >= 5:
+            organization = ", ".join(parts[:-4])
+            city = ", ".join(parts[-4:-2])
+            state, country = parts[-2:]
+            return {
+                "organization": organization,
+                "city": city,
+                "state": state,
+                "country": country,
+            }
         if len(parts) >= 4:
             organization = ", ".join(parts[:-3])
             city, state, country = parts[-3:]

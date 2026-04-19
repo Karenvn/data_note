@@ -1,9 +1,5 @@
 #!/usr/bin/env python
 
-# 15 January 2025 edited to have different functions for prim_alt assemblies and haplotype assemblies.
-# 16 June updated to use new GenomeScope naming convention and to use the format with nbsp convention
-# 17 June updated to parse the latest Merqury run
-# 10 Sept use absolute paths for genome note assets
 
 import pandas as pd
 import os

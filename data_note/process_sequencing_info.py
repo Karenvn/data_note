@@ -1,14 +1,5 @@
 #!/usr/bin/env python
 
-# Modified to ensure that the technology_data and seq_data and summarised variables are all added to the context dictionary
-# seq_data is iterated through in the template to dynamically list all the read accessions
-# technology_data is used to access summary variables and is also used to find biosample details
-# summary gives totals of sequencing information for direct variable replacement
-# For Markdown output, need to call format_sequencing_rows_for_markdown
-# 12 April 2025 Extract "library_name"  to link to extraction_id
-# 4 May 2025 Ensuring that PacBio reads from other individuals are not included. 
-# 5 May switching to using non-breaking spaces rather than commas as thousands separators to prevent 
-# 3 September 2025 The ENA Portal API has changed
 
 
 import requests

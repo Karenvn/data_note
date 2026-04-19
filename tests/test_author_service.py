@@ -94,6 +94,21 @@ def _build_test_db(db_path: Path) -> None:
                 decided_by TEXT,
                 decided_at TEXT
             );
+
+            CREATE TABLE staging_role_name (
+                staging_id INTEGER PRIMARY KEY,
+                sample_id TEXT NOT NULL,
+                specimen_id TEXT,
+                role_code TEXT NOT NULL,
+                raw_name TEXT NOT NULL,
+                cleaned_name TEXT,
+                norm_raw_name TEXT NOT NULL,
+                source_field TEXT,
+                source TEXT,
+                matched_person_id INTEGER,
+                match_status TEXT NOT NULL DEFAULT 'unmatched',
+                loaded_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
 
@@ -116,6 +131,7 @@ def _build_test_db(db_path: Path) -> None:
                 ("2", "SPEC-H", "BS-H", "tol1", "Species one", "DTOL"),
                 ("3", "SPEC-R", "BS-R", "tol1", "Species one", "DTOL"),
                 ("4", "SPEC-F", "", "tol1", "Species one", "DTOL"),
+                ("5", "SPEC-S", "BS-S", "tol2", "Species two", "DTOL"),
             ],
         )
 
@@ -131,6 +147,8 @@ def _build_test_db(db_path: Path) -> None:
                 (4, "Dan Drew", "Dan", "Drew", ""),
                 (5, "Eve Ellis", "Eve", "Ellis", ""),
                 (6, "Fran Frost", "Fran", "Frost", ""),
+                (7, "Liam M. Crowley", "Liam M.", "Crowley", "0000-0001-6380-0329"),
+                (8, "Susan C. Taylor", "Susan C.", "Taylor", ""),
             ],
         )
 
@@ -143,6 +161,8 @@ def _build_test_db(db_path: Path) -> None:
                 (4, 4, "email", "dan@example.org", 1),
                 (5, 5, "email", "eve@example.org", 1),
                 (6, 6, "email", "fran@example.org", 1),
+                (7, 7, "email", "liam@example.org", 1),
+                (8, 8, "email", "susan@example.org", 1),
             ],
         )
 
@@ -151,6 +171,8 @@ def _build_test_db(db_path: Path) -> None:
             [
                 (1, "Museum of Testing, London, England, GB"),
                 (2, "Institute of Examples, Edinburgh, Scotland, GB"),
+                (3, "University of Oxford, Oxford, Oxfordshire, England, GB"),
+                (4, "Independent researcher, Berkhamsted, Hertfordshire, England, GB"),
             ],
         )
 
@@ -163,6 +185,8 @@ def _build_test_db(db_path: Path) -> None:
                 (4, 4, 2, 1),
                 (5, 5, 2, 1),
                 (6, 6, 2, 1),
+                (7, 7, 3, 1),
+                (8, 8, 4, 1),
             ],
         )
 
@@ -180,7 +204,23 @@ def _build_test_db(db_path: Path) -> None:
                 (6, "3", 5, 2, "Eve Ellis", "test"),
                 (7, "4", 6, 1, "Fran Frost", "test"),
                 (8, "4", 6, 2, "Fran Frost", "test"),
+                (9, "5", 8, 1, "Sue Taylor", "test"),
+                (10, "5", 8, 2, "Sue Taylor", "test"),
             ],
+        )
+
+        connection.execute(
+            """
+            INSERT INTO staging_role_name(
+                staging_id, sample_id, specimen_id, role_code, raw_name, cleaned_name,
+                norm_raw_name, source_field, source, matched_person_id, match_status
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                1, "1", "SPEC-P", "preserver", "Liam Crowley", "Liam M. Crowley",
+                "liam crowley", "test_field", "test", 7, "exact"
+            ),
         )
 
 
@@ -268,6 +308,52 @@ class AuthorServiceTests(unittest.TestCase):
             [{"credit": "Resources"}, {"credit": "Investigation"}],
         )
 
+    def test_uses_staged_name_match_for_corrected_raw_names(self) -> None:
+        context = {
+            "technology_data": {
+                "pacbio": {"pacbio_sample_accession": "missing-accession"},
+            },
+            "pacbio_collector": "Liam Crowley",
+        }
+
+        result = self.service.build_context(context)
+        self.assertEqual(
+            result["author_people"],
+            [
+                {
+                    "given-names": "Liam M.",
+                    "surname": "Crowley",
+                    "email": "liam@example.org",
+                    "orcid": "0000-0001-6380-0329",
+                    "affiliation": "1",
+                    "roles": [{"credit": "Resources"}, {"credit": "Investigation"}],
+                }
+            ],
+        )
+
+    def test_deduplicates_placeholder_when_sample_role_raw_name_matches_existing_person(self) -> None:
+        context = {
+            "technology_data": {
+                "hic": {"hic_sample_accession": "BS-S"},
+            },
+            "hic_collector": "Sue Taylor",
+            "hic_identifier": "Sue Taylor",
+        }
+
+        result = self.service.build_context(context)
+        self.assertEqual(
+            result["author_people"],
+            [
+                {
+                    "given-names": "Susan C.",
+                    "surname": "Taylor",
+                    "email": "susan@example.org",
+                    "affiliation": "1",
+                    "roles": [{"credit": "Resources"}, {"credit": "Investigation"}],
+                }
+            ],
+        )
+
     def test_returns_empty_yaml_block_when_database_is_missing(self) -> None:
         service = AuthorService(Path(self.tmpdir.name) / "does-not-exist.sqlite3")
         result = service.build_context(
@@ -280,6 +366,20 @@ class AuthorServiceTests(unittest.TestCase):
 
         self.assertEqual(result["author_people"], [])
         self.assertEqual(yaml.safe_load(result["author_yaml_block"]), {"author": [], "affiliation": []})
+
+    def test_parses_five_part_affiliations_with_city_and_county_together(self) -> None:
+        parsed = self.service._parse_affiliation(
+            "Wellcome Sanger Institute, Hinxton, Cambridgeshire, England, GB"
+        )
+        self.assertEqual(
+            parsed,
+            {
+                "organization": "Wellcome Sanger Institute",
+                "city": "Hinxton, Cambridgeshire",
+                "state": "England",
+                "country": "GB",
+            },
+        )
 
 
 if __name__ == "__main__":

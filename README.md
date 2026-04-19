@@ -2,7 +2,7 @@
 
 `data_note` is a Python workflow for generating publication-oriented genome note markdown from BioProject accession numbers. It collects assembly, sequencing, taxonomy and quality metadata from public sources, with optional addition of metadata from local systems, and renders a Pandoc-ready markdown note together with associated figures and context data.
 
-The repository is designed for genome note preparation rather than genome analysis. It treats metadata integration, text generation, figure preparation and standards-aware note assembly as a distinct workflow, separate from upstream pipelines that produce assembly and quality assessment outputs.
+The repository is designed for preparation of genome notes in markdown. It treats metadata integration, text generation and figure preparation as a distinct workflow, separate from upstream pipelines that produce genome assembly and quality assessment outputs.
 
 ## Scope
 

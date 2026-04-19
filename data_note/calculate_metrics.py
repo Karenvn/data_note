@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-# TO DO: modify for haploid assemblies
 
 import math
 

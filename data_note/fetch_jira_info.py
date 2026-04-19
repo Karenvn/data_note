@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 
-# Editing on 15 Jan: lowercase for chromosome_naming result.
-# Also fixed versions parsing.
-# 5 May switch to using nbsp for markdown (because commas break pantable functioning)
-# 16 July fetch yaml from server
-
 
 import requests
 from netrc import netrc
