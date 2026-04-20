@@ -49,13 +49,13 @@ python -m data_note --profile darwin --template_file ~/genome_note_templates/dto
 
 ## Architecture
 
-The refactor is now centered on a typed internal model with a flattened template context only at the rendering boundary.
+The refactor of genome note writing scripts is centered on a typed internal model with a flattened template context only at the point of filling the template.
 
 - `data_note/orchestrator.py` coordinates the end-to-end workflow for one BioProject.
 - `data_note/models/` contains typed slices for assembly, sequencing, sampling, curation, taxonomy, annotation, and quality metadata.
 - `data_note/models/note_data.py` bundles those typed slices into a single `NoteData` object during orchestration.
 - `data_note/services/context_assembler.py` is the boundary that flattens typed slices into the final template-facing `NoteContext`.
-- `data_note/profiles/` defines programme-specific behavior for Darwin, Psyche, and ASG.
+- `data_note/profiles/` defines programme-specific behaviour for Darwin, Psyche, and ASG.
 - `data_note/tables/` contains profile-specific table builders rather than one monolithic table module.
 
 The intended flow is:
