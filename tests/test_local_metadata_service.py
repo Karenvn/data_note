@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from data_note.models import AssemblyRecord, AssemblySelection
+from data_note.models import AssemblyRecord, AssemblySelection, CurationInfo
 from data_note.services.local_metadata_service import LocalMetadataService
 
 
@@ -33,8 +33,10 @@ class LocalMetadataServiceTests(unittest.TestCase):
             primary=AssemblyRecord(accession="GCA_1.1", assembly_name="ixFooBar1.1", role="primary"),
         )
 
-        context = service.build_context(selection, tolid="ixFooBar1")
+        curation = service.build_context(selection, tolid="ixFooBar1")
+        context = curation.to_context_dict()
 
+        self.assertIsInstance(curation, CurationInfo)
         self.assertEqual(provider.calls, [("GCA_1.1", "ixFooBar1", "ixFooBar1.1")])
         self.assertEqual(context["jira"], "GRIT-1000")
         self.assertEqual(context["jira_summary"], "GRIT-1000")
@@ -51,8 +53,10 @@ class LocalMetadataServiceTests(unittest.TestCase):
             hap2=AssemblyRecord(accession="GCA_h2", assembly_name="ixFooBar1.hap2.1", role="hap2"),
         )
 
-        context = service.build_context(selection, tolid="ixFooBar1")
+        curation = service.build_context(selection, tolid="ixFooBar1")
+        context = curation.to_context_dict()
 
+        self.assertIsInstance(curation, CurationInfo)
         self.assertEqual(provider.calls, [("GCA_h1", "ixFooBar1", "ixFooBar1.hap1.1")])
         self.assertEqual(context["jira"], "RC-2000")
         self.assertEqual(context["jira_summary"], "RC-2000")
@@ -68,7 +72,8 @@ class LocalMetadataServiceTests(unittest.TestCase):
             primary=AssemblyRecord(accession="GCA_1.1", assembly_name="ixFooBar1.1", role="primary"),
         )
 
-        context = service.build_context(selection, tolid="ixFooBar1")
+        curation = service.build_context(selection, tolid="ixFooBar1")
+        context = curation.to_context_dict()
 
         self.assertEqual(context, {})
 

@@ -5,7 +5,7 @@ from typing import Any, Callable
 
 from ..fetch_jira_info import fetch_and_parse_jira_data
 from ..local_metadata_provider import get_local_metadata_provider
-from ..models import AssemblySelection
+from ..models import AssemblySelection, CurationInfo
 
 
 @dataclass(slots=True)
@@ -19,8 +19,8 @@ class LocalMetadataService:
         tolid: str | None = None,
         *,
         species: str | None = None,
-    ) -> dict[str, Any]:
-        local_data_context: dict[str, Any] = {}
+    ) -> CurationInfo:
+        local_data_context = CurationInfo()
 
         accession, assembly_name = self._resolve_lookup_values(assembly_selection)
         if not accession:
@@ -39,11 +39,11 @@ class LocalMetadataService:
             return local_data_context
 
         print(f"Fetching Jira data for ticket: {jira_ticket}")
-        local_data_context["jira"] = jira_ticket
+        local_data_context.jira_ticket = jira_ticket
 
         jira_dict = self.jira_data_fetcher(jira_ticket) or {}
         if jira_dict:
-            local_data_context.update(jira_dict)
+            local_data_context.jira_fields.update(jira_dict)
         else:
             print(f"Warning: No Jira data found for ticket {jira_ticket}.")
 

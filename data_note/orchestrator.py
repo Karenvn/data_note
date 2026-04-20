@@ -11,9 +11,14 @@ from .models import (
     AssemblyCoverageInput,
     AssemblyDatasetsInfo,
     AssemblySelection,
+    BarcodingInfo,
     BtkSummary,
     ChromosomeSummary,
+    CurationBundle,
+    CurationInfo,
+    ExtractionInfo,
     NoteContext,
+    QualityMetrics,
     SamplingInfo,
     SequencingSummary,
 )
@@ -22,7 +27,8 @@ from .services import (
     AssemblyService,
     BtkService,
     ChromosomeService,
-    LocalMetadataService,
+    ContextAssembler,
+    CurationService,
     NcbiDatasetsService,
     RenderingService,
     SequencingService,
@@ -40,11 +46,6 @@ from .fetch_bioproject_assemblies import (
 )
 from .fetch_biosample_info import create_biosample_dict
 from .fetch_ensembl_info import create_ensembl_dict
-from .fetch_extraction_data import (
-    fallback_fetch_from_lr_sample_prep,
-    fetch_barcoding_info,
-    get_sequencing_and_extraction_metadata,
-)
 from .io_utils import dict_to_csv, load_and_apply_corrections, read_bioprojects_from_file
 from .process_chromosome_data import calculate_percentage_assembled
 from .profiles import ProgrammeProfile, get_profile
@@ -65,7 +66,8 @@ class DataNoteOrchestrator:
         self.assembly_service = AssemblyService()
         self.btk_service = BtkService()
         self.chromosome_service = ChromosomeService()
-        self.local_metadata_service = LocalMetadataService()
+        self.context_assembler = ContextAssembler()
+        self.curation_service = CurationService()
         self.ncbi_datasets_service = NcbiDatasetsService()
         self.rendering_service = RenderingService()
         self.sequencing_service = SequencingService()
@@ -86,7 +88,7 @@ class DataNoteOrchestrator:
         umbrella_data = fetch_data(bioproject)
         umbrella_project_dict = get_umbrella_project_details(umbrella_data, bioproject)
         print(umbrella_project_dict)
-        context.update(umbrella_project_dict)
+        context = self.context_assembler.merge(context, umbrella_project_dict)
 
         tax_id = context.tax_id or umbrella_project_dict["tax_id"]
         if taxonomy_mapper.has_tax_id_override(bioproject):
@@ -100,7 +102,7 @@ class DataNoteOrchestrator:
                 context.tax_id = tax_id
 
         print("The tax_id for this assembly is: ", tax_id)
-        context.update(self.fetch_taxonomic_data(tax_id))
+        context = self.context_assembler.merge(context, self.fetch_taxonomic_data(tax_id))
 
         species = context.species
         child_accessions = get_child_accessions_for_bioproject(umbrella_data)
@@ -111,12 +113,7 @@ class DataNoteOrchestrator:
         print("These are the assemblies selected ", assembly_bundle.selection.to_context_dict())
         context.assemblies_type = assembly_bundle.assemblies_type
         context.assembly_name = assembly_bundle.preferred_assembly_name()
-        context.update(get_parent_bioprojects(bioproject))
-
-        try:
-            context.update(self.process_local_data(assembly_selection, species, context.tolid))
-        except Exception as exc:
-            print(f"Warning: local data fetch failed for {bioproject}: {exc}")
+        context = self.context_assembler.merge(context, get_parent_bioprojects(bioproject))
 
         context.set_formatted_parent_projects()
 
@@ -148,7 +145,7 @@ class DataNoteOrchestrator:
         if assemblies_type in ["prim_alt", "hap_asm"]:
             assembly_bundle.btk = self.fetch_btk_info(assembly_selection)
 
-        context.update(assembly_bundle.to_context_dict())
+        context = self.context_assembler.merge(context, assembly_bundle)
 
         context.apply_known_tolid_fix(KNOWN_TOLID_FIX)
 
@@ -163,19 +160,22 @@ class DataNoteOrchestrator:
         print(f"The TOLID is {tolid}")
         sequencing_projects = child_accessions or [bioproject]
         sequencing_summary = self.process_sequencing_workflow(sequencing_projects, tolid)
-        context.update(sequencing_summary.to_context_dict())
+        context = self.context_assembler.merge(context, sequencing_summary)
         pacbio_library_name = sequencing_summary.pacbio_library_name()
         extraction_lookup_id = pacbio_library_name or tolid
-
         try:
-            context.update(self.process_extraction_info(extraction_lookup_id))
+            curation_bundle = self.process_curation_data(
+                assembly_selection,
+                species=species,
+                tolid=tolid,
+                extraction_lookup_id=extraction_lookup_id,
+            )
+            context = self.context_assembler.merge(context, curation_bundle)
         except Exception as exc:
-            logging.warning("Failed to process extraction info for %r: %s", extraction_lookup_id, exc)
-
-        context.update(fetch_barcoding_info(tolid))
+            logging.warning("Failed to process curation data for %r: %s", bioproject, exc)
         sampling_info = self.fetch_biosample_data(sequencing_summary.technology_data)
-        context.update(sampling_info.to_context_dict())
-        context.update(self.build_author_context(context))
+        context = self.context_assembler.merge(context, sampling_info)
+        context = self.context_assembler.merge(context, self.build_author_context(context))
 
         print("Checking for Ensembl annotation...")
         try:
@@ -192,13 +192,14 @@ class DataNoteOrchestrator:
                     f"{assembly_bundle.preferred_accession()}"
                 )
             else:
-                context.update(res)
+                context = self.context_assembler.merge(context, res)
                 if os.environ.get("GN_DEBUG_ENSEMBL") == "1":
                     print(f"Ensembl annotation: {res['ensembl_annotation_url']}")
         except Exception as exc:
             print(f"Warning: Ensembl fetch failed for {bioproject} ({assemblies_type}): {exc}")
 
-        context.update(self.process_server_data(assemblies_type, context["tolid"]))
+        quality_metrics = self.process_server_data(assemblies_type, context["tolid"])
+        context = self.context_assembler.merge(context, quality_metrics)
 
         corrections_file = os.getenv(
             "DATA_NOTE_CORRECTIONS_FILE",
@@ -231,70 +232,26 @@ class DataNoteOrchestrator:
     def process_sequencing_workflow(self, bioprojects: Any, tolid: str) -> SequencingSummary:
         return self.sequencing_service.build_context(bioprojects, tolid)
 
-    def process_extraction_info(self, library_name: str | None) -> dict[str, Any]:
-        extraction_context: dict[str, Any] = {}
-        lookup_id = str(library_name).strip() if library_name is not None else ""
-        if not lookup_id:
-            return extraction_context
+    def process_curation_data(
+        self,
+        assembly_selection: AssemblySelection,
+        *,
+        species: str | None,
+        tolid: str | None,
+        extraction_lookup_id: str | None,
+    ) -> CurationBundle:
+        return self.curation_service.build_context(
+            assembly_selection,
+            species=species,
+            tolid=tolid,
+            extraction_lookup_id=extraction_lookup_id,
+        )
 
-        seq_attrs, extraction_attrs = get_sequencing_and_extraction_metadata(lookup_id)
-        if seq_attrs:
-            extraction_context.update({key: value for key, value in seq_attrs.items()})
+    def process_extraction_info(self, library_name: str | None) -> ExtractionInfo:
+        return self.curation_service.build_extraction(library_name)
 
-        important_fields = [
-            "dna_yield_ng",
-            "qubit_ngul",
-            "volume_ul",
-            "ratio_260_280",
-            "ratio_260_230",
-            "fragment_size_kb",
-            "extraction_date",
-        ]
-
-        needs_fallback = False
-        if not extraction_attrs:
-            needs_fallback = True
-        else:
-            missing = [key for key in important_fields if extraction_attrs.get(key) in (None, "", float("nan"))]
-            if len(missing) >= len(important_fields) - 1:
-                needs_fallback = True
-
-        if extraction_attrs:
-            extraction_context.update({key: value for key, value in extraction_attrs.items()})
-
-        def _is_missing(value: Any) -> bool:
-            if value is None or value == "":
-                return True
-            try:
-                return value != value
-            except Exception:
-                return False
-
-        if needs_fallback:
-            print("Extraction info incomplete or missing. Falling back to local LR_sample_prep.tsv.")
-            fallback_attrs = fallback_fetch_from_lr_sample_prep(lookup_id)
-            if fallback_attrs:
-                for key, value in fallback_attrs.items():
-                    if _is_missing(extraction_context.get(key)):
-                        extraction_context[key] = value
-            else:
-                print(f"No fallback extraction info found for {lookup_id}.")
-        elif _is_missing(extraction_context.get("gqn")):
-            fallback_attrs = fallback_fetch_from_lr_sample_prep(lookup_id)
-            if fallback_attrs and not _is_missing(fallback_attrs.get("gqn")):
-                extraction_context["gqn"] = fallback_attrs.get("gqn")
-
-        extraction_protocol = extraction_context.get("extraction_protocol")
-        legacy_protocol = extraction_context.get("protocol")
-        if _is_missing(extraction_protocol) and not _is_missing(legacy_protocol):
-            extraction_context["extraction_protocol"] = legacy_protocol
-        elif _is_missing(legacy_protocol) and not _is_missing(extraction_protocol):
-            extraction_context["protocol"] = extraction_protocol
-
-        if _is_missing(extraction_context.get("sanger_sample_id")):
-            extraction_context["sanger_sample_id"] = lookup_id
-
-        return extraction_context
+    def process_barcoding_info(self, tolid: str | None) -> BarcodingInfo:
+        return self.curation_service.build_barcoding(tolid)
 
     def fetch_biosample_data(self, technology_data: dict[str, Any]) -> SamplingInfo:
         print("Accessing BioSample information from BioSamples.")
@@ -332,8 +289,8 @@ class DataNoteOrchestrator:
         assembly_selection: AssemblySelection,
         species: str | None,
         tolid: str | None,
-    ) -> dict[str, Any]:
-        return self.local_metadata_service.build_context(assembly_selection, tolid=tolid, species=species)
+    ) -> CurationInfo:
+        return self.curation_service.build_local_metadata(assembly_selection, tolid=tolid, species=species)
 
     def fetch_btk_info(
         self,
@@ -341,8 +298,8 @@ class DataNoteOrchestrator:
     ) -> BtkSummary:
         return self.btk_service.build_context(assembly_selection)
 
-    def process_server_data(self, assemblies_type: str | None, tolid: str) -> dict[str, Any]:
+    def process_server_data(self, assemblies_type: str | None, tolid: str) -> QualityMetrics:
         return self.server_data_service.build_context(assemblies_type, tolid)
 
     def write_note(self, template_file: str, context: dict[str, Any]) -> str:
-        return self.rendering_service.write_note(template_file, context)
+        return self.rendering_service.write_note(template_file, context, self.profile)

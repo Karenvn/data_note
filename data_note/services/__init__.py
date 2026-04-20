@@ -3,6 +3,8 @@ __all__ = [
     "AssemblyService",
     "BtkService",
     "ChromosomeService",
+    "ContextAssembler",
+    "CurationService",
     "LocalMetadataService",
     "NcbiDatasetsService",
     "RenderingService",
@@ -29,6 +31,14 @@ def __getattr__(name: str):
         from .chromosome_service import ChromosomeService
 
         return ChromosomeService
+    if name == "ContextAssembler":
+        from .context_assembler import ContextAssembler
+
+        return ContextAssembler
+    if name == "CurationService":
+        from .curation_service import CurationService
+
+        return CurationService
     if name == "LocalMetadataService":
         from .local_metadata_service import LocalMetadataService
 

@@ -42,6 +42,11 @@ python -m data_note --profile darwin --template_file ~/genome_note_templates/dto
 - Table 3 adds assigned Merian elements and, for dual chromosome-level haplotypes, reports haplotype 1 only.
 - Table 5 includes the extra Psyche software rows.
 
+`asg` is now also available as a profile name. It currently provides:
+- ASG figure numbering, including metagenome figure slots.
+- ASG table numbering, with software versions moved to `table6`.
+- an optional metagenome `table5` hook driven by `metagenome_table_headers` and `metagenome_table_rows` when metagenome output is available.
+
 For a lightweight in-repo smoke-test run, use the fixture files and do:
 
 ```bash
@@ -131,7 +136,7 @@ The repository also includes:
 - The supported entrypoint is `python -m data_note ...`.
 - `darwin` is the default profile.
 - `psyche` is now a separate profile with its own table module, but only the first table differences have been extracted so far.
-- `asg` is not yet implemented as a runtime profile.
+- `asg` is now scaffolded as a runtime profile, but metagenome-specific data collection and figure generation are not yet implemented in the core pipeline.
 - Internal integrations are environment dependent.
 
 
