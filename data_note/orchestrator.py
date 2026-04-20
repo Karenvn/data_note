@@ -94,7 +94,7 @@ class DataNoteOrchestrator:
         umbrella_data = fetch_data(bioproject)
         umbrella_project_dict = get_umbrella_project_details(umbrella_data, bioproject)
         print(umbrella_project_dict)
-        note_data.base_context.update(umbrella_project_dict)
+        note_data.base.update(umbrella_project_dict)
         context = self.context_assembler.build(note_data)
 
         tax_id = context.tax_id or umbrella_project_dict["tax_id"]
@@ -104,9 +104,9 @@ class DataNoteOrchestrator:
             if override_tax_id:
                 print(f"  -> Using tax_id override for {bioproject}: {tax_id} -> {override_tax_id}")
                 print(f"    Reason: {override.get('reason')}")
-                note_data.base_context["tax_id_umbrella"] = tax_id
+                note_data.base.tax_id_umbrella = tax_id
                 tax_id = str(override_tax_id)
-                note_data.base_context["tax_id"] = tax_id
+                note_data.base.tax_id = tax_id
 
         print("The tax_id for this assembly is: ", tax_id)
         note_data.taxonomy = self.fetch_taxonomic_data(tax_id)
@@ -114,19 +114,19 @@ class DataNoteOrchestrator:
 
         species = context.species
         child_accessions = get_child_accessions_for_bioproject(umbrella_data)
-        note_data.base_context["child_bioprojects"] = child_accessions
+        note_data.base.child_bioprojects = child_accessions
 
         assembly_selection = self.fetch_assembly_data(umbrella_data, tax_id, child_accessions)
         assembly_bundle = AssemblyBundle(selection=assembly_selection)
         note_data.assembly = assembly_bundle
         print("These are the assemblies selected ", assembly_bundle.selection.to_context_dict())
-        note_data.base_context["assemblies_type"] = assembly_bundle.assemblies_type
-        note_data.base_context["assembly_name"] = assembly_bundle.preferred_assembly_name()
-        note_data.base_context.update(get_parent_bioprojects(bioproject))
+        note_data.base.assemblies_type = assembly_bundle.assemblies_type
+        note_data.base.assembly_name = assembly_bundle.preferred_assembly_name()
+        note_data.base.update(get_parent_bioprojects(bioproject))
 
         context = self.context_assembler.build(note_data)
         context.set_formatted_parent_projects()
-        note_data.base_context["formatted_parent_projects"] = context.formatted_parent_projects
+        note_data.base.formatted_parent_projects = context.formatted_parent_projects
 
         assemblies_type = assembly_bundle.assemblies_type
         datasets_ok = True
@@ -134,13 +134,13 @@ class DataNoteOrchestrator:
             assembly_bundle.datasets = self.fetch_ncbi_datasets(assembly_selection)
         except Exception as exc:
             datasets_ok = False
-            note_data.base_context["ncbi_datasets_error"] = str(exc)
+            note_data.base.extras["ncbi_datasets_error"] = str(exc)
             print(f"Warning: NCBI datasets fetch failed for {bioproject} ({assemblies_type}): {exc}")
 
         context = self.context_assembler.build(note_data)
         context.ensure_tolid()
         if context.tolid:
-            note_data.base_context["tolid"] = context.tolid
+            note_data.base.tolid = context.tolid
 
         if datasets_ok:
             try:
@@ -160,15 +160,15 @@ class DataNoteOrchestrator:
         context = self.context_assembler.build(note_data)
         context.apply_known_tolid_fix(KNOWN_TOLID_FIX)
         if context.tolid:
-            note_data.base_context["tolid"] = context.tolid
+            note_data.base.tolid = context.tolid
 
         tolid = context.tolid
         try:
-            note_data.base_context["auto_text"] = summarise_genomes(tax_id, assembly_selection, tolid, show_tables=True)
+            note_data.base.auto_text = summarise_genomes(tax_id, assembly_selection, tolid, show_tables=True)
         except Exception as exc:
             print(f"Warning: auto intro failed for {bioproject}: {exc}")
-            note_data.base_context["auto_text_error"] = str(exc)
-            note_data.base_context["auto_text"] = ""
+            note_data.base.extras["auto_text_error"] = str(exc)
+            note_data.base.auto_text = ""
 
         print(f"The TOLID is {tolid}")
         sequencing_projects = child_accessions or [bioproject]
@@ -209,7 +209,7 @@ class DataNoteOrchestrator:
         except Exception as exc:
             print(f"Warning: Ensembl fetch failed for {bioproject} ({assemblies_type}): {exc}")
 
-        quality_metrics = self.process_server_data(assemblies_type, note_data.base_context.get("tolid"))
+        quality_metrics = self.process_server_data(assemblies_type, note_data.base.tolid)
         note_data.quality = quality_metrics
 
         context = self.context_assembler.build(note_data)

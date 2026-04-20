@@ -5,6 +5,7 @@ from typing import Any
 
 from .author import AuthorInfo
 from .assembly import AssemblyBundle
+from .base_note import BaseNoteInfo
 from .curation import CurationBundle
 from .metadata import AnnotationInfo, TaxonomyInfo
 from .quality import QualityMetrics
@@ -14,7 +15,7 @@ from .sequencing import SequencingSummary
 
 @dataclass(slots=True)
 class NoteData:
-    base_context: dict[str, Any] = field(default_factory=dict)
+    base: BaseNoteInfo = field(default_factory=BaseNoteInfo)
     taxonomy: TaxonomyInfo | None = None
     assembly: AssemblyBundle | None = None
     sequencing: SequencingSummary | None = None
@@ -26,7 +27,7 @@ class NoteData:
     extra_sections: list[Any] = field(default_factory=list)
 
     def context_sections(self) -> tuple[Any, ...]:
-        sections: list[Any] = [self.base_context]
+        sections: list[Any] = [self.base]
         if self.taxonomy is not None:
             sections.append(self.taxonomy)
         if self.assembly is not None:

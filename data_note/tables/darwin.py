@@ -18,6 +18,22 @@ def make_table1_rows(context):
         ["**Base count total**", f"{flatten_cell(context.get('pacbio_bases_gb'))} Gb", f"{flatten_cell(context.get('hic_bases_gb'))} Gb"],
     ]
 
+    if context.get("isoseq_sample_accession"):
+        headers.append("**Iso-Seq**")
+        isoseq_values = [
+            flatten_cell(context.get("isoseq_tolid")),
+            flatten_cell(context.get("isoseq_specimen_id")),
+            flatten_cell(context.get("isoseq_sample_derived_from")),
+            flatten_cell(context.get("isoseq_sample_accession")),
+            flatten_cell(context.get("isoseq_organism_part")),
+            flatten_cell(context.get("isoseq_instrument")),
+            flatten_cell(context.get("isoseq_run_accessions")),
+            f"{flatten_cell(context.get('isoseq_reads_millions'))} million",
+            f"{flatten_cell(context.get('isoseq_bases_gb'))} Gb",
+        ]
+        for i in range(len(rows)):
+            rows[i].append(isoseq_values[i])
+
     if context.get("rna_sample_accession"):
         headers.append("**RNA-seq**")
         rna_values = [
@@ -34,13 +50,14 @@ def make_table1_rows(context):
         for i in range(len(rows)):
             rows[i].append(rna_values[i])
 
+    num_cols = len(headers)
     native_table = build_native_table(headers, rows)
 
     return {
         "caption": f"Specimen and sequencing data for *{safe_str(context.get('species'))}* (BioProject {flatten_cell(context.get('bioproject'))})",
         "label": "tbl:table1",
-        "alignment": "LLLL" if context.get("rna_sample_accession") else "LLL",
-        "width": [0.25, 0.25, 0.25, 0.25] if context.get("rna_sample_accession") else [0.25, 0.25, 0.25],
+        "alignment": "L" * num_cols,
+        "width": [0.25] * num_cols if num_cols == 4 else ([0.20] * num_cols if num_cols == 5 else [0.25, 0.25, 0.25]),
         "rows": [",".join(headers)] + [",".join(r) for r in rows],
         **native_table,
     }

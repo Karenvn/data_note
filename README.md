@@ -38,9 +38,10 @@ python -m data_note --profile darwin --template_file ~/genome_note_templates/dto
 ```
 
 `psyche` is also available as a profile name. It now has its own table module, with the first extracted differences from Darwin:
-- Table 1 can include an Iso-Seq column.
 - Table 3 adds assigned Merian elements and, for dual chromosome-level haplotypes, reports haplotype 1 only.
 - Table 5 includes the extra Psyche software rows.
+
+All profiles can now include an Iso-Seq column in the specimen/sequencing table when Iso-Seq data is present.
 
 `asg` is now also available as a profile name. It currently provides:
 - ASG figure numbering, including metagenome figure slots.
@@ -55,8 +56,8 @@ The refactor of genome note writing scripts is centered on a typed internal mode
 - `data_note/models/` contains typed slices for assembly, sequencing, sampling, curation, taxonomy, annotation, and quality metadata.
 - `data_note/models/note_data.py` bundles those typed slices into a single `NoteData` object during orchestration.
 - `data_note/services/context_assembler.py` is the boundary that flattens typed slices into the final template-facing `NoteContext`.
-- `data_note/profiles/` defines programme-specific behaviour for Darwin, Psyche, and ASG.
-- `data_note/tables/` contains profile-specific table builders rather than one monolithic table module.
+- `data_note/profiles/` defines project-specific behaviour for Darwin, Psyche, and ASG.
+- `data_note/tables/` contains profile-specific table builders for the different Tree of Life projects.
 
 The intended flow is:
 
@@ -125,7 +126,7 @@ Optional internal variables include:
 - Data for each BioProject should be available in ENA using a structure matching the Earth BioGenome Project recommendation for a Species X assembly project (see https://www.earthbiogenome.org/report-on-assembly-standards).
 - Assembly quality assets such as BlobToolKit, GenomeScope, Merqury run results, a chromosome map, ancestral linkage groups plots, and metagenome analyses are expected to exist already.
 - Templates are expected to be Jinja2-based markdown templates.
-- Some local metadata lookup steps are institution-specific and are not required for the public core pipeline.
+- Some local metadata lookup steps rely on internal data, and are not required for the public core pipeline.
 
 ## Repository Layout
 

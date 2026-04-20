@@ -8,6 +8,7 @@ from data_note.models import (
     AssemblyBundle,
     AssemblyRecord,
     AssemblySelection,
+    BaseNoteInfo,
     NoteContext,
     NoteData,
     SequencingSummary,
@@ -57,9 +58,10 @@ class ContextAssemblerTests(unittest.TestCase):
     def test_build_accepts_note_data_bundle(self) -> None:
         assembler = ContextAssembler()
         note_data = NoteData(
-            base_context={"bioproject": "PRJEB1", "species": "Example species"},
+            base=BaseNoteInfo.from_mapping({"bioproject": "PRJEB1", "study_title": "Example study"}),
             taxonomy=TaxonomyInfo(
                 tax_id="9606",
+                species="Example species",
                 lineage="Eukaryota; Metazoa",
                 family="Hominidae",
                 common_name="human",

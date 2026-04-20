@@ -10,6 +10,7 @@ from .assembly import (
     BtkSummary,
     ChromosomeSummary,
 )
+from .base_note import BaseNoteInfo
 from .curation import BarcodingInfo, CurationBundle, CurationInfo, ExtractionInfo
 from .metadata import AnnotationInfo, TaxonomyInfo
 from .note_data import NoteData
@@ -28,6 +29,7 @@ __all__ = [
     "AuthorAffiliation",
     "AuthorInfo",
     "AuthorPerson",
+    "BaseNoteInfo",
     "BtkAssemblyRecord",
     "BtkSummary",
     "ChromosomeSummary",

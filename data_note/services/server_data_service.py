@@ -17,7 +17,10 @@ class ServerDataService:
     haplotype_merqury_fetcher: Callable[[str], dict[str, Any]] = get_merqury_results_haplotype_assemblies
     genomescope_fetcher: Callable[[str], dict[str, Any]] = parse_genomescope
 
-    def build_context(self, assemblies_type: str | None, tolid: str) -> QualityMetrics:
+    def build_context(self, assemblies_type: str | None, tolid: str | None) -> QualityMetrics:
+        if not tolid:
+            return QualityMetrics()
+
         merqury: dict[str, Any] = {}
         if assemblies_type == "prim_alt":
             merqury.update(self.prim_alt_merqury_fetcher(tolid))
