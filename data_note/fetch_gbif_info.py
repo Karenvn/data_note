@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 
+import logging
 import requests
 import re
 from collections import Counter
 from .formatting_utils import format_with_nbsp
 from .text_utils import oxford_comma_list
+
+logger = logging.getLogger(__name__)
 
 
 def extract_year_from_authorship(authorship):
@@ -47,7 +50,7 @@ def find_earliest_genus(synonyms_list, current_genus, specific_epithet):
         syn_authorship = synonym.get("authorship", "").strip()
         syn_status = synonym.get("taxonomicStatus", "")
         
-        print(f"  Analyzing: {syn_canonical} ({syn_authorship})")
+        logger.info("Analyzing synonym candidate: %s (%s)", syn_canonical, syn_authorship)
         
         # Extract genus from canonical name
         if syn_canonical and ' ' in syn_canonical:
@@ -69,7 +72,7 @@ def find_earliest_genus(synonyms_list, current_genus, specific_epithet):
                         'year': year,
                         'status': syn_status
                     })
-                    print(f"    -> Candidate: {syn_genus} (year: {year})")
+                    logger.info("Found synonym candidate genus %s (year: %s)", syn_genus, year)
     
     if not candidates:
         return None, None, None
@@ -78,12 +81,17 @@ def find_earliest_genus(synonyms_list, current_genus, specific_epithet):
     candidates.sort(key=lambda x: x['year'] if x['year'] is not None else 9999)
     
     earliest = candidates[0]
-    print(f"  Earliest genus: {earliest['genus']} from {earliest['year']} (was {earliest['combination']})")
+    logger.info(
+        "Earliest genus: %s from %s (was %s)",
+        earliest["genus"],
+        earliest["year"],
+        earliest["combination"],
+    )
     
     # Show other candidates for debugging
     if len(candidates) > 1:
         others = [f"{c['genus']} ({c['year']})" for c in candidates[1:]]
-        print(f"  Other genera in chronological order: {', '.join(others)}")
+        logger.info("Other genera in chronological order: %s", ", ".join(others))
     
     return earliest['genus'], earliest['combination'], earliest['year']#!/usr/bin/env python3
 
@@ -118,21 +126,21 @@ def normalize_authorship(authorship_str, original_genus=None, current_genus=None
         
         if gbif_has_brackets and should_have_brackets:
             verification_status = "CORRECT_WITH_BRACKETS"
-            print(f"✅ GBIF correctly has brackets: {original_genus} -> {current_genus}")
+            logger.info("GBIF correctly has brackets: %s -> %s", original_genus, current_genus)
             return authorship, verification_status  # Trust GBIF's formatting
         elif not gbif_has_brackets and should_have_brackets:
             verification_status = "GBIF_WRONG_MISSING_BRACKETS"
-            print(f"⚠️  GBIF missing brackets: {original_genus} -> {current_genus}")
+            logger.warning("GBIF missing brackets: %s -> %s", original_genus, current_genus)
             return f"({clean_authorship})", verification_status  # Add brackets
     elif not original_genus:
         # We couldn't determine the original genus - trust GBIF
         if gbif_has_brackets:
             verification_status = "TRUST_GBIF_WITH_BRACKETS"
-            print(f"🤷 Couldn't determine original genus, trusting GBIF brackets")
+            logger.info("Couldn't determine original genus, trusting GBIF brackets")
             return authorship, verification_status
         else:
             verification_status = "TRUST_GBIF_NO_BRACKETS" 
-            print(f"🤷 Couldn't determine original genus, trusting GBIF (no brackets)")
+            logger.info("Couldn't determine original genus, trusting GBIF without brackets")
             return clean_authorship, verification_status
     else:
         # original_genus == current_genus, so no brackets should be needed
@@ -140,11 +148,11 @@ def normalize_authorship(authorship_str, original_genus=None, current_genus=None
         
         if gbif_has_brackets and not should_have_brackets:
             verification_status = "GBIF_WRONG_HAS_BRACKETS"
-            print(f"⚠️  GBIF has brackets but shouldn't: species not moved from original genus")
+            logger.warning("GBIF has brackets but shouldn't: species not moved from original genus")
             return clean_authorship, verification_status  # Remove brackets
         elif not gbif_has_brackets and not should_have_brackets:
             verification_status = "CORRECT_NO_BRACKETS"
-            print(f"✅ GBIF correctly has no brackets: original placement maintained")
+            logger.info("GBIF correctly has no brackets: original placement maintained")
             return clean_authorship, verification_status
 
 
@@ -186,7 +194,7 @@ def fetch_taxonomy_info(species_name, include_history=True):
         if not usage_key:
             return tax_dict
             
-        print(f"GBIF usage key: {usage_key}")
+        logger.info("GBIF usage key: %s", usage_key)
         
         # Step 2: Get detailed species information
         species_url = f"https://api.gbif.org/v1/species/{usage_key}"
@@ -221,17 +229,17 @@ def fetch_taxonomy_info(species_name, include_history=True):
                         original_genus = basionym_genus
                         if basionym_species:
                             tax_dict["original_combination"] = basionym_species
-                            print(f"Found basionym with different genus: {basionym_species}")
+                            logger.info("Found basionym with different genus: %s", basionym_species)
                         
                         # Use basionym authorship if available
                         basionym_authorship = basionym_data.get("authorship", "")
                         if basionym_authorship:
                             raw_authorship = basionym_authorship
                     else:
-                        print(f"Basionym has same genus ({basionym_genus}), ignoring...")
+                        logger.info("Basionym has same genus (%s), ignoring...", basionym_genus)
                         
                 except requests.RequestException as e:
-                    print(f"Could not fetch basionym information: {e}")
+                    logger.warning("Could not fetch basionym information: %s", e)
             
             # Method 2: Check synonyms API for historical information
             if original_genus == current_genus:  # Only if we haven't found original genus yet
@@ -242,7 +250,7 @@ def fetch_taxonomy_info(species_name, include_history=True):
                     synonyms_data = synonyms_response.json()
                     
                     synonyms_list = synonyms_data.get("results", [])
-                    print(f"Found {len(synonyms_list)} synonyms")
+                    logger.info("Found %s synonyms", len(synonyms_list))
                     
                     # Find the chronologically earliest genus
                     earliest_genus, earliest_combination, earliest_year = find_earliest_genus(
@@ -252,12 +260,17 @@ def fetch_taxonomy_info(species_name, include_history=True):
                     if earliest_genus:
                         original_genus = earliest_genus
                         tax_dict["original_combination"] = earliest_combination
-                        print(f"Found original genus from chronological analysis: {original_genus} (was {earliest_combination}, {earliest_year})")
+                        logger.info(
+                            "Found original genus from chronological analysis: %s (was %s, %s)",
+                            original_genus,
+                            earliest_combination,
+                            earliest_year,
+                        )
                         
                 except requests.RequestException as e:
-                    print(f"Could not fetch synonyms: {e}")
+                    logger.warning("Could not fetch synonyms: %s", e)
         
-        print(f"Taxonomic history: {original_genus} -> {current_genus}")
+        logger.info("Taxonomic history: %s -> %s", original_genus, current_genus)
         
         # Step 4: Apply verification-based bracketing
         formatted_authorship, verification = normalize_authorship(
@@ -269,12 +282,12 @@ def fetch_taxonomy_info(species_name, include_history=True):
         tax_dict["tax_auth"] = formatted_authorship
         tax_dict["verification_status"] = verification  # New field for debugging
         
-        print(f"Final result: '{formatted_authorship}' (Status: {verification})")
+        logger.info("Final authorship result: %r (Status: %s)", formatted_authorship, verification)
         
         return tax_dict
         
     except requests.RequestException as e:
-        print(f"Error fetching taxonomy info: {e}")
+        logger.warning("Error fetching taxonomy info for %s: %s", species_name, e)
         return tax_dict
 
 

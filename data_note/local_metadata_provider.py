@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Iterable
 
@@ -21,6 +22,8 @@ except ImportError:
 DATA_NOTE_TOLA_TSV_URL = "DATA_NOTE_TOLA_TSV_URL"
 _MISSING_JIRA_VALUES = {"", "N/A", "nan", "None"}
 _CURATION_TOLID_FILTERS = ("grit_tolid.id", "tolid.id")
+
+logger = logging.getLogger(__name__)
 
 
 def _derive_tolid(tolid: str | None, assembly_name: str | None) -> str | None:
@@ -69,7 +72,7 @@ class PortalCurationMetadataProvider:
         try:
             ds = portal(retries=self.retries)
         except Exception as exc:
-            print(f"Portal curation lookup unavailable for {resolved_tolid}: {exc}")
+            logger.warning("Portal curation lookup unavailable for %s: %s", resolved_tolid, exc)
             return None
 
         for filter_name in _CURATION_TOLID_FILTERS:
@@ -127,7 +130,7 @@ class ToLASpreadsheetMetadataProvider:
                 low_memory=False,
             )
         except Exception as exc:
-            print(f"Local ToLA lookup unavailable for {accession}: {exc}")
+            logger.warning("Local ToLA lookup unavailable for %s: %s", accession, exc)
             return None
 
         info_df.columns = ["jira", "accession"]

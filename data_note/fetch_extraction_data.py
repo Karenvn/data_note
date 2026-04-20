@@ -6,6 +6,7 @@ Script to fetch extraction attributes from the ToL Portal.
 sanger_sample_id is the library name in the sequencing data
 
 """
+import logging
 import os
 import pandas as pd
 from pathlib import Path
@@ -20,18 +21,19 @@ except ImportError:
 
 
 PORTAL_API_PATH_DEFAULT = "/api/v1"
+logger = logging.getLogger(__name__)
 
 
 def _portal_datasource():
     if portal is None:
-        print("tol-sdk is not installed; skipping ToL Portal lookup.")
+        logger.info("tol-sdk is not installed; skipping ToL Portal lookup.")
         return None
 
     os.environ.setdefault("PORTAL_API_PATH", os.getenv("PORTAL_API_PATH", PORTAL_API_PATH_DEFAULT))
     try:
         return portal()
     except Exception as exc:
-        print(f"ToL Portal lookup unavailable: {exc}")
+        logger.warning("ToL Portal lookup unavailable: %s", exc)
         return None
 
 def _normalize_identifier(value):
@@ -202,7 +204,7 @@ def get_sequencing_and_extraction_metadata(sanger_sample_id):
     # --- Step 1: Try extraction directly ---
     extraction = _get_extraction_by_uid(ds, sanger_sample_id)
     if extraction:
-        print("Input matches an extraction UID directly.")
+        logger.info("Input matches an extraction UID directly.")
         extraction_attrs_renamed = _extract_extraction_attrs(extraction)
         return seq_attrs_renamed, extraction_attrs_renamed
 
@@ -251,7 +253,7 @@ def fallback_fetch_from_lr_sample_prep(sanger_sample_id, tsv_path=None):
         if candidate.exists():
             tsv_file = candidate
         else:
-            print(f"TSV file not found. Tried: {tsv_file} and {candidate}")
+            logger.warning("TSV file not found. Tried: %s and %s", tsv_file, candidate)
             return {}
 
     df = pd.read_csv(tsv_file, sep="\t")
@@ -269,7 +271,7 @@ def fallback_fetch_from_lr_sample_prep(sanger_sample_id, tsv_path=None):
     match = df[df["sanger_sample_id"] == sanger_sample_id]
 
     if match.empty:
-        print(f"Sanger sample ID {sanger_sample_id} not found in {tsv_path}.")
+        logger.warning("Sanger sample ID %s not found in %s.", sanger_sample_id, tsv_path)
         return {}
     
     row = match.iloc[0]

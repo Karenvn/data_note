@@ -1,5 +1,6 @@
 #! usr/bin/env python3
 
+import logging
 import requests
 import pandas as pd
 import os
@@ -9,6 +10,7 @@ pd.set_option('display.max_rows', 10)
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 120)
 pd.set_option('display.max_colwidth', None)
+logger = logging.getLogger(__name__)
 
 def fetch_data(bioproject_id):
     """Fetches umbrella project data using Portal API."""
@@ -22,12 +24,12 @@ def fetch_data(bioproject_id):
     
     response = requests.get(url, params=params)
     if response.status_code != 200:
-        print(f"Failed to get data for project {bioproject_id}")
+        logger.warning("Failed to get data for project %s", bioproject_id)
         return None
     
     data = response.json()
     if not data:
-        print(f"No data found for project {bioproject_id}")
+        logger.warning("No data found for project %s", bioproject_id)
         return None
     
     # Return the first matching study (should be exact match)
@@ -52,7 +54,7 @@ def get_child_accessions_for_bioproject(umbrella_data):
     if not bioproject_id:
         return []
     
-    print(f"  → Searching for child projects of {bioproject_id}...")
+    logger.info("Searching for child projects of %s...", bioproject_id)
     
     url = "https://www.ebi.ac.uk/ena/portal/api/search"
     params = {
@@ -64,7 +66,7 @@ def get_child_accessions_for_bioproject(umbrella_data):
     
     response = requests.get(url, params=params)
     if response.status_code != 200:
-        print(f"    ✗ Failed to get child projects for {bioproject_id}")
+        logger.warning("Failed to get child projects for %s", bioproject_id)
         return []
     
     data = response.json()
@@ -77,12 +79,12 @@ def get_child_accessions_for_bioproject(umbrella_data):
         if bioproject_id in parent_studies.split(';'):
             child_projects.append(study['study_accession'])
     
-    print(f"    → Found {len(child_projects)} child projects: {child_projects}")
+    logger.info("Found %s child projects for %s: %s", len(child_projects), bioproject_id, child_projects)
     return child_projects
 
 def fetch_and_update_assembly_details(bioproject):
     """Fetch assembly details for a given BioProject using Portal API."""
-    print(f"  → Fetching assemblies for bioproject: {bioproject}")
+    logger.info("Fetching assemblies for bioproject: %s", bioproject)
     
     url = "https://www.ebi.ac.uk/ena/portal/api/search"
     params = {
@@ -95,14 +97,14 @@ def fetch_and_update_assembly_details(bioproject):
     response = requests.get(url, params=params)
     
     if response.status_code != 200:
-        print(f"    ✗ Failed to get assemblies for project {bioproject}")
+        logger.warning("Failed to get assemblies for project %s", bioproject)
         return None
 
     assemblies = response.json()
-    print(f"    → Found {len(assemblies)} assemblies")
+    logger.info("Found %s assemblies for bioproject %s", len(assemblies), bioproject)
     
     if assemblies:
-        print(f"    → Assembly tax_ids found: {[asm.get('tax_id') for asm in assemblies]}")
+        logger.info("Assembly tax_ids found for %s: %s", bioproject, [asm.get('tax_id') for asm in assemblies])
 
     # Update assembly accessions to latest versions
     updated_assemblies = []
@@ -111,7 +113,7 @@ def fetch_and_update_assembly_details(bioproject):
         if current_accession:
             latest_accession, latest_assembly_name = assembly_version_checker.get_latest_revision(current_accession)
             if latest_accession != current_accession:
-                print(f"    → Updated assembly_set_accession: {current_accession} -> {latest_accession}")
+                logger.info("Updated assembly_set_accession: %s -> %s", current_accession, latest_accession)
                 assembly['assembly_set_accession'] = latest_accession
             if latest_assembly_name:
                 assembly['assembly_name'] = latest_assembly_name
@@ -132,7 +134,7 @@ def fetch_assembly_details(bioproject):
     response = requests.get(url, params=params)
     
     if response.status_code != 200:
-        print(f"Failed to get data for project {bioproject}")
+        logger.warning("Failed to get data for project %s", bioproject)
         return None
 
     assemblies = response.json()
@@ -143,7 +145,7 @@ def fetch_assembly_details(bioproject):
         current_accession = assembly['accession']
         latest_accession = assembly_version_checker.get_latest_revision(current_accession)
         if latest_accession != current_accession:
-            print(f"Updated accession: {current_accession} -> {latest_accession}")
+            logger.info("Updated accession: %s -> %s", current_accession, latest_accession)
         assembly['accession'] = latest_accession
         updated_assemblies.append(assembly)
 
@@ -246,7 +248,7 @@ def get_parent_bioprojects(bioproject_id):
     
     response = requests.get(url, params=params)
     if response.status_code != 200:
-        print(f"Failed to get data for project {bioproject_id}")
+        logger.warning("Failed to get data for project %s", bioproject_id)
         return {}
 
     data = response.json()
@@ -295,7 +297,7 @@ def get_parent_bioprojects(bioproject_id):
                 parent_project_dict[f"parentproject{index}_accession"] = parent_accession
                 parent_project_dict[f"parentproject{index}_project_name"] = best_name
         else:
-            print(f"Failed to fetch parent project details for accession {parent_accession}")
+            logger.warning("Failed to fetch parent project details for accession %s", parent_accession)
     
     parent_project_dict["parent_projects"] = parent_projects
     return parent_project_dict

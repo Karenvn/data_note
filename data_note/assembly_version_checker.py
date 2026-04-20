@@ -1,3 +1,4 @@
+import logging
 import os
 import requests
 from Bio import Entrez
@@ -6,6 +7,7 @@ from Bio import Entrez
 
 Entrez.email = os.getenv('ENTREZ_EMAIL', 'default_email')
 Entrez.api_key = os.getenv('ENTREZ_API_KEY', 'default_api_key')
+logger = logging.getLogger(__name__)
 
 def get_latest_revision(accession):
     """
@@ -43,23 +45,23 @@ def get_latest_revision(accession):
                         break
 
                 if not latest_accession:
-                    print(f"No matching {prefix} revision found for {accession}.")
+                    logger.warning("No matching %s revision found for %s.", prefix, accession)
                     return accession, None
 
                 if latest_accession != accession:
-                    print(f"Update found: {accession} -> {latest_accession} ({latest_assembly_name})")
+                    logger.info("Update found: %s -> %s (%s)", accession, latest_accession, latest_assembly_name)
                 else:
-                    print(f"No update needed for {accession} ({latest_assembly_name}).")
+                    logger.info("No update needed for %s (%s).", accession, latest_assembly_name)
 
                 return latest_accession, latest_assembly_name
             else:
-                print(f"No revisions found for {accession}.")
+                logger.info("No revisions found for %s.", accession)
                 return accession, None
         except ValueError:
-            print("Error processing JSON response.")
+            logger.warning("Error processing JSON response for %s.", accession)
             return accession, None
     else:
-        print(f"Failed to fetch revision history, status code: {response.status_code}")
+        logger.warning("Failed to fetch revision history for %s, status code: %s", accession, response.status_code)
         return accession, None
 
 

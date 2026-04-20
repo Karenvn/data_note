@@ -2,10 +2,13 @@
 
 
 
+import logging
 import requests
 import json
 import pandas as pd
 from .formatting_utils import format_with_nbsp, clean_numeric_string, safe_convert
+
+logger = logging.getLogger(__name__)
 
 def fetch_biosample_info(biosample_acc):
     """
@@ -27,10 +30,10 @@ def fetch_biosample_info(biosample_acc):
         data = response.json()
         #print(data)
     except requests.RequestException as e:
-        print(f"Request failed for biosample_acc {biosample_acc}: {e}")
+        logger.warning("Request failed for biosample accession %s: %s", biosample_acc, e)
         return {}
     except json.JSONDecodeError as e:
-        print(f"Failed to decode JSON response for {biosample_acc}. Error: {e}")
+        logger.warning("Failed to decode JSON response for %s: %s", biosample_acc, e)
         return {}
 
 
@@ -55,10 +58,10 @@ def fetch_tolid_from_biosamples(biosample_acc):
         biosample_info = fetch_biosample_info(biosample_acc)
         tolid = biosample_info.get('tolid')
         if tolid:
-            print(f"Fetched tolid from BioSamples for {biosample_acc}: {tolid}")
+            logger.info("Fetched ToLID from BioSamples for %s: %s", biosample_acc, tolid)
         return tolid
     except Exception as e:
-        print(f"Failed to fetch tolid from BioSamples for {biosample_acc}. Error: {e}")
+        logger.warning("Failed to fetch ToLID from BioSamples for %s: %s", biosample_acc, e)
         return None
 
 def get_biosample_tolid_map(biosample_ids):
@@ -168,7 +171,7 @@ def create_biosample_dict(technology_data):
             if not biosample_list:
                 continue
 
-            print(f"Fetching data for {tech_name} with {len(biosample_list)} sample(s)")
+            logger.info("Fetching data for %s with %s sample(s)", tech_name, len(biosample_list))
 
             try:
                 # Fetch primary sample for all shared metadata
@@ -198,7 +201,7 @@ def create_biosample_dict(technology_data):
                     sample_dicts[tech_name] = processed_sample_dict
 
             except Exception as e:
-                print(f"Failed to fetch data for {biosample_acc_str}. Error: {e}")
+                logger.warning("Failed to fetch data for %s: %s", biosample_acc_str, e)
 
 
     return (

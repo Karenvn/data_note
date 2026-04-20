@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import logging
 from typing import Any, Callable
 
 from ..fetch_extraction_data import (
@@ -16,6 +17,8 @@ from ..models import (
     ExtractionInfo,
 )
 from .local_metadata_service import LocalMetadataService
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -90,14 +93,14 @@ class CurationService:
                 return False
 
         if needs_fallback:
-            print("Extraction info incomplete or missing. Falling back to local LR_sample_prep.tsv.")
+            logger.info("Extraction info incomplete or missing. Falling back to local LR_sample_prep.tsv.")
             fallback_attrs = self.extraction_fallback_fetcher(lookup_id)
             if fallback_attrs:
                 for key, value in fallback_attrs.items():
                     if _is_missing(extraction_context.get(key)):
                         extraction_context[key] = value
             else:
-                print(f"No fallback extraction info found for {lookup_id}.")
+                logger.warning("No fallback extraction info found for %s.", lookup_id)
         elif _is_missing(extraction_context.get("gqn")):
             fallback_attrs = self.extraction_fallback_fetcher(lookup_id)
             if fallback_attrs and not _is_missing(fallback_attrs.get("gqn")):

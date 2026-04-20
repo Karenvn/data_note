@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import closing
 import sqlite3
 import tempfile
 import unittest
@@ -12,7 +13,7 @@ from data_note.services.author_service import AuthorService
 
 
 def _build_test_db(db_path: Path) -> None:
-    with sqlite3.connect(db_path) as connection:
+    with closing(sqlite3.connect(db_path)) as connection, connection:
         connection.executescript(
             """
             CREATE TABLE sample (

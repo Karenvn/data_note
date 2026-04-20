@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import getpass
-import io
 import unittest
-from contextlib import redirect_stdout
 from types import SimpleNamespace
 from unittest.mock import patch, sentinel
 
@@ -51,12 +49,11 @@ class FetchJiraInfoTests(unittest.TestCase):
         _mock_jira_get,
         _mock_get_auth,
     ) -> None:
-        stdout = io.StringIO()
-        with redirect_stdout(stdout):
+        with self.assertLogs("data_note.fetch_jira_info", level="WARNING") as logs:
             issue = fetch_jira_issue("GRIT-1124")
 
         self.assertIsNone(issue)
-        output = stdout.getvalue()
+        output = "\n".join(logs.output)
         self.assertIn("Failed to fetch JIRA issue GRIT-1124", output)
         self.assertIn("log reference: 84de793b-4464-43f9-b3b9-b96686cc907a", output)
 

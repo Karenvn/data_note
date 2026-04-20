@@ -1,16 +1,21 @@
 __all__ = [
     "AnnotationService",
+    "AnnotationQualityWorkflowService",
     "AuthorService",
     "AssemblyService",
+    "AssemblyWorkflowService",
     "BtkService",
     "ChromosomeService",
     "ContextAssembler",
     "CurationService",
+    "FigureService",
     "LocalMetadataService",
     "NcbiDatasetsService",
+    "RenderContextBuilder",
     "RenderingService",
     "SequencingFetchService",
     "SequencingService",
+    "SequencingWorkflowService",
     "ServerDataService",
     "TaxonomyService",
 ]
@@ -21,6 +26,10 @@ def __getattr__(name: str):
         from .annotation_service import AnnotationService
 
         return AnnotationService
+    if name == "AnnotationQualityWorkflowService":
+        from .annotation_quality_workflow_service import AnnotationQualityWorkflowService
+
+        return AnnotationQualityWorkflowService
     if name == "AuthorService":
         from .author_service import AuthorService
 
@@ -29,6 +38,10 @@ def __getattr__(name: str):
         from .assembly_service import AssemblyService
 
         return AssemblyService
+    if name == "AssemblyWorkflowService":
+        from .assembly_workflow_service import AssemblyWorkflowService
+
+        return AssemblyWorkflowService
     if name == "BtkService":
         from .btk_service import BtkService
 
@@ -45,6 +58,10 @@ def __getattr__(name: str):
         from .curation_service import CurationService
 
         return CurationService
+    if name == "FigureService":
+        from .figure_service import FigureService
+
+        return FigureService
     if name == "LocalMetadataService":
         from .local_metadata_service import LocalMetadataService
 
@@ -53,6 +70,10 @@ def __getattr__(name: str):
         from .ncbi_datasets_service import NcbiDatasetsService
 
         return NcbiDatasetsService
+    if name == "RenderContextBuilder":
+        from .render_context_builder import RenderContextBuilder
+
+        return RenderContextBuilder
     if name == "RenderingService":
         from .rendering_service import RenderingService
 
@@ -65,6 +86,10 @@ def __getattr__(name: str):
         from .sequencing_service import SequencingService
 
         return SequencingService
+    if name == "SequencingWorkflowService":
+        from .sequencing_workflow_service import SequencingWorkflowService
+
+        return SequencingWorkflowService
     if name == "ServerDataService":
         from .server_data_service import ServerDataService
 

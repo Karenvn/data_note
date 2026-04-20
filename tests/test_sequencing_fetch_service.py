@@ -59,6 +59,28 @@ class SequencingFetchServiceTests(unittest.TestCase):
         mock_summary.assert_called_once_with("PRJEB1")
         mock_ena.assert_called_once_with("PRJEB1")
 
+    def test_fetch_rows_for_accession_logs_single_message_when_all_sources_are_empty(self) -> None:
+        service = SequencingFetchService()
+
+        with patch.object(SequencingFetchService, "fetch_runinfo_rows_for_accession", return_value=[]) as mock_runinfo:
+            with patch.object(
+                SequencingFetchService, "fetch_sra_summary_rows_for_accession", return_value=[]
+            ) as mock_summary:
+                with patch.object(
+                    SequencingFetchService, "fetch_read_runs_for_bioproject", return_value=[]
+                ) as mock_ena:
+                    with self.assertLogs("data_note.services.sequencing_fetch_service", level="INFO") as logs:
+                        rows = service.fetch_rows_for_accession("PRJEB83598")
+
+        self.assertEqual(rows, [])
+        self.assertIn(
+            "No read-run metadata found for PRJEB83598 across SRA RunInfo, NCBI E-utilities, or ENA filereport.",
+            "\n".join(logs.output),
+        )
+        mock_runinfo.assert_called_once_with("PRJEB83598")
+        mock_summary.assert_called_once_with("PRJEB83598")
+        mock_ena.assert_called_once_with("PRJEB83598")
+
     @patch("data_note.services.sequencing_fetch_service.requests.get")
     def test_fetch_sra_summary_rows_for_accession_parses_ncbi_esummary(self, mock_get: Mock) -> None:
         mock_get.side_effect = [

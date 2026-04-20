@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import Any, Callable
 
 from ..models import AssemblyRecord, AssemblySelection
@@ -13,6 +14,8 @@ from ..fetch_bioproject_assemblies import (
     fetch_and_update_assembly_details,
     get_child_accessions_for_bioproject,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -49,7 +52,7 @@ class AssemblyService:
         ]
 
         assemblies_type = self.assembly_type_resolver(assembly_dicts, tax_id)
-        print(f"This is a {assemblies_type} assembly.")
+        logger.info("Detected %s assembly type.", assemblies_type)
 
         if assemblies_type == "hap_asm":
             hap1_dict, hap2_dict = self.haplotype_extractor(assembly_dicts, tax_id)
@@ -102,8 +105,11 @@ class AssemblyService:
 
     def _build_override_context(self, bioproject_id: str) -> AssemblySelection:
         override = self.taxonomy_mapper_module.get_assembly_override(bioproject_id)
-        print(f"  → Using manual assembly override for {bioproject_id}")
-        print(f"    Reason: {override.get('reason')}")
+        logger.info(
+            "Using manual assembly override for %s (%s)",
+            bioproject_id,
+            override.get("reason"),
+        )
 
         selection = AssemblySelection(assemblies_type="prim_alt")
         if "primary" in override:

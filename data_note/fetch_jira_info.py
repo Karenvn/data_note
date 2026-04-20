@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 
+import logging
 import requests
 from netrc import netrc
 import getpass
@@ -26,6 +27,7 @@ except Exception:
 YAML_FIELD_ID = "customfield_13408"
 JIRA_RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 JIRA_TIMEOUT_SECONDS = int(os.getenv("JIRA_TIMEOUT_SECONDS", "30"))
+logger = logging.getLogger(__name__)
 
 
 def _jira_base_url():
@@ -115,7 +117,7 @@ def _jira_get(url: str, *, auth, timeout: int = JIRA_TIMEOUT_SECONDS) -> request
 
     if response.status_code in JIRA_RETRY_STATUS_CODES:
         details = _format_jira_error(response)
-        print(f"Retryable JIRA HTTP error {response.status_code}: {details}")
+        logger.warning("Retryable JIRA HTTP error %s: %s", response.status_code, details)
         raise JiraRequestError(f"HTTP {response.status_code}: {details}")
 
     if response.status_code >= 400:
@@ -202,7 +204,7 @@ def get_yaml_for_ticket(ticket, auth):
             ssh_host    = ssh_host
         )
 
-    print(f"[error] No YAML available for ticket {ticket}")
+    logger.error("No YAML available for ticket %s", ticket)
     return None
 
 
@@ -224,7 +226,7 @@ def fetch_jira_issue(jira_ticket_id):
     """ Fetch a JIRA issue using the ticket ID from ToLA spreadsheet. """
     jira_base_url = _jira_base_url()
     if not jira_base_url:
-        print("JIRA is not configured; skipping JIRA lookup.")
+        logger.info("JIRA is not configured; skipping JIRA lookup.")
         return None
 
     url = f"{jira_base_url}/rest/api/2/issue/{jira_ticket_id}"
@@ -232,33 +234,33 @@ def fetch_jira_issue(jira_ticket_id):
     try:
         auth = get_auth()
     except Exception as exc:
-        print(f"JIRA authentication unavailable: {exc}")
+        logger.warning("JIRA authentication unavailable: %s", exc)
         return None
 
     try:
         response = _jira_get(url, auth=auth)
     except requests.exceptions.RequestException as exc:
-        print(f"Failed to fetch JIRA issue {jira_ticket_id}: {exc}")
+        logger.warning("Failed to fetch JIRA issue %s: %s", jira_ticket_id, exc)
         return None
 
     try:
         return response.json()
     except requests.exceptions.JSONDecodeError as e:
-        print(f"Error parsing JSON for JIRA issue {jira_ticket_id}: {e}")
-        print("Response content:", response.text)
+        logger.warning("Error parsing JSON for JIRA issue %s: %s", jira_ticket_id, e)
+        logger.debug("JIRA response content for %s: %s", jira_ticket_id, response.text)
         return None
 
 
 def fetch_and_parse_jira_data(jira_ticket_id):
     """ Fetch and process JIRA issue data based on specified field IDs within the JSON data. """
     if not _jira_base_url():
-        print("JIRA is not configured; skipping JIRA enrichment.")
+        logger.info("JIRA is not configured; skipping JIRA enrichment.")
         return {}
 
     try:
         auth = get_auth()
     except Exception as exc:
-        print(f"JIRA authentication unavailable: {exc}")
+        logger.warning("JIRA authentication unavailable: %s", exc)
         return {}
 
     response_data = fetch_jira_issue(jira_ticket_id)
@@ -428,7 +430,7 @@ def fetch_and_parse_jira_data(jira_ticket_id):
         try:
             yaml_response = _jira_get(yaml_url, auth=auth)
         except requests.exceptions.RequestException as exc:
-            print(f"Failed to download YAML attachment for {jira_ticket_id}: {exc}")
+            logger.warning("Failed to download YAML attachment for %s: %s", jira_ticket_id, exc)
         else:
             yaml_versions = parse_yaml_attachment(yaml_response.text)
             jira_dict.update(yaml_versions)
@@ -446,7 +448,7 @@ def download_jira_attachment(jira_ticket_id, directory):
     """Find a .yaml attachment on the JIRA issue and download it."""
     jira_base_url = _jira_base_url()
     if not jira_base_url:
-        print("JIRA is not configured; skipping attachment download.")
+        logger.info("JIRA is not configured; skipping attachment download.")
         return None
 
     url = f"{jira_base_url}/rest/api/2/issue/{jira_ticket_id}?fields=attachment"
@@ -454,7 +456,7 @@ def download_jira_attachment(jira_ticket_id, directory):
     try:
         auth = get_auth()
     except Exception as exc:
-        print(f"JIRA authentication unavailable: {exc}")
+        logger.warning("JIRA authentication unavailable: %s", exc)
         return None
 
     response = _jira_get(url, auth=auth)
@@ -466,11 +468,11 @@ def download_jira_attachment(jira_ticket_id, directory):
         if fn.lower().endswith(('.yaml', '.yml')):
             download_url = attachment['content']
             local_path = os.path.join(directory, fn)
-            print(f"[info] Downloading JIRA attachment → {local_path}")
+            logger.info("Downloading JIRA attachment to %s", local_path)
             # delegate the actual GET + write to our helper:
             return download_jira_attachment_http(download_url, local_path, auth)
 
-    print("[warn] No YAML attachment found on JIRA issue")
+    logger.warning("No YAML attachment found on JIRA issue")
     return None
 
 
@@ -503,7 +505,7 @@ def parse_yaml_attachment(yaml_content):
                     if key in versions:
                         versions[key] = None
     except yaml.YAMLError as e:
-        print(f"Error parsing YAML: {e}")
+        logger.warning("Error parsing YAML: %s", e)
 
     return versions
 

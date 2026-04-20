@@ -2,11 +2,14 @@
 
 # Script to access images, BUSCO scores and software information for a BlobToolKit run
 
+import logging
 import os
 import subprocess
 import requests
 import json
 from .formatting_utils import format_with_nbsp
+
+logger = logging.getLogger(__name__)
 
 
 def build_btk_urls(assembly_accession, prefix=""):
@@ -48,12 +51,12 @@ def fetch_and_parse_summary(assembly_accession, prefix=''):
         resp.raise_for_status()
         data = resp.json()
     except requests.exceptions.RequestException as e:
-        print(f"Failed to fetch BTK summary for {assembly_accession}: {e}")
+        logger.warning("Failed to fetch BTK summary for %s: %s", assembly_accession, e)
         return {}
 
     busco_data = data.get("summaryStats", {}).get("busco", {})
     if not busco_data:
-        print(f"No BUSCO data for {assembly_accession}")
+        logger.warning("No BUSCO data for %s", assembly_accession)
         return {}
 
     # Use the first lineage returned by the API — BTK returns the most granular lineage first
@@ -131,7 +134,7 @@ def fetch_software_versions(assembly_accession):
         return versions
 
     except requests.exceptions.RequestException as e:
-        print(f"Failed to fetch software versions: {e}")
+        logger.warning("Failed to fetch software versions for %s: %s", assembly_accession, e)
         return None
 
 

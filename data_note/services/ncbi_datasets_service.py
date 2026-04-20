@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import Any, Callable
 
 from ..models import AssemblyDatasetRecord, AssemblyDatasetsInfo, AssemblySelection
@@ -11,6 +12,8 @@ from ..fetch_ncbi_data import (
     get_organelle_template_data,
 )
 from ..process_chromosome_data import get_longest_scaffold
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -43,7 +46,7 @@ class NcbiDatasetsService:
         try:
             shared_fields.update(self.organelle_info_fetcher(prim_accession))
         except Exception as exc:
-            print(f"Warning: organelle fetch failed for {prim_accession}: {exc}")
+            logger.warning("Organelle fetch failed for %s: %s", prim_accession, exc)
             shared_fields["organelle_error"] = str(exc)
         primary_fields["longest_scaffold_length"] = self.longest_scaffold_fetcher(prim_accession)
         return AssemblyDatasetsInfo(
@@ -66,7 +69,7 @@ class NcbiDatasetsService:
         try:
             shared_fields.update(self.organelle_info_fetcher(hap1_accession))
         except Exception as exc:
-            print(f"Warning: organelle fetch failed for {hap1_accession}: {exc}")
+            logger.warning("Organelle fetch failed for %s: %s", hap1_accession, exc)
             shared_fields["organelle_error"] = str(exc)
         combined_fields["hap1_longest_scaffold_length"] = self.longest_scaffold_fetcher(hap1_accession)
         combined_fields["hap2_longest_scaffold_length"] = self.longest_scaffold_fetcher(hap2_accession)

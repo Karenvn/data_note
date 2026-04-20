@@ -1,6 +1,6 @@
 # Genome notes markdown creation
 
-`data_note` is a Python workflow for generating genome note markdown from BioProject accession numbers. It collects assembly, sequencing, taxonomy, annotation, curation, sampling, and quality metadata from public sources, with optional addition of metadata from local systems. It then renders a Pandoc markdown note together with associated figures and context data.
+`data_note` is a Python workflow for generating genome note markdown from BioProject accession numbers. It collects assembly, sequencing, taxonomy, annotation, curation, sampling, and quality metadata from public sources, with optional addition of metadata from local systems. It then renders a Pandoc markdown note with associated figures in the required formats.
 
 The repository is designed for preparation of genome notes in markdown. It treats metadata integration, text generation and figure preparation as a distinct workflow, separate from upstream pipelines that produce genome assembly and quality assessment outputs.
 
@@ -21,7 +21,7 @@ This repository does not aim to cover:
 - BibTeX cleanup and publication-specific bibliography repair
 - final publication packaging
 
-Those publishing steps are better treated as a separate Pandoc/typesetting workflow.
+Those publishing steps are a separate Pandoc/typesetting workflow.
 
 ## Quick start
 
@@ -50,19 +50,21 @@ All profiles can now include an Iso-Seq column in the specimen/sequencing table 
 
 ## Architecture
 
-The refactor of genome note writing scripts is centered on a typed internal model with a flattened template context only at the point of filling the template.
+The refactor of genome note writing scripts is centered on a typed internal model with a flattened template context only at the point of filling the markdown template.
 
 - `data_note/orchestrator.py` coordinates the end-to-end workflow for one BioProject.
-- `data_note/models/` contains typed slices for assembly, sequencing, sampling, curation, taxonomy, annotation, and quality metadata.
+- `data_note/models/` contains typed slices for base note info, assembly, sequencing, sampling, curation, taxonomy, annotation, quality, and author metadata.
 - `data_note/models/note_data.py` bundles those typed slices into a single `NoteData` object during orchestration.
-- `data_note/services/context_assembler.py` is the boundary that flattens typed slices into the final template-facing `NoteContext`.
+- `data_note/services/assembly_workflow_service.py`, `sequencing_workflow_service.py`, and `annotation_quality_workflow_service.py` now own the main stage-level workflow logic.
+- `data_note/services/render_context_builder.py` is the main boundary that derives and flattens typed slices into the final template-facing `NoteContext`.
 - `data_note/profiles/` defines project-specific behaviour for Darwin, Psyche, and ASG.
 - `data_note/tables/` contains profile-specific table builders for the different Tree of Life projects.
+- `data_note/services/figure_service.py` plus the image helper modules handle profile-driven figure collection and naming separately from markdown rendering.
 
 The intended flow is:
 
 ```text
-services -> typed models -> NoteData -> ContextAssembler -> NoteContext/dict -> Jinja2 template
+fetch/service layers -> typed models -> NoteData -> workflow services -> RenderContextBuilder -> NoteContext/dict -> Jinja2 template
 ```
 
 For a lightweight in-repo test run, use the fixture files and do:
@@ -71,7 +73,7 @@ For a lightweight in-repo test run, use the fixture files and do:
 python -m data_note --template_file tests/fixtures/template.md tests/fixtures/bioprojects.txt
 ```
 
-This still performs live metadata lookups. By default, generated species folders are written into the current working directory.
+This still performs live metadata lookups. Generated species folders are written into the current working directory.
 
 ## Requirements
 
@@ -155,12 +157,14 @@ The repository also includes:
 
 - The supported entrypoint is `python -m data_note ...`.
 - `darwin` is the default profile.
-- The core workflow now uses typed internal slices for assembly, sequencing, sampling, curation, taxonomy, annotation, and quality metadata, with context flattening centralised in `ContextAssembler`.
+- The core workflow now uses typed internal slices for base note info, assembly, sequencing, sampling, curation, taxonomy, annotation, quality, and author metadata, with context flattening centralised in `RenderContextBuilder`.
+- The orchestrator is now mostly a high-level coordinator over dedicated workflow services rather than a large inline script.
 - `psyche` is now a separate runtime profile with its own table module and figure plan; it still shares much of the Darwin workflow where behaviour is the same.
 - `asg` is now a separate runtime profile with its own table/figure numbering, but metagenome-specific data collection and figure generation are not yet implemented in the core pipeline.
+- Darwin and Psyche regression coverage now exists alongside the unit tests.
 - Internal integrations are environment dependent.
 
 
 ## Standards
 
-This repository is informed by the [Genomic Standards Consortium’s MIxS standard](https://genomicsstandardsconsortium.github.io/mixs/) for sequence-associated contextual metadata. Where appropriate, the workflow attempts to structure metadata in ways that are compatible with MIxS concepts and checklists, although it does not yet implement a complete formal MIxS schema.
+This repository is informed by the [Genomic Standards Consortium’s MIxS standard](https://genomicsstandardsconsortium.github.io/mixs/) for sequence-associated metadata. Where appropriate, the workflow attempts to structure metadata in ways that are compatible with MIxS concepts and checklists, although it does not yet implement a complete formal MIxS schema.

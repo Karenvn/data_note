@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import Any, Callable
 
 from ..formatting_utils import format_sex_chromosomes
@@ -11,6 +12,8 @@ from ..process_chromosome_data import (
     identify_supernumerary_chromosomes,
     prim_chromosome_table,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -35,7 +38,7 @@ class ChromosomeService:
             elif assembly_selection.assemblies_type == "hap_asm":
                 self._populate_haplotype_context(assembly_selection, context, chromosome_summary)
         except Exception as exc:
-            print(f"Error processing chromosome data: {exc}")
+            logger.warning("Error processing chromosome data: %s", exc)
 
         return chromosome_summary
 

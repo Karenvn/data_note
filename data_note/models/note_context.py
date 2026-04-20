@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Iterator, MutableMapping
 from dataclasses import dataclass, field
+import logging
 from typing import Any, ClassVar
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -100,7 +103,7 @@ class NoteContext(MutableMapping[str, Any]):
         current_accession = self.current_accession()
         fixed_tolid = known_fixes.get(current_accession)
         if fixed_tolid:
-            print(f"Overriding ToLID for {current_accession} -> {fixed_tolid} (NCBI mislabel).")
+            logger.info("Overriding ToLID for %s -> %s (NCBI mislabel).", current_accession, fixed_tolid)
             self.tolid = fixed_tolid
 
     def set_formatted_parent_projects(

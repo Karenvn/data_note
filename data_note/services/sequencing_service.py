@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import logging
 from typing import Any, Callable
 
 import pandas as pd
@@ -52,6 +53,8 @@ SEQUENCING_COLUMNS: tuple[str, ...] = (
     "instrument_platform",
 )
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(slots=True)
 class SequencingService:
@@ -74,7 +77,10 @@ class SequencingService:
     def build_context(self, bioprojects: Any, tolid: str) -> SequencingSummary:
         bioproject_list = self._normalise_bioprojects(bioprojects)
 
-        print(f"Processing sequencing information for bioproject(s): {', '.join(bioproject_list)}.")
+        logger.info(
+            "Processing sequencing information for bioproject(s): %s.",
+            ", ".join(bioproject_list),
+        )
         read_study_df = self.fetch_service.fetch_for_bioprojects(bioproject_list)
         if read_study_df.empty:
             raise RuntimeError(

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from contextlib import closing
 from dataclasses import dataclass
+import logging
 import os
 from pathlib import Path
 import re
@@ -10,6 +12,8 @@ from typing import Any, Mapping
 import yaml
 
 from ..models import AuthorInfo
+
+logger = logging.getLogger(__name__)
 
 
 AUTHOR_SLOT_ORDER: tuple[tuple[str, str], ...] = (
@@ -39,7 +43,7 @@ class AuthorService:
     def build_context(self, context: Mapping[str, Any]) -> AuthorInfo:
         db_path = self._resolved_db_path()
         if not db_path.exists():
-            print(f"Author DB not found at {db_path}; leaving author block empty.")
+            logger.warning("Author DB not found at %s; leaving author block empty.", db_path)
             return self._empty_context()
 
         slot_refs = self._build_slot_refs(context)
@@ -115,7 +119,7 @@ class AuthorService:
         ordered_authors: list[dict[str, Any]] = []
         authors_by_key: dict[tuple[str, str], dict[str, Any]] = {}
 
-        with sqlite3.connect(db_path) as connection:
+        with closing(sqlite3.connect(db_path)) as connection:
             connection.row_factory = sqlite3.Row
             for slot_ref in slot_refs:
                 slot_rows = self._fetch_slot_rows(connection, slot_ref)

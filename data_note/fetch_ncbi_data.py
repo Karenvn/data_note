@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import requests
+import logging
 from Bio import Entrez
 import xml.etree.ElementTree as ET
 import json
@@ -13,6 +14,7 @@ Entrez.email = os.getenv('ENTREZ_EMAIL', 'default_email')
 Entrez.api_key = os.getenv('ENTREZ_API_KEY', 'default_api_key')
 
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
+logger = logging.getLogger(__name__)
 
 @retry(
     reraise=True,
@@ -23,7 +25,7 @@ RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 def safe_ncbi_request(url, headers, params=None, timeout=30):
     response = requests.get(url, headers=headers, params=params, timeout=timeout)
     if response.status_code in RETRY_STATUS_CODES:
-        print(f"Retryable HTTP error {response.status_code}, will retry...")
+        logger.warning("Retryable HTTP error %s, will retry...", response.status_code)
         raise requests.exceptions.RequestException(f"Status: {response.status_code}")
     response.raise_for_status()
     return response
@@ -67,10 +69,10 @@ def get_taxonomy_lineage_and_ranks(taxid):
         try:
             return parse_ncbi_tax_xml(response.content)
         except ET.ParseError as e:
-            print(f"Error parsing XML: {e}")
+            logger.warning("Error parsing XML: %s", e)
             return {}
     else:
-        print(f"Failed to fetch data for taxid {taxid}, status code: {response.status_code}")
+        logger.warning("Failed to fetch data for taxid %s, status code: %s", taxid, response.status_code)
         return {}
     
 
@@ -94,12 +96,12 @@ def fetch_and_extract_data(accession):
     response = safe_ncbi_request(api_url, headers=headers, params=params)
 
     if response.status_code != 200:
-        print(f"Failed to fetch data for {accession}: HTTP {response.status_code}")
+        logger.warning("Failed to fetch data for %s: HTTP %s", accession, response.status_code)
         return None
     
     data = response.json()
     if not data or 'reports' not in data or len(data['reports']) == 0:
-        print(f"No valid report data found for {accession}")
+        logger.warning("No valid report data found for %s", accession)
         return None
 
     report = data['reports'][0]
@@ -119,7 +121,7 @@ def fetch_and_extract_data(accession):
         parsed_assembly_data['coverage'] = assembly_stats.get('genome_coverage')
 
     except KeyError as e:
-        print(f"Missing key in response data: {e}")
+        logger.warning("Missing key in response data for %s: %s", accession, e)
     
     # Extracting tolid from attributes if available
     biosample = report.get('assembly_info', {}).get('biosample', {})
@@ -297,7 +299,7 @@ def get_organelle_template_data(accession):
         
         return template_data
     except Exception as e:
-        print(f"Error fetching organelle data: {e}")
+        logger.warning("Error fetching organelle data for %s: %s", accession, e)
         return {
             'has_mitochondria': False,
             'has_plastids': False,

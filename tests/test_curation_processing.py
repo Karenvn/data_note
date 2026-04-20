@@ -3,14 +3,12 @@ from __future__ import annotations
 import unittest
 
 from data_note.models import BarcodingInfo, ExtractionInfo
-from data_note.orchestrator import DataNoteOrchestrator
 from data_note.services.curation_service import CurationService
 
 
 class CurationProcessingTests(unittest.TestCase):
     def test_process_extraction_info_returns_typed_extraction_info(self) -> None:
-        orchestrator = DataNoteOrchestrator(profile="darwin")
-        orchestrator.curation_service = CurationService(
+        service = CurationService(
             sequencing_extraction_fetcher=lambda lookup_id: (
                 {"sequencing_date": "2026-01-05", "submission_id": "SUB1"},
                 {
@@ -23,7 +21,7 @@ class CurationProcessingTests(unittest.TestCase):
             barcoding_fetcher=lambda tolid: {},
         )
 
-        extraction = orchestrator.process_extraction_info("LIB1")
+        extraction = service.build_extraction("LIB1")
         context = extraction.to_context_dict()
 
         self.assertIsInstance(extraction, ExtractionInfo)
@@ -34,8 +32,7 @@ class CurationProcessingTests(unittest.TestCase):
         self.assertEqual(context["gqn"], "40")
 
     def test_process_barcoding_info_returns_typed_barcoding_info(self) -> None:
-        orchestrator = DataNoteOrchestrator(profile="darwin")
-        orchestrator.curation_service = CurationService(
+        service = CurationService(
             sequencing_extraction_fetcher=lambda lookup_id: ({}, {}),
             extraction_fallback_fetcher=lambda lookup_id: {},
             barcoding_fetcher=lambda tolid: {
@@ -45,7 +42,7 @@ class CurationProcessingTests(unittest.TestCase):
             },
         )
 
-        barcoding = orchestrator.process_barcoding_info("ixExample1")
+        barcoding = service.build_barcoding("ixExample1")
         context = barcoding.to_context_dict()
 
         self.assertIsInstance(barcoding, BarcodingInfo)

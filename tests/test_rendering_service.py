@@ -36,13 +36,13 @@ class RenderingServiceTests(unittest.TestCase):
                 return png, tif, gif
 
             service = RenderingService(
-                gscope_image_copier=lambda tolid, output_dir: make_triple("Fig_2_Gscope"),
-                pretext_labeler=lambda tolid, context, output_dir: make_triple("Fig_3_Pretext"),
-                merian_image_copier=lambda tolid, output_dir: make_triple("Fig_3_Merian"),
-                merqury_image_copier=lambda tolid, output_dir: make_triple("Fig_4_Merqury"),
-                btk_image_processor=lambda accession, output_dir: [
-                    make_triple("Fig_5_Snail"),
-                    make_triple("Fig_6_Blob"),
+                gscope_image_copier=lambda tolid, output_dir, output_stem=None: make_triple(output_stem or "Fig_2_Gscope"),
+                pretext_labeler=lambda tolid, context, output_dir, output_stem=None: make_triple(output_stem or "Fig_3_Pretext"),
+                merian_image_copier=lambda tolid, output_dir, output_stem=None: make_triple(output_stem or "Fig_3_Merian"),
+                merqury_image_copier=lambda tolid, output_dir, output_stem=None: make_triple(output_stem or "Fig_4_Merqury"),
+                btk_image_processor=lambda accession, output_dir, output_names=None: [
+                    make_triple((output_names or {}).get("snail", "Fig_5_Snail.png").removesuffix(".png")),
+                    make_triple((output_names or {}).get("blob", "Fig_6_Blob.png").removesuffix(".png")),
                 ],
             )
 
@@ -85,11 +85,11 @@ class RenderingServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             context = {"prim_accession": "GCA_1.1"}
             service = RenderingService(
-                gscope_image_copier=lambda tolid, output_dir: None,
-                pretext_labeler=lambda tolid, context, output_dir: None,
-                merian_image_copier=lambda tolid, output_dir: None,
-                merqury_image_copier=lambda tolid, output_dir: None,
-                btk_image_processor=lambda accession, output_dir: [],
+                gscope_image_copier=lambda tolid, output_dir, output_stem=None: None,
+                pretext_labeler=lambda tolid, context, output_dir, output_stem=None: None,
+                merian_image_copier=lambda tolid, output_dir, output_stem=None: None,
+                merqury_image_copier=lambda tolid, output_dir, output_stem=None: None,
+                btk_image_processor=lambda accession, output_dir, output_names=None: [],
             )
 
             service._populate_images(AsgProfile(), "ixExample1", tmpdir, context)

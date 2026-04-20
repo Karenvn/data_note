@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import Any, Callable
 
 from ..models import AssemblySelection, BtkAssemblyRecord, BtkSummary
 from ..fetch_btk_info import build_btk_urls, fetch_and_parse_summary, fetch_software_versions
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -24,14 +27,14 @@ class BtkService:
         elif assembly_selection.assemblies_type == "hap_asm":
             self._populate_haplotype_context(assembly_selection, btk_summary)
         else:
-            print(f"Warning: Unsupported assemblies type: {assembly_selection.assemblies_type}")
+            logger.warning("Unsupported assemblies type for BTK: %s", assembly_selection.assemblies_type)
 
         return btk_summary
 
     def _populate_primary_context(self, assembly_selection: AssemblySelection, btk_summary: BtkSummary) -> None:
-        print("Fetching BTK info for primary assembly...")
+        logger.info("Fetching BTK info for primary assembly.")
         if assembly_selection.primary is None:
-            print("Warning: Primary accession is missing.")
+            logger.warning("Primary accession is missing.")
             return
         prim_accession = assembly_selection.primary.accession
 
@@ -39,28 +42,28 @@ class BtkService:
             btk_summary.primary = self._build_record(prim_accession)
             btk_summary.shared_fields.update(self.software_versions_fetcher(prim_accession) or {})
         except Exception as exc:
-            print(f"Warning: BTK data missing or failed for {prim_accession}: {exc}")
+            logger.warning("BTK data missing or failed for %s: %s", prim_accession, exc)
 
     def _populate_haplotype_context(self, assembly_selection: AssemblySelection, btk_summary: BtkSummary) -> None:
-        print("Fetching BTK info for haplotype assemblies...")
+        logger.info("Fetching BTK info for haplotype assemblies.")
         if assembly_selection.hap1 is not None:
             hap1_accession = assembly_selection.hap1.accession
             try:
                 btk_summary.hap1 = self._build_record(hap1_accession, prefix="hap1_")
                 btk_summary.shared_fields.update(self.software_versions_fetcher(hap1_accession) or {})
             except Exception as exc:
-                print(f"Warning: BTK data missing or failed for hap1 {hap1_accession}: {exc}")
+                logger.warning("BTK data missing or failed for hap1 %s: %s", hap1_accession, exc)
         else:
-            print("Warning: Hap1 accession is missing.")
+            logger.warning("Hap1 accession is missing.")
 
         if assembly_selection.hap2 is not None:
             hap2_accession = assembly_selection.hap2.accession
             try:
                 btk_summary.hap2 = self._build_record(hap2_accession, prefix="hap2_")
             except Exception as exc:
-                print(f"Warning: BTK data missing or failed for hap2 {hap2_accession}: {exc}")
+                logger.warning("BTK data missing or failed for hap2 %s: %s", hap2_accession, exc)
         else:
-            print("Warning: Hap2 accession is missing.")
+            logger.warning("Hap2 accession is missing.")
 
     def _build_record(self, accession: str, *, prefix: str = "") -> BtkAssemblyRecord:
         view_urls, download_urls = self.url_builder(accession, prefix=prefix)
