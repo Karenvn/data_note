@@ -18,7 +18,6 @@ def fetch_or_copy_yaml(local_base: str,
     - otherwise scp remote_path → local_base/<tolid>.yaml
     """
     local_yaml = Path(local_base) / f"{tolid}.yaml"
-    print(local_yaml)
     if local_yaml.exists():
         print(f"[info] Reusing local YAML: {local_yaml}")
         return local_yaml

@@ -17,7 +17,7 @@ from .note_data import NoteData
 from .note_context import NoteContext
 from .quality import GenomeScopeSummary, MerquryRecord, MerqurySummary, QualityMetrics
 from .sampling import SampleMetadataRecord, SamplingInfo
-from .sequencing import RunGroup, RunRecord, SequencingSummary, TechnologyRecord
+from .sequencing import RunGroup, RunRecord, SequencingSummary, SequencingTotals, TechnologyRecord
 
 __all__ = [
     "AssemblyCoverageInput",
@@ -49,6 +49,7 @@ __all__ = [
     "RunGroup",
     "RunRecord",
     "SequencingSummary",
+    "SequencingTotals",
     "TaxonomyInfo",
     "TechnologyRecord",
 ]

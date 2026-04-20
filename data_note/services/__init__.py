@@ -9,6 +9,7 @@ __all__ = [
     "LocalMetadataService",
     "NcbiDatasetsService",
     "RenderingService",
+    "SequencingFetchService",
     "SequencingService",
     "ServerDataService",
     "TaxonomyService",
@@ -56,6 +57,10 @@ def __getattr__(name: str):
         from .rendering_service import RenderingService
 
         return RenderingService
+    if name == "SequencingFetchService":
+        from .sequencing_fetch_service import SequencingFetchService
+
+        return SequencingFetchService
     if name == "SequencingService":
         from .sequencing_service import SequencingService
 

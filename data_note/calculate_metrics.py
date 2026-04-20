@@ -25,8 +25,7 @@ def calc_ebp_metric(context):
         qv = context.get("prim_QV")
     else:
         return "?.?.Q?"
-    
-    print(f"Raw vaues for metrics are: {contig_n50} {scaffold_n50} {perc_assembled} and {qv}")
+
     # First part: log10(contig N50 in bp), rounded down
     try:
         ebp1 = str(int(math.log10(contig_n50 * 1_000_000)))

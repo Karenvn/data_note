@@ -93,7 +93,6 @@ class DataNoteOrchestrator:
 
         umbrella_data = fetch_data(bioproject)
         umbrella_project_dict = get_umbrella_project_details(umbrella_data, bioproject)
-        print(umbrella_project_dict)
         note_data.base.update(umbrella_project_dict)
         context = self.context_assembler.build(note_data)
 
@@ -108,7 +107,6 @@ class DataNoteOrchestrator:
                 tax_id = str(override_tax_id)
                 note_data.base.tax_id = tax_id
 
-        print("The tax_id for this assembly is: ", tax_id)
         note_data.taxonomy = self.fetch_taxonomic_data(tax_id)
         context = self.context_assembler.build(note_data)
 
@@ -119,7 +117,6 @@ class DataNoteOrchestrator:
         assembly_selection = self.fetch_assembly_data(umbrella_data, tax_id, child_accessions)
         assembly_bundle = AssemblyBundle(selection=assembly_selection)
         note_data.assembly = assembly_bundle
-        print("These are the assemblies selected ", assembly_bundle.selection.to_context_dict())
         note_data.base.assemblies_type = assembly_bundle.assemblies_type
         note_data.base.assembly_name = assembly_bundle.preferred_assembly_name()
         note_data.base.update(get_parent_bioprojects(bioproject))
@@ -164,13 +161,12 @@ class DataNoteOrchestrator:
 
         tolid = context.tolid
         try:
-            note_data.base.auto_text = summarise_genomes(tax_id, assembly_selection, tolid, show_tables=True)
+            note_data.base.auto_text = summarise_genomes(tax_id, assembly_selection, tolid, show_tables=False)
         except Exception as exc:
             print(f"Warning: auto intro failed for {bioproject}: {exc}")
             note_data.base.extras["auto_text_error"] = str(exc)
             note_data.base.auto_text = ""
 
-        print(f"The TOLID is {tolid}")
         sequencing_projects = child_accessions or [bioproject]
         sequencing_summary = self.process_sequencing_workflow(sequencing_projects, tolid)
         note_data.sequencing = sequencing_summary
@@ -195,8 +191,6 @@ class DataNoteOrchestrator:
             ensembl_accession = assembly_bundle.preferred_accession()
             annotation_info = self.fetch_annotation_data(ensembl_accession, species, context.tax_id)
             annotation_context = annotation_info.to_context_dict()
-            if annotation_context:
-                print(annotation_context)
             if not annotation_context:
                 print(
                     f"No Ensembl annotation found for {species} / "
@@ -227,8 +221,6 @@ class DataNoteOrchestrator:
             context = NoteContext.from_mapping(context)
 
         final_context = context.to_dict()
-        print(f"The context dict has {len(final_context)} key-value pairs.")
-        print("Final context: ", final_context)
         return final_context
 
     def fetch_assembly_data(

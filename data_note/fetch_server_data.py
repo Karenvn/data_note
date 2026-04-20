@@ -206,20 +206,9 @@ def get_merqury_results_haplotype_assemblies(tolid):
 def main():
     tolid = "ilNymAnti1"
     download_dir = "./downloads"
-    completeness_metrics = read_merqury_results(tolid)
-
-    gscope_results = parse_genomescope(tolid)
-
-    # Print the parsed data
-    print("Parsed Merqury info:", completeness_metrics)
-    print("Parsed GenomeScope info:", gscope_results)
-
-    image_path = copy_merqury_image(tolid, download_dir)
-
-    if image_path:
-        print(f"Image downloaded to: {image_path}")
-    else:
-        print("Failed to download image.")
+    read_merqury_results(tolid)
+    parse_genomescope(tolid)
+    copy_merqury_image(tolid, download_dir)
 
     if __name__ == "__main__":
         main()

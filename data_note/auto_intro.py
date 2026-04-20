@@ -9,7 +9,7 @@
 ...     hap2=AssemblyRecord(accession="GCA_964187955.1", assembly_name="ixExample1.hap2.1", role="hap2"),
 ... )
 >>> sent = summarise_genomes(139089, asm, tolid="ilAgaZoeg1")
-print(sent)
+>>> sent
 """
 
 import os
@@ -203,25 +203,6 @@ def summarise_genomes(
 
     sentence += ref_note
         
-    if show_tables:
-        for lvl in ("genus", "family"):
-            name = lineage[lvl]
-            taxid = lineage[f"{lvl}_taxid"]
-            total = len(results[lvl]["reports"])
-            distinct = len(results[lvl]["grouped"])
-            print(f"🧬 {lvl.title()} '{name}' (taxid {taxid}):")
-            print(f"- Total assemblies: {total}")
-            print(f"- Distinct genomes: {distinct}")
-            print("| Key | Accessions | Species | Submitter |")
-            print("|-----|------------|---------|-----------|")
-            for key, recs in results[lvl]["grouped"].items():
-                accs = ", ".join(r["accession"] for r in recs)
-                sp = recs[0]["species"]
-                sub = recs[0]["submitter"]
-                flag = " (this genome)" if key == tolid else ""
-                print(f"| {key}{flag} | {accs} | {sp} | {sub} |")
-        print(f"Data source: NCBI Datasets API ({CITATION_DATASETS})")
-
     return sentence
 
 

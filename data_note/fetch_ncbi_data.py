@@ -363,4 +363,3 @@ if __name__ == "__main__":
 
 
     assembly_info = fetch_prim_assembly_info(prim_accession)
-    print(assembly_info)
