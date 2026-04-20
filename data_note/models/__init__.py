@@ -10,6 +10,7 @@ from .assembly import (
     ChromosomeSummary,
 )
 from .curation import BarcodingInfo, CurationBundle, CurationInfo, ExtractionInfo
+from .note_data import NoteData
 from .note_context import NoteContext
 from .quality import GenomeScopeSummary, MerquryRecord, MerqurySummary, QualityMetrics
 from .sampling import SampleMetadataRecord, SamplingInfo
@@ -32,6 +33,7 @@ __all__ = [
     "GenomeScopeSummary",
     "MerquryRecord",
     "MerqurySummary",
+    "NoteData",
     "NoteContext",
     "QualityMetrics",
     "SampleMetadataRecord",

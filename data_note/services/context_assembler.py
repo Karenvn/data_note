@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from ..models import NoteContext
+from ..models import NoteContext, NoteData
 
 
 @dataclass(slots=True)
@@ -16,8 +16,14 @@ class ContextAssembler:
     ) -> NoteContext:
         note_context = self._ensure_note_context(context)
         for section in sections:
+            if isinstance(section, NoteData):
+                note_context = self.merge(note_context, *section.context_sections())
+                continue
             note_context.update(self._section_to_mapping(section))
         return note_context
+
+    def build(self, note_data: NoteData, context: NoteContext | Mapping[str, Any] | None = None) -> NoteContext:
+        return self.merge(context, note_data)
 
     @staticmethod
     def _ensure_note_context(context: NoteContext | Mapping[str, Any] | None) -> NoteContext:

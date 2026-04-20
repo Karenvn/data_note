@@ -17,6 +17,7 @@ from .models import (
     CurationBundle,
     CurationInfo,
     ExtractionInfo,
+    NoteData,
     NoteContext,
     QualityMetrics,
     SamplingInfo,
@@ -83,12 +84,13 @@ class DataNoteOrchestrator:
         dict_to_csv(context, csv_path)
 
     def process_bioproject(self, bioproject: str) -> dict[str, Any]:
-        context = NoteContext()
+        note_data = NoteData()
 
         umbrella_data = fetch_data(bioproject)
         umbrella_project_dict = get_umbrella_project_details(umbrella_data, bioproject)
         print(umbrella_project_dict)
-        context = self.context_assembler.merge(context, umbrella_project_dict)
+        note_data.base_context.update(umbrella_project_dict)
+        context = self.context_assembler.build(note_data)
 
         tax_id = context.tax_id or umbrella_project_dict["tax_id"]
         if taxonomy_mapper.has_tax_id_override(bioproject):
@@ -97,25 +99,29 @@ class DataNoteOrchestrator:
             if override_tax_id:
                 print(f"  -> Using tax_id override for {bioproject}: {tax_id} -> {override_tax_id}")
                 print(f"    Reason: {override.get('reason')}")
-                context.tax_id_umbrella = tax_id
+                note_data.base_context["tax_id_umbrella"] = tax_id
                 tax_id = str(override_tax_id)
-                context.tax_id = tax_id
+                note_data.base_context["tax_id"] = tax_id
 
         print("The tax_id for this assembly is: ", tax_id)
-        context = self.context_assembler.merge(context, self.fetch_taxonomic_data(tax_id))
+        note_data.base_context.update(self.fetch_taxonomic_data(tax_id))
+        context = self.context_assembler.build(note_data)
 
         species = context.species
         child_accessions = get_child_accessions_for_bioproject(umbrella_data)
-        context.child_bioprojects = child_accessions
+        note_data.base_context["child_bioprojects"] = child_accessions
 
         assembly_selection = self.fetch_assembly_data(umbrella_data, tax_id, child_accessions)
         assembly_bundle = AssemblyBundle(selection=assembly_selection)
+        note_data.assembly = assembly_bundle
         print("These are the assemblies selected ", assembly_bundle.selection.to_context_dict())
-        context.assemblies_type = assembly_bundle.assemblies_type
-        context.assembly_name = assembly_bundle.preferred_assembly_name()
-        context = self.context_assembler.merge(context, get_parent_bioprojects(bioproject))
+        note_data.base_context["assemblies_type"] = assembly_bundle.assemblies_type
+        note_data.base_context["assembly_name"] = assembly_bundle.preferred_assembly_name()
+        note_data.base_context.update(get_parent_bioprojects(bioproject))
 
+        context = self.context_assembler.build(note_data)
         context.set_formatted_parent_projects()
+        note_data.base_context["formatted_parent_projects"] = context.formatted_parent_projects
 
         assemblies_type = assembly_bundle.assemblies_type
         datasets_ok = True
@@ -123,59 +129,61 @@ class DataNoteOrchestrator:
             assembly_bundle.datasets = self.fetch_ncbi_datasets(assembly_selection)
         except Exception as exc:
             datasets_ok = False
-            context["ncbi_datasets_error"] = str(exc)
+            note_data.base_context["ncbi_datasets_error"] = str(exc)
             print(f"Warning: NCBI datasets fetch failed for {bioproject} ({assemblies_type}): {exc}")
 
+        context = self.context_assembler.build(note_data)
         context.ensure_tolid()
+        if context.tolid:
+            note_data.base_context["tolid"] = context.tolid
 
         if datasets_ok:
             try:
-                chromosome_context = context.to_dict()
-                chromosome_context.update(assembly_bundle.to_context_dict())
+                chromosome_context = self.context_assembler.build(note_data).to_dict()
                 assembly_bundle.chromosomes = self.process_chromosomes(assembly_selection, chromosome_context)
             except Exception as exc:
                 print(f"Warning: chromosome processing failed for {bioproject} ({assemblies_type}): {exc}")
 
         if datasets_ok and assemblies_type in {"prim_alt", "hap_asm"}:
-            coverage_context = context.to_dict()
-            coverage_context.update(assembly_bundle.to_context_dict())
+            coverage_context = self.context_assembler.build(note_data).to_dict()
             coverage_input = AssemblyCoverageInput.from_selection_and_context(assembly_selection, coverage_context)
             assembly_bundle.coverage_fields = calculate_percentage_assembled(coverage_input)
 
         if assemblies_type in ["prim_alt", "hap_asm"]:
             assembly_bundle.btk = self.fetch_btk_info(assembly_selection)
 
-        context = self.context_assembler.merge(context, assembly_bundle)
-
+        context = self.context_assembler.build(note_data)
         context.apply_known_tolid_fix(KNOWN_TOLID_FIX)
+        if context.tolid:
+            note_data.base_context["tolid"] = context.tolid
 
         tolid = context.tolid
         try:
-            context.auto_text = summarise_genomes(tax_id, assembly_selection, tolid, show_tables=True)
+            note_data.base_context["auto_text"] = summarise_genomes(tax_id, assembly_selection, tolid, show_tables=True)
         except Exception as exc:
             print(f"Warning: auto intro failed for {bioproject}: {exc}")
-            context["auto_text_error"] = str(exc)
-            context.auto_text = ""
+            note_data.base_context["auto_text_error"] = str(exc)
+            note_data.base_context["auto_text"] = ""
 
         print(f"The TOLID is {tolid}")
         sequencing_projects = child_accessions or [bioproject]
         sequencing_summary = self.process_sequencing_workflow(sequencing_projects, tolid)
-        context = self.context_assembler.merge(context, sequencing_summary)
+        note_data.sequencing = sequencing_summary
         pacbio_library_name = sequencing_summary.pacbio_library_name()
         extraction_lookup_id = pacbio_library_name or tolid
         try:
-            curation_bundle = self.process_curation_data(
+            note_data.curation = self.process_curation_data(
                 assembly_selection,
                 species=species,
                 tolid=tolid,
                 extraction_lookup_id=extraction_lookup_id,
             )
-            context = self.context_assembler.merge(context, curation_bundle)
         except Exception as exc:
             logging.warning("Failed to process curation data for %r: %s", bioproject, exc)
         sampling_info = self.fetch_biosample_data(sequencing_summary.technology_data)
-        context = self.context_assembler.merge(context, sampling_info)
-        context = self.context_assembler.merge(context, self.build_author_context(context))
+        note_data.sampling = sampling_info
+        context = self.context_assembler.build(note_data)
+        note_data.author_context = self.build_author_context(context)
 
         print("Checking for Ensembl annotation...")
         try:
@@ -192,14 +200,16 @@ class DataNoteOrchestrator:
                     f"{assembly_bundle.preferred_accession()}"
                 )
             else:
-                context = self.context_assembler.merge(context, res)
+                note_data.annotation_context = res
                 if os.environ.get("GN_DEBUG_ENSEMBL") == "1":
                     print(f"Ensembl annotation: {res['ensembl_annotation_url']}")
         except Exception as exc:
             print(f"Warning: Ensembl fetch failed for {bioproject} ({assemblies_type}): {exc}")
 
-        quality_metrics = self.process_server_data(assemblies_type, context["tolid"])
-        context = self.context_assembler.merge(context, quality_metrics)
+        quality_metrics = self.process_server_data(assemblies_type, note_data.base_context.get("tolid"))
+        note_data.quality = quality_metrics
+
+        context = self.context_assembler.build(note_data)
 
         corrections_file = os.getenv(
             "DATA_NOTE_CORRECTIONS_FILE",
