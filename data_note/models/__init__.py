@@ -1,3 +1,4 @@
+from .author import AuthorAffiliation, AuthorInfo, AuthorPerson
 from .assembly import (
     AssemblyBundle,
     AssemblyCoverageInput,
@@ -10,6 +11,7 @@ from .assembly import (
     ChromosomeSummary,
 )
 from .curation import BarcodingInfo, CurationBundle, CurationInfo, ExtractionInfo
+from .metadata import AnnotationInfo, TaxonomyInfo
 from .note_data import NoteData
 from .note_context import NoteContext
 from .quality import GenomeScopeSummary, MerquryRecord, MerqurySummary, QualityMetrics
@@ -23,9 +25,13 @@ __all__ = [
     "AssemblyDatasetsInfo",
     "AssemblyRecord",
     "AssemblySelection",
+    "AuthorAffiliation",
+    "AuthorInfo",
+    "AuthorPerson",
     "BtkAssemblyRecord",
     "BtkSummary",
     "ChromosomeSummary",
+    "AnnotationInfo",
     "BarcodingInfo",
     "CurationBundle",
     "CurationInfo",
@@ -41,5 +47,6 @@ __all__ = [
     "RunGroup",
     "RunRecord",
     "SequencingSummary",
+    "TaxonomyInfo",
     "TechnologyRecord",
 ]

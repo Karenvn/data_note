@@ -1,6 +1,6 @@
 # Genome notes markdown creation
 
-`data_note` is a Python workflow for generating publication-oriented genome note markdown from BioProject accession numbers. It collects assembly, sequencing, taxonomy and quality metadata from public sources, with optional addition of metadata from local systems, and renders a Pandoc-ready markdown note together with associated figures and context data.
+`data_note` is a Python workflow for generating genome note markdown from BioProject accession numbers. It collects assembly, sequencing, taxonomy, annotation, curation, sampling, and quality metadata from public sources, with optional addition of metadata from local systems. It then renders a Pandoc markdown note together with associated figures and context data.
 
 The repository is designed for preparation of genome notes in markdown. It treats metadata integration, text generation and figure preparation as a distinct workflow, separate from upstream pipelines that produce genome assembly and quality assessment outputs.
 
@@ -47,7 +47,24 @@ python -m data_note --profile darwin --template_file ~/genome_note_templates/dto
 - ASG table numbering, with software versions moved to `table6`.
 - an optional metagenome `table5` hook driven by `metagenome_table_headers` and `metagenome_table_rows` when metagenome output is available.
 
-For a lightweight in-repo smoke-test run, use the fixture files and do:
+## Architecture
+
+The refactor is now centered on a typed internal model with a flattened template context only at the rendering boundary.
+
+- `data_note/orchestrator.py` coordinates the end-to-end workflow for one BioProject.
+- `data_note/models/` contains typed slices for assembly, sequencing, sampling, curation, taxonomy, annotation, and quality metadata.
+- `data_note/models/note_data.py` bundles those typed slices into a single `NoteData` object during orchestration.
+- `data_note/services/context_assembler.py` is the boundary that flattens typed slices into the final template-facing `NoteContext`.
+- `data_note/profiles/` defines programme-specific behavior for Darwin, Psyche, and ASG.
+- `data_note/tables/` contains profile-specific table builders rather than one monolithic table module.
+
+The intended flow is:
+
+```text
+services -> typed models -> NoteData -> ContextAssembler -> NoteContext/dict -> Jinja2 template
+```
+
+For a lightweight in-repo test run, use the fixture files and do:
 
 ```bash
 python -m data_note --template_file tests/fixtures/template.md tests/fixtures/bioprojects.txt
@@ -68,7 +85,7 @@ This still performs live metadata lookups. By default, generated species folders
 - `requests`
 - `tenacity`
 
-Optional local integrations may also require:
+Optional local integration would also require:
 
 - `tol-sdk`
 - JIRA credentials in `~/.netrc`
@@ -106,15 +123,17 @@ Optional internal variables include:
 
 - The core pipeline is designed to work from public assembly project metadata.
 - Data for each BioProject should be available in ENA using a structure matching the Earth BioGenome Project recommendation for a Species X assembly project (see https://www.earthbiogenome.org/report-on-assembly-standards).
-- Assembly quality assets such as BlobToolKit, GenomeScope, Merqury, a chromosome map, ancestral linkage groups plots, and metagenome analyses are expected to exist already.
+- Assembly quality assets such as BlobToolKit, GenomeScope, Merqury run results, a chromosome map, ancestral linkage groups plots, and metagenome analyses are expected to exist already.
 - Templates are expected to be Jinja2-based markdown templates.
 - Some local metadata lookup steps are institution-specific and are not required for the public core pipeline.
 
 ## Repository Layout
 
 - [data_note](data_note/): the package code
-- [data_note/services](data_note/services/): service-layer components for assembly, taxonomy, sequencing, rendering, BTK, and local data
-- [data_note/models](data_note/models/): typed models such as `NoteContext`
+- [data_note/services](data_note/services/): service-layer components for assembly, taxonomy, annotation, sequencing, sampling, curation, quality, rendering, and context assembly
+- [data_note/models](data_note/models/): typed models such as `AssemblyBundle`, `SequencingSummary`, `SamplingInfo`, `CurationBundle`, `TaxonomyInfo`, `AnnotationInfo`, `QualityMetrics`, `NoteData`, and `NoteContext`
+- [data_note/profiles](data_note/profiles/): programme-specific profile definitions for Darwin, Psyche, and ASG
+- [data_note/tables](data_note/tables/): profile-specific table builders and shared table utilities
 - [tests](tests/): minimal unit tests, fixtures and representative output folders
 - [.env.example](.env.example): example environment configuration
 
@@ -128,18 +147,19 @@ python -m unittest discover -s tests
 
 The repository also includes:
 
-- [tests/fixtures](tests/fixtures/): a small template and BioProject list for smoke-test runs
+- [tests/fixtures](tests/fixtures/): a small template and BioProject list for test runs
 - [tests/output](tests/output/): lightweight representative output folders kept for structure and discussion, not as strict golden-master outputs
 
 ## Current Status
 
 - The supported entrypoint is `python -m data_note ...`.
 - `darwin` is the default profile.
-- `psyche` is now a separate profile with its own table module, but only the first table differences have been extracted so far.
-- `asg` is now scaffolded as a runtime profile, but metagenome-specific data collection and figure generation are not yet implemented in the core pipeline.
+- The core workflow now uses typed internal slices for assembly, sequencing, sampling, curation, taxonomy, annotation, and quality metadata, with context flattening centralised in `ContextAssembler`.
+- `psyche` is now a separate runtime profile with its own table module and figure plan; it still shares much of the Darwin workflow where behaviour is the same.
+- `asg` is now a separate runtime profile with its own table/figure numbering, but metagenome-specific data collection and figure generation are not yet implemented in the core pipeline.
 - Internal integrations are environment dependent.
 
 
 ## Standards
 
-This repository is informed by the Genomic Standards Consortium’s MIxS standard for sequence-associated contextual metadata. Where appropriate, the workflow attempts to structure metadata in ways that are compatible with MIxS concepts and checklists, although it does not yet implement a complete formal MIxS schema.
+This repository is informed by the [Genomic Standards Consortium’s MIxS standard](https://genomicsstandardsconsortium.github.io/mixs/) for sequence-associated contextual metadata. Where appropriate, the workflow attempts to structure metadata in ways that are compatible with MIxS concepts and checklists, although it does not yet implement a complete formal MIxS schema.

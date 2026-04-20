@@ -1,4 +1,5 @@
 __all__ = [
+    "AnnotationService",
     "AuthorService",
     "AssemblyService",
     "BtkService",
@@ -15,6 +16,10 @@ __all__ = [
 
 
 def __getattr__(name: str):
+    if name == "AnnotationService":
+        from .annotation_service import AnnotationService
+
+        return AnnotationService
     if name == "AuthorService":
         from .author_service import AuthorService
 

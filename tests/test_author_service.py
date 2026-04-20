@@ -7,6 +7,7 @@ from pathlib import Path
 
 import yaml
 
+from data_note.models import AuthorInfo
 from data_note.services.author_service import AuthorService
 
 
@@ -244,13 +245,14 @@ class AuthorServiceTests(unittest.TestCase):
         }
 
         result = self.service.build_context(context)
-        author_names = [f"{author['given-names']} {author['surname']}" for author in result["author_people"]]
+        self.assertIsInstance(result, AuthorInfo)
+        author_names = [f"{author.given_names} {author.surname}" for author in result.people]
         self.assertEqual(
             author_names,
             ["Alice Able", "Bob Baker", "Cara Cole", "Dan Drew", "Eve Ellis"],
         )
 
-        parsed_yaml = yaml.safe_load(result["author_yaml_block"])
+        parsed_yaml = yaml.safe_load(result.yaml_block)
         first_author = parsed_yaml["author"][0]
         self.assertEqual(
             first_author["roles"],
@@ -277,10 +279,10 @@ class AuthorServiceTests(unittest.TestCase):
         }
 
         result = self.service.build_context(context)
-        self.assertEqual(len(result["author_people"]), 1)
-        self.assertEqual(result["author_people"][0]["given-names"], "Fran")
+        self.assertEqual(len(result.people), 1)
+        self.assertEqual(result.people[0].given_names, "Fran")
         self.assertEqual(
-            result["author_people"][0]["roles"],
+            result.people[0].roles,
             [{"credit": "Resources"}, {"credit": "Investigation"}],
         )
 
@@ -294,13 +296,13 @@ class AuthorServiceTests(unittest.TestCase):
 
         result = self.service.build_context(context)
         self.assertEqual(
-            [f"{author['given-names']} {author['surname']}".strip() for author in result["author_people"]],
+            [f"{author.given_names} {author.surname}".strip() for author in result.people],
             ["Alice Able", "Unmatched Person"],
         )
-        self.assertEqual(result["author_people"][0]["email"], "alice@example.org")
-        self.assertEqual(result["author_people"][1]["email"], "")
+        self.assertEqual(result.people[0].email, "alice@example.org")
+        self.assertEqual(result.people[1].email, "")
 
-        parsed_yaml = yaml.safe_load(result["author_yaml_block"])
+        parsed_yaml = yaml.safe_load(result.yaml_block)
         self.assertEqual(parsed_yaml["author"][1]["email"], "")
         self.assertEqual(parsed_yaml["author"][1]["affiliation"], "")
         self.assertEqual(
@@ -318,7 +320,7 @@ class AuthorServiceTests(unittest.TestCase):
 
         result = self.service.build_context(context)
         self.assertEqual(
-            result["author_people"],
+            [person.to_mapping() for person in result.people],
             [
                 {
                     "given-names": "Liam M.",
@@ -342,7 +344,7 @@ class AuthorServiceTests(unittest.TestCase):
 
         result = self.service.build_context(context)
         self.assertEqual(
-            result["author_people"],
+            [person.to_mapping() for person in result.people],
             [
                 {
                     "given-names": "Susan C.",
@@ -364,8 +366,8 @@ class AuthorServiceTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(result["author_people"], [])
-        self.assertEqual(yaml.safe_load(result["author_yaml_block"]), {"author": [], "affiliation": []})
+        self.assertEqual(result.people, [])
+        self.assertEqual(yaml.safe_load(result.yaml_block), {"author": [], "affiliation": []})
 
     def test_parses_five_part_affiliations_with_city_and_county_together(self) -> None:
         parsed = self.service._parse_affiliation(

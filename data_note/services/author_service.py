@@ -9,6 +9,8 @@ from typing import Any, Mapping
 
 import yaml
 
+from ..models import AuthorInfo
+
 
 AUTHOR_SLOT_ORDER: tuple[tuple[str, str], ...] = (
     ("pacbio", "collector"),
@@ -34,7 +36,7 @@ class _IndentedYamlDumper(yaml.SafeDumper):
 class AuthorService:
     db_path: Path | None = None
 
-    def build_context(self, context: Mapping[str, Any]) -> dict[str, Any]:
+    def build_context(self, context: Mapping[str, Any]) -> AuthorInfo:
         db_path = self._resolved_db_path()
         if not db_path.exists():
             print(f"Author DB not found at {db_path}; leaving author block empty.")
@@ -49,11 +51,11 @@ class AuthorService:
         author_entries = self._author_yaml_entries(authors, affiliations)
         affiliation_entries = [item["yaml"] for item in affiliations]
 
-        return {
-            "author_people": author_entries,
-            "author_affiliations": affiliation_entries,
-            "author_yaml_block": self._render_yaml_block(author_entries, affiliation_entries),
-        }
+        return AuthorInfo.from_legacy_parts(
+            people=author_entries,
+            affiliations=affiliation_entries,
+            yaml_block=self._render_yaml_block(author_entries, affiliation_entries),
+        )
 
     def _resolved_db_path(self) -> Path:
         if self.db_path is not None:
@@ -587,11 +589,11 @@ class AuthorService:
             default_flow_style=False,
         ).strip()
 
-    def _empty_context(self) -> dict[str, Any]:
+    def _empty_context(self) -> AuthorInfo:
         author_entries: list[dict[str, Any]] = []
         affiliation_entries: list[dict[str, Any]] = []
-        return {
-            "author_people": author_entries,
-            "author_affiliations": affiliation_entries,
-            "author_yaml_block": self._render_yaml_block(author_entries, affiliation_entries),
-        }
+        return AuthorInfo.from_legacy_parts(
+            people=author_entries,
+            affiliations=affiliation_entries,
+            yaml_block=self._render_yaml_block(author_entries, affiliation_entries),
+        )

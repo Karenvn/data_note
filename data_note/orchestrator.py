@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Mapping
 from typing import Any
 
 from Bio import Entrez
@@ -11,6 +12,8 @@ from .models import (
     AssemblyCoverageInput,
     AssemblyDatasetsInfo,
     AssemblySelection,
+    AnnotationInfo,
+    AuthorInfo,
     BarcodingInfo,
     BtkSummary,
     ChromosomeSummary,
@@ -22,8 +25,10 @@ from .models import (
     QualityMetrics,
     SamplingInfo,
     SequencingSummary,
+    TaxonomyInfo,
 )
 from .services import (
+    AnnotationService,
     AuthorService,
     AssemblyService,
     BtkService,
@@ -46,7 +51,6 @@ from .fetch_bioproject_assemblies import (
     get_umbrella_project_details,
 )
 from .fetch_biosample_info import create_biosample_dict
-from .fetch_ensembl_info import create_ensembl_dict
 from .io_utils import dict_to_csv, load_and_apply_corrections, read_bioprojects_from_file
 from .process_chromosome_data import calculate_percentage_assembled
 from .profiles import ProgrammeProfile, get_profile
@@ -63,6 +67,7 @@ class DataNoteOrchestrator:
         Entrez.api_key = os.getenv("ENTREZ_API_KEY", "default_api_key")
         self.profile = profile if isinstance(profile, ProgrammeProfile) else get_profile(profile)
 
+        self.annotation_service = AnnotationService()
         self.author_service = AuthorService()
         self.assembly_service = AssemblyService()
         self.btk_service = BtkService()
@@ -104,7 +109,7 @@ class DataNoteOrchestrator:
                 note_data.base_context["tax_id"] = tax_id
 
         print("The tax_id for this assembly is: ", tax_id)
-        note_data.base_context.update(self.fetch_taxonomic_data(tax_id))
+        note_data.taxonomy = self.fetch_taxonomic_data(tax_id)
         context = self.context_assembler.build(note_data)
 
         species = context.species
@@ -183,26 +188,24 @@ class DataNoteOrchestrator:
         sampling_info = self.fetch_biosample_data(sequencing_summary.technology_data)
         note_data.sampling = sampling_info
         context = self.context_assembler.build(note_data)
-        note_data.author_context = self.build_author_context(context)
+        note_data.author = self.build_author_context(context)
 
         print("Checking for Ensembl annotation...")
         try:
             ensembl_accession = assembly_bundle.preferred_accession()
-            if ensembl_accession:
-                res = create_ensembl_dict(ensembl_accession, species, context.tax_id)
-                print(res)
-            else:
-                res = {}
-
-            if not res:
+            annotation_info = self.fetch_annotation_data(ensembl_accession, species, context.tax_id)
+            annotation_context = annotation_info.to_context_dict()
+            if annotation_context:
+                print(annotation_context)
+            if not annotation_context:
                 print(
                     f"No Ensembl annotation found for {species} / "
                     f"{assembly_bundle.preferred_accession()}"
                 )
             else:
-                note_data.annotation_context = res
+                note_data.annotation = annotation_info
                 if os.environ.get("GN_DEBUG_ENSEMBL") == "1":
-                    print(f"Ensembl annotation: {res['ensembl_annotation_url']}")
+                    print(f"Ensembl annotation: {annotation_context['ensembl_annotation_url']}")
         except Exception as exc:
             print(f"Warning: Ensembl fetch failed for {bioproject} ({assemblies_type}): {exc}")
 
@@ -275,11 +278,19 @@ class DataNoteOrchestrator:
             isoseq=isoseq_sample_dict,
         )
 
-    def build_author_context(self, context: Mapping[str, Any]) -> dict[str, Any]:
+    def build_author_context(self, context: Mapping[str, Any]) -> AuthorInfo:
         return self.author_service.build_context(context)
 
-    def fetch_taxonomic_data(self, tax_id: str) -> dict[str, Any]:
+    def fetch_taxonomic_data(self, tax_id: str) -> TaxonomyInfo:
         return self.taxonomy_service.build_context(tax_id)
+
+    def fetch_annotation_data(
+        self,
+        assembly_accession: str | None,
+        species: str,
+        tax_id: str | int | None,
+    ) -> AnnotationInfo:
+        return self.annotation_service.build_context(assembly_accession, species, tax_id)
 
     def fetch_ncbi_datasets(
         self,
