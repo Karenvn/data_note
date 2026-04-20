@@ -11,6 +11,7 @@ class CliParserTests(unittest.TestCase):
         self.assertEqual(args.bioproject_file, "bioprojects.txt")
         self.assertEqual(args.template_file, "template.md")
         self.assertEqual(args.error_file, "error_log.txt")
+        self.assertIsNone(args.profile)
 
     def test_parser_custom_arguments(self) -> None:
         args = build_parser().parse_args(
@@ -19,11 +20,14 @@ class CliParserTests(unittest.TestCase):
                 "tests/fixtures/template.md",
                 "--error-file",
                 "tmp-errors.txt",
+                "--profile",
+                "psyche",
                 "tests/fixtures/bioprojects.txt",
             ]
         )
         self.assertEqual(args.template_file, "tests/fixtures/template.md")
         self.assertEqual(args.error_file, "tmp-errors.txt")
+        self.assertEqual(args.profile, "psyche")
         self.assertEqual(args.bioproject_file, "tests/fixtures/bioprojects.txt")
 
 

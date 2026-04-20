@@ -6,6 +6,7 @@ from typing import Any, Callable
 import pandas as pd
 
 from ..fetch_biosample_info import get_biosample_tolid_map
+from ..models import SequencingSummary
 from ..process_sequencing_info import (
     check_pacbio_protocol,
     extract_technology_data,
@@ -30,16 +31,21 @@ class SequencingService:
     pacbio_protocol_checker: Callable[[pd.DataFrame], list[str]] = check_pacbio_protocol
     run_accession_getter: Callable[[dict[str, Any]], dict[str, str]] = get_run_accession_lists
 
-    def empty_context(self) -> dict[str, Any]:
+    def empty_context(self) -> SequencingSummary:
         empty_df = self.columns_selector(self._empty_dataframe())
         technology_data = self.technology_extractor(empty_df)
         seq_data = self.sequencing_organiser(empty_df)
-        summary = self.totals_summariser(empty_df, technology_data)
-        summary["pacbio_protocols"] = []
+        totals = self.totals_summariser(empty_df, technology_data)
         run_accessions = self.run_accession_getter(seq_data)
-        return {"technology_data": technology_data, "seq_data": seq_data, **summary, **run_accessions}
+        return SequencingSummary.from_legacy_parts(
+            technology_data=technology_data,
+            seq_data=seq_data,
+            totals=totals,
+            pacbio_protocols=[],
+            run_accessions=run_accessions,
+        )
 
-    def build_context(self, bioprojects: Any, tolid: str) -> dict[str, Any]:
+    def build_context(self, bioprojects: Any, tolid: str) -> SequencingSummary:
         bioproject_list = self._normalise_bioprojects(bioprojects)
 
         print(f"Processing sequencing information for bioproject(s): {', '.join(bioproject_list)}.")
@@ -68,13 +74,18 @@ class SequencingService:
         technology_df = self.columns_selector(read_study_df)
         technology_data = self.technology_extractor(technology_df)
         seq_data = self.sequencing_organiser(technology_df)
-        summary = self.totals_summariser(technology_df, technology_data)
+        totals = self.totals_summariser(technology_df, technology_data)
 
         pacbio_protocols = self.pacbio_protocol_checker(technology_df)
-        summary["pacbio_protocols"] = pacbio_protocols
 
         run_accessions = self.run_accession_getter(seq_data)
-        return {"technology_data": technology_data, "seq_data": seq_data, **summary, **run_accessions}
+        return SequencingSummary.from_legacy_parts(
+            technology_data=technology_data,
+            seq_data=seq_data,
+            totals=totals,
+            pacbio_protocols=pacbio_protocols,
+            run_accessions=run_accessions,
+        )
 
     @staticmethod
     def _normalise_bioprojects(bioprojects: Any) -> list[str]:

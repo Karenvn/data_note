@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from ..models import AssemblySelection, BtkAssemblyRecord, BtkSummary
 from ..fetch_btk_info import build_btk_urls, fetch_and_parse_summary, fetch_software_versions
 
 
@@ -14,59 +15,57 @@ class BtkService:
 
     def build_context(
         self,
-        assemblies_type: str | None,
-        assembly_accessions: dict[str, Any],
-    ) -> dict[str, Any]:
-        btk_dict: dict[str, Any] = {}
+        assembly_selection: AssemblySelection,
+    ) -> BtkSummary:
+        btk_summary = BtkSummary(assemblies_type=assembly_selection.assemblies_type)
 
-        if assemblies_type == "prim_alt":
-            self._populate_primary_context(assembly_accessions, btk_dict)
-        elif assemblies_type == "hap_asm":
-            self._populate_haplotype_context(assembly_accessions, btk_dict)
+        if assembly_selection.assemblies_type == "prim_alt":
+            self._populate_primary_context(assembly_selection, btk_summary)
+        elif assembly_selection.assemblies_type == "hap_asm":
+            self._populate_haplotype_context(assembly_selection, btk_summary)
         else:
-            print(f"Warning: Unsupported assemblies type: {assemblies_type}")
+            print(f"Warning: Unsupported assemblies type: {assembly_selection.assemblies_type}")
 
-        return btk_dict
+        return btk_summary
 
-    def _populate_primary_context(self, assembly_accessions: dict[str, Any], btk_dict: dict[str, Any]) -> None:
+    def _populate_primary_context(self, assembly_selection: AssemblySelection, btk_summary: BtkSummary) -> None:
         print("Fetching BTK info for primary assembly...")
-        prim_accession = assembly_accessions.get("prim_accession")
-        if not prim_accession:
+        if assembly_selection.primary is None:
             print("Warning: Primary accession is missing.")
             return
+        prim_accession = assembly_selection.primary.accession
 
         try:
-            btk_dict.update(self.summary_fetcher(prim_accession) or {})
-            btk_dict.update(self.software_versions_fetcher(prim_accession) or {})
-            view_urls, download_urls = self.url_builder(prim_accession)
-            btk_dict.update(view_urls or {})
-            btk_dict.update(download_urls or {})
+            btk_summary.primary = self._build_record(prim_accession)
+            btk_summary.shared_fields.update(self.software_versions_fetcher(prim_accession) or {})
         except Exception as exc:
             print(f"Warning: BTK data missing or failed for {prim_accession}: {exc}")
 
-    def _populate_haplotype_context(self, assembly_accessions: dict[str, Any], btk_dict: dict[str, Any]) -> None:
+    def _populate_haplotype_context(self, assembly_selection: AssemblySelection, btk_summary: BtkSummary) -> None:
         print("Fetching BTK info for haplotype assemblies...")
-        hap1_accession = assembly_accessions.get("hap1_accession")
-        if hap1_accession:
+        if assembly_selection.hap1 is not None:
+            hap1_accession = assembly_selection.hap1.accession
             try:
-                btk_dict.update(self.summary_fetcher(hap1_accession, prefix="hap1_") or {})
-                btk_dict.update(self.software_versions_fetcher(hap1_accession) or {})
-                view_urls, download_urls = self.url_builder(hap1_accession, prefix="hap1_")
-                btk_dict.update(view_urls or {})
-                btk_dict.update(download_urls or {})
+                btk_summary.hap1 = self._build_record(hap1_accession, prefix="hap1_")
+                btk_summary.shared_fields.update(self.software_versions_fetcher(hap1_accession) or {})
             except Exception as exc:
                 print(f"Warning: BTK data missing or failed for hap1 {hap1_accession}: {exc}")
         else:
             print("Warning: Hap1 accession is missing.")
 
-        hap2_accession = assembly_accessions.get("hap2_accession")
-        if hap2_accession:
+        if assembly_selection.hap2 is not None:
+            hap2_accession = assembly_selection.hap2.accession
             try:
-                btk_dict.update(self.summary_fetcher(hap2_accession, prefix="hap2_") or {})
-                view_urls, download_urls = self.url_builder(hap2_accession, prefix="hap2_")
-                btk_dict.update(view_urls or {})
-                btk_dict.update(download_urls or {})
+                btk_summary.hap2 = self._build_record(hap2_accession, prefix="hap2_")
             except Exception as exc:
                 print(f"Warning: BTK data missing or failed for hap2 {hap2_accession}: {exc}")
         else:
             print("Warning: Hap2 accession is missing.")
+
+    def _build_record(self, accession: str, *, prefix: str = "") -> BtkAssemblyRecord:
+        view_urls, download_urls = self.url_builder(accession, prefix=prefix)
+        return BtkAssemblyRecord(
+            summary_fields=self.summary_fetcher(accession, prefix=prefix) or {},
+            view_urls=view_urls or {},
+            download_urls=download_urls or {},
+        )

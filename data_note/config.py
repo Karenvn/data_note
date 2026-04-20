@@ -28,6 +28,7 @@ class AppConfig:
     entrez_email: str
     entrez_api_key: str
     debug_ensembl: bool
+    profile_name: str
     server_data_root: Path
     corrections_file: Path
     lr_sample_prep_tsv: Path
@@ -58,6 +59,7 @@ class AppConfig:
             entrez_email=env.get("ENTREZ_EMAIL", "default_email"),
             entrez_api_key=env.get("ENTREZ_API_KEY", "default_api_key"),
             debug_ensembl=_env_bool(env.get("GN_DEBUG_ENSEMBL"), default=False),
+            profile_name=env.get("DATA_NOTE_PROFILE", "darwin").strip().lower() or "darwin",
             server_data_root=server_data_root,
             corrections_file=_expand_path(
                 env.get(
@@ -91,6 +93,7 @@ class AppConfig:
         self._set("ENTREZ_EMAIL", self.entrez_email)
         self._set("ENTREZ_API_KEY", self.entrez_api_key)
         self._set("GN_DEBUG_ENSEMBL", "1" if self.debug_ensembl else "0")
+        self._set("DATA_NOTE_PROFILE", self.profile_name)
         self._set("DATA_NOTE_GN_ASSETS", self.server_data_root)
         self._set("DATA_NOTE_SERVER_DATA", self.server_data_root)
         self._set("DATA_NOTE_CORRECTIONS_FILE", self.corrections_file)

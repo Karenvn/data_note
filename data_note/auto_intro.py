@@ -2,11 +2,12 @@
 # 3 August 2025
 # -------------------------------------------------------------
 """Minimal usage
->>> asm = {
-        "assemblies_type": "hap_asm",           # or "prim_alt"
-        "hap1_accession": "GCA_964188265.1",
-        "hap2_accession": "GCA_964187955.1",
-    }
+>>> from data_note.models import AssemblyRecord, AssemblySelection
+>>> asm = AssemblySelection(
+...     assemblies_type="hap_asm",
+...     hap1=AssemblyRecord(accession="GCA_964188265.1", assembly_name="ixExample1.hap1.1", role="hap1"),
+...     hap2=AssemblyRecord(accession="GCA_964187955.1", assembly_name="ixExample1.hap2.1", role="hap2"),
+... )
 >>> sent = summarise_genomes(139089, asm, tolid="ilAgaZoeg1")
 print(sent)
 """
@@ -16,7 +17,10 @@ import re
 import requests
 from collections import defaultdict
 from datetime import datetime
+from typing import Any, Mapping
 from num2words import num2words
+
+from .models import AssemblyRecord, AssemblySelection
 
 API_KEY = os.getenv("ENTREZ_API_KEY", "default_api_key")
 HEADERS = {"accept": "application/json", "api-key": API_KEY}
@@ -123,15 +127,22 @@ def make_core_sentence(genus: str, family: str, species: str, g: int, f: int) ->
             f"complete sequence for *{species}*, enabling comparative analyses {cite}.")
 
 
+def _normalise_assembly_input(assembly_input: AssemblySelection | Mapping[str, Any]) -> dict[str, Any]:
+    if isinstance(assembly_input, AssemblySelection):
+        return assembly_input.to_context_dict()
+    return dict(assembly_input)
+
+
 # ------------------------------------------------------------------
 # main driver
 # ------------------------------------------------------------------
 
 def summarise_genomes(
     species_taxid: int,
-    asm_dict: dict,
+    assembly_input: AssemblySelection | Mapping[str, Any],
     tolid: str | None = None,
     show_tables: bool = True) -> str:
+    asm_dict = _normalise_assembly_input(assembly_input)
     lineage = get_lineage(species_taxid)
 
     # --- determine our accessions first ---
@@ -218,16 +229,15 @@ def summarise_genomes(
 # example run
 # ------------------------------------------------------------------
 if __name__ == "__main__":
-    example_asm = {
-        "assemblies_type": "hap_asm",
-        "hap1_accession": "GCA_964188265.1",
-        "hap2_accession": "GCA_964187955.1",
-    }
+    example_asm = AssemblySelection(
+        assemblies_type="hap_asm",
+        hap1=AssemblyRecord(accession="GCA_964188265.1", assembly_name="ixExample1.hap1.1", role="hap1"),
+        hap2=AssemblyRecord(accession="GCA_964187955.1", assembly_name="ixExample1.hap2.1", role="hap2"),
+    )
     intro = summarise_genomes(
         species_taxid=139089,   # Agapeta zoegana
-        asm_dict=example_asm,
+        assembly_input=example_asm,
         tolid="ilAgaZoeg1",
         show_tables=False,
     )
     print("\nIntro sentence:\n", intro)
-

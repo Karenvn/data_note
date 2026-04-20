@@ -20,7 +20,7 @@ class RenderingService:
     jira_attachment_downloader: Callable[[str, str], Any] = download_jira_attachment
     special_character_replacer: Callable[[str], str] = replace_special_characters
 
-    def write_note(self, assemblies_type: str, template_file: str, context: dict[str, Any]) -> str:
+    def write_note(self, template_file: str, context: dict[str, Any]) -> str:
         species_name = context["species"]
         tolid = context["tolid"]
         jira_ticket = context.get("jira")
@@ -34,7 +34,7 @@ class RenderingService:
         output_dir = os.path.join(os.getcwd(), species_name.replace(" ", "_"))
         os.makedirs(output_dir, exist_ok=True)
 
-        self._populate_images(assemblies_type, tolid, output_dir, context)
+        self._populate_images(tolid, output_dir, context)
 
         if jira_ticket:
             self.jira_attachment_downloader(jira_ticket, output_dir)
@@ -54,7 +54,6 @@ class RenderingService:
 
     def _populate_images(
         self,
-        assemblies_type: str,
         tolid: str,
         output_dir: str,
         context: dict[str, Any],
@@ -76,7 +75,7 @@ class RenderingService:
         except Exception:
             print(f"Merqury plot not found for {tolid}.")
 
-        accession = self._resolve_btk_accession(assemblies_type, context)
+        accession = self._resolve_btk_accession(context)
         if not accession:
             print("No valid accession found for BTK image download.")
             return
@@ -97,12 +96,8 @@ class RenderingService:
                 context[key] = self.special_character_replacer(value, target_format="markdown")
 
     @staticmethod
-    def _resolve_btk_accession(assemblies_type: str, context: dict[str, Any]) -> str | None:
-        if assemblies_type == "prim_alt":
-            return context.get("prim_accession")
-        if assemblies_type == "hap_asm":
-            return context.get("hap1_accession")
-        return None
+    def _resolve_btk_accession(context: dict[str, Any]) -> str | None:
+        return context.get("prim_accession") or context.get("hap1_accession")
 
     @staticmethod
     def _ensure_tables(context: dict[str, Any]) -> None:

@@ -5,6 +5,7 @@ from typing import Any, Callable
 
 from ..fetch_jira_info import fetch_and_parse_jira_data
 from ..local_metadata_provider import get_local_metadata_provider
+from ..models import AssemblySelection
 
 
 @dataclass(slots=True)
@@ -14,14 +15,14 @@ class LocalMetadataService:
 
     def build_context(
         self,
-        assemblies_type: str | None,
-        context: dict[str, Any],
+        assembly_selection: AssemblySelection,
+        tolid: str | None = None,
         *,
         species: str | None = None,
     ) -> dict[str, Any]:
         local_data_context: dict[str, Any] = {}
 
-        accession, assembly_name = self._resolve_lookup_values(assemblies_type, context)
+        accession, assembly_name = self._resolve_lookup_values(assembly_selection)
         if not accession:
             print("Error: No valid accession found for ToLA lookup.")
             return local_data_context
@@ -29,7 +30,7 @@ class LocalMetadataService:
         provider = self.provider_factory()
         jira_ticket = provider.lookup_jira_ticket(
             accession,
-            tolid=context.get("tolid"),
+            tolid=tolid,
             assembly_name=assembly_name,
         )
 
@@ -50,11 +51,9 @@ class LocalMetadataService:
 
     @staticmethod
     def _resolve_lookup_values(
-        assemblies_type: str | None,
-        context: dict[str, Any],
+        assembly_selection: AssemblySelection,
     ) -> tuple[str | None, str | None]:
-        if assemblies_type == "prim_alt":
-            return context.get("prim_accession"), context.get("prim_assembly_name")
-        if assemblies_type == "hap_asm":
-            return context.get("hap1_accession"), context.get("hap1_assembly_name")
-        return None, None
+        return (
+            assembly_selection.preferred_accession(),
+            assembly_selection.preferred_assembly_name(),
+        )

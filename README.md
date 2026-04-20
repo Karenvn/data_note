@@ -1,4 +1,4 @@
-# Genome notes workflow
+# Genome notes markdown creation
 
 `data_note` is a Python workflow for generating publication-oriented genome note markdown from BioProject accession numbers. It collects assembly, sequencing, taxonomy and quality metadata from public sources, with optional addition of metadata from local systems, and renders a Pandoc-ready markdown note together with associated figures and context data.
 
@@ -30,6 +30,17 @@ python -m data_note --template_file ~/genome_note_templates/dtol_template.md bio
 ```
 
 This runs the package entrypoint directly.
+
+For explicit profile selection, use:
+
+```bash
+python -m data_note --profile darwin --template_file ~/genome_note_templates/dtol_template.md bioprojects.txt
+```
+
+`psyche` is also available as a profile name. It now has its own table module, with the first extracted differences from Darwin:
+- Table 1 can include an Iso-Seq column.
+- Table 3 adds assigned Merian elements and, for dual chromosome-level haplotypes, reports haplotype 1 only.
+- Table 5 includes the extra Psyche software rows.
 
 For a lightweight in-repo smoke-test run, use the fixture files and do:
 
@@ -69,6 +80,7 @@ Important variables include:
 - `ENTREZ_API_KEY`
 - `DATA_NOTE_GN_ASSETS` (preferred)
 - `DATA_NOTE_SERVER_DATA` (legacy alias)
+- `DATA_NOTE_PROFILE` (`darwin` by default)
 - `DATA_NOTE_CORRECTIONS_FILE`
 - `DATA_NOTE_LR_SAMPLE_PREP_TSV`
 - `DATA_NOTE_AUTHOR_DB`
@@ -117,8 +129,11 @@ The repository also includes:
 ## Current Status
 
 - The supported entrypoint is `python -m data_note ...`.
+- `darwin` is the default profile.
+- `psyche` is now a separate profile with its own table module, but only the first table differences have been extracted so far.
+- `asg` is not yet implemented as a runtime profile.
 - Internal integrations are environment dependent.
-- Automated regression testing is still limited.
+
 
 ## Standards
 

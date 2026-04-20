@@ -1,21 +1,13 @@
-#!/usr/bin/env python3
-
 from __future__ import annotations
 
-# Compatibility wrapper: Darwin table builders now live in data_note.tables.darwin,
-# while shared utilities live in data_note.tables.common.
-from .tables import (
+from .common import build_native_table, flatten_cell, na, native_cell, safe_str
+from .darwin import (
     build_all_tables,
-    build_native_table,
-    flatten_cell,
     make_table1_rows,
     make_table2_rows,
     make_table3_rows,
     make_table4_rows,
     make_table5_rows,
-    na,
-    native_cell,
-    safe_str,
 )
 
 __all__ = [

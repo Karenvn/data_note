@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
-
 import os
 import re
 import requests
 from Bio import Entrez
+
+from .models import AssemblyCoverageInput
 
 # Setup Entrez credentials
 Entrez.email = os.getenv('ENTREZ_EMAIL', 'default_email')
@@ -20,7 +21,7 @@ def fetch_sequence_reports(accession):
     resp = requests.get(api_url, headers=headers)
     resp.raise_for_status()
     reports = resp.json().get('reports', [])
-    # include both assembled chromosomes and their unlocalized scaffolds
+    # include both assembled chromosomes and their unlocalised scaffolds
     return [r for r in reports if r.get('role') in ('assembled-molecule','unlocalized-scaffold')]
 
 
@@ -140,24 +141,30 @@ def get_chromosome_lengths(accession):
     return sum(int(c['length'] * 1e6) for c in chroms)
 
 
-def calculate_percentage_assembled(info):
+def calculate_percentage_assembled(info: AssemblyCoverageInput | dict):
     """
     Compute percentage of total genome sequence assigned to chromosomes.
     Works for prim_alt and hap_asm.
     """
-    asm = info.get('assemblies_type')
+    if isinstance(info, AssemblyCoverageInput):
+        coverage = info
+    else:
+        coverage = AssemblyCoverageInput.from_mapping(info)
+
+    coverage.validate()
+    asm = coverage.assemblies_type
     if asm == 'prim_alt':
-        total_chr = get_chromosome_lengths(info['prim_accession'])
-        genome = float(info.get('genome_length_unrounded', 0))
+        total_chr = get_chromosome_lengths(coverage.primary_accession)
+        genome = coverage.genome_length_unrounded or 0
         pct = round((total_chr / genome) * 100, 2) if genome else 0
         return {'total_chromosome_length': total_chr,
                 'genome_length_unrounded': genome,
                 'perc_assembled': pct}
     elif asm == 'hap_asm':
-        total1 = get_chromosome_lengths(info['hap1_accession'])
-        total2 = get_chromosome_lengths(info['hap2_accession'])
-        g1 = float(info.get('hap1_genome_length_unrounded', 0))
-        g2 = float(info.get('hap2_genome_length_unrounded', 0))
+        total1 = get_chromosome_lengths(coverage.hap1_accession)
+        total2 = get_chromosome_lengths(coverage.hap2_accession)
+        g1 = coverage.hap1_genome_length_unrounded or 0
+        g2 = coverage.hap2_genome_length_unrounded or 0
         p1 = round((total1 / g1) * 100, 2) if g1 else 0
         p2 = round((total2 / g2) * 100, 2) if g2 else 0
         return {'hap1_chromosome_length': total1,
@@ -172,6 +179,15 @@ def identify_sex_chromosomes(chr_list):
     """
     Return sorted list of sex chromosomes and their variants found.
     """
-    valid = {'X','X1','X2','Y','W','Z','Z1','Z2','B','B1','B2'}
+    valid = {'X','X1','X2','Y','W','Z','Z1','Z2'}
+    found = {c['molecule'].upper() for c in chr_list if c['molecule'].upper() in valid}
+    return sorted(found)
+
+
+def identify_supernumerary_chromosomes(chr_list):
+    """
+    Return sorted list of supernumerary B chromosomes and their variants found.
+    """
+    valid = {'B','B1','B2','B3', 'B4'}
     found = {c['molecule'].upper() for c in chr_list if c['molecule'].upper() in valid}
     return sorted(found)

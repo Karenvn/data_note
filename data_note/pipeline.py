@@ -27,7 +27,7 @@ class DataNotePipeline:
                     assemblies_type = context.get("assemblies_type")
                     if assemblies_type in ["prim_alt", "hap_asm"]:
                         try:
-                            genome_note_dir = orchestrator.write_note(assemblies_type, template_file, context)
+                            genome_note_dir = orchestrator.write_note(template_file, context)
                             if genome_note_dir:
                                 output_csv = Path(genome_note_dir) / f"{bioproject}_context.csv"
                                 orchestrator.write_context_csv(context, str(output_csv))
@@ -46,5 +46,5 @@ class DataNotePipeline:
     def _orchestrator_instance(self):
         if self._orchestrator is None:
             self.config.apply_environment()
-            self._orchestrator = DataNoteOrchestrator()
+            self._orchestrator = DataNoteOrchestrator(profile=self.config.profile_name)
         return self._orchestrator

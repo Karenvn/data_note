@@ -6,7 +6,17 @@ from typing import Any
 
 from Bio import Entrez
 
-from .models import AssemblySelection, NoteContext
+from .models import (
+    AssemblyBundle,
+    AssemblyCoverageInput,
+    AssemblyDatasetsInfo,
+    AssemblySelection,
+    BtkSummary,
+    ChromosomeSummary,
+    NoteContext,
+    SamplingInfo,
+    SequencingSummary,
+)
 from .services import (
     AuthorService,
     AssemblyService,
@@ -37,7 +47,7 @@ from .fetch_extraction_data import (
 )
 from .io_utils import dict_to_csv, load_and_apply_corrections, read_bioprojects_from_file
 from .process_chromosome_data import calculate_percentage_assembled
-from .table_rows import build_all_tables
+from .profiles import ProgrammeProfile, get_profile
 
 
 KNOWN_TOLID_FIX = {
@@ -46,9 +56,10 @@ KNOWN_TOLID_FIX = {
 
 
 class DataNoteOrchestrator:
-    def __init__(self) -> None:
+    def __init__(self, profile: ProgrammeProfile | str | None = None) -> None:
         Entrez.email = os.getenv("ENTREZ_EMAIL", "default_email")
         Entrez.api_key = os.getenv("ENTREZ_API_KEY", "default_api_key")
+        self.profile = profile if isinstance(profile, ProgrammeProfile) else get_profile(profile)
 
         self.author_service = AuthorService()
         self.assembly_service = AssemblyService()
@@ -96,30 +107,23 @@ class DataNoteOrchestrator:
         context.child_bioprojects = child_accessions
 
         assembly_selection = self.fetch_assembly_data(umbrella_data, tax_id, child_accessions)
-        asm_dict = assembly_selection.to_context_dict()
-        print("These are the assemblies selected ", asm_dict)
-        context.update(asm_dict)
+        assembly_bundle = AssemblyBundle(selection=assembly_selection)
+        print("These are the assemblies selected ", assembly_bundle.selection.to_context_dict())
+        context.assemblies_type = assembly_bundle.assemblies_type
+        context.assembly_name = assembly_bundle.preferred_assembly_name()
         context.update(get_parent_bioprojects(bioproject))
 
         try:
-            context.update(self.process_local_data(context.get("assemblies_type"), species, context))
+            context.update(self.process_local_data(assembly_selection, species, context.tolid))
         except Exception as exc:
             print(f"Warning: local data fetch failed for {bioproject}: {exc}")
 
         context.set_formatted_parent_projects()
 
-        assemblies_type = context.assemblies_type
-        assembly_accessions = context.assembly_accessions()
-
+        assemblies_type = assembly_bundle.assemblies_type
         datasets_ok = True
         try:
-            ncbi_context = self.fetch_ncbi_datasets(assemblies_type, assembly_accessions)
-            if assemblies_type == "prim_alt":
-                context.update(ncbi_context)
-                context.assembly_name = context["prim_assembly_name"]
-            elif assemblies_type == "hap_asm":
-                context.update(ncbi_context)
-                context.assembly_name = context["hap1_assembly_name"]
+            assembly_bundle.datasets = self.fetch_ncbi_datasets(assembly_selection)
         except Exception as exc:
             datasets_ok = False
             context["ncbi_datasets_error"] = str(exc)
@@ -129,32 +133,28 @@ class DataNoteOrchestrator:
 
         if datasets_ok:
             try:
-                context.update(self.process_chromosomes(assembly_accessions, assemblies_type, context))
+                chromosome_context = context.to_dict()
+                chromosome_context.update(assembly_bundle.to_context_dict())
+                assembly_bundle.chromosomes = self.process_chromosomes(assembly_selection, chromosome_context)
             except Exception as exc:
                 print(f"Warning: chromosome processing failed for {bioproject} ({assemblies_type}): {exc}")
 
-        if datasets_ok and context["assemblies_type"] == "prim_alt":
-            info = {
-                "assemblies_type": "prim_alt",
-                "prim_accession": context["prim_accession"],
-                "genome_length_unrounded": context.get("genome_length_unrounded"),
-            }
-            context.update(calculate_percentage_assembled(info))
-        elif datasets_ok and context["assemblies_type"] == "hap_asm":
-            info = {
-                "assemblies_type": "hap_asm",
-                "hap1_accession": context["hap1_accession"],
-                "hap2_accession": context["hap2_accession"],
-                "hap1_genome_length_unrounded": context.get("hap1_genome_length_unrounded"),
-                "hap2_genome_length_unrounded": context.get("hap2_genome_length_unrounded"),
-            }
-            context.update(calculate_percentage_assembled(info))
+        if datasets_ok and assemblies_type in {"prim_alt", "hap_asm"}:
+            coverage_context = context.to_dict()
+            coverage_context.update(assembly_bundle.to_context_dict())
+            coverage_input = AssemblyCoverageInput.from_selection_and_context(assembly_selection, coverage_context)
+            assembly_bundle.coverage_fields = calculate_percentage_assembled(coverage_input)
+
+        if assemblies_type in ["prim_alt", "hap_asm"]:
+            assembly_bundle.btk = self.fetch_btk_info(assembly_selection)
+
+        context.update(assembly_bundle.to_context_dict())
 
         context.apply_known_tolid_fix(KNOWN_TOLID_FIX)
 
         tolid = context.tolid
         try:
-            context.auto_text = summarise_genomes(tax_id, asm_dict, tolid, show_tables=True)
+            context.auto_text = summarise_genomes(tax_id, assembly_selection, tolid, show_tables=True)
         except Exception as exc:
             print(f"Warning: auto intro failed for {bioproject}: {exc}")
             context["auto_text_error"] = str(exc)
@@ -162,8 +162,9 @@ class DataNoteOrchestrator:
 
         print(f"The TOLID is {tolid}")
         sequencing_projects = child_accessions or [bioproject]
-        context.update(self.process_sequencing_workflow(sequencing_projects, tolid))
-        pacbio_library_name = context.get("technology_data", {}).get("pacbio", {}).get("pacbio_library_name")
+        sequencing_summary = self.process_sequencing_workflow(sequencing_projects, tolid)
+        context.update(sequencing_summary.to_context_dict())
+        pacbio_library_name = sequencing_summary.pacbio_library_name()
         extraction_lookup_id = pacbio_library_name or tolid
 
         try:
@@ -172,16 +173,15 @@ class DataNoteOrchestrator:
             logging.warning("Failed to process extraction info for %r: %s", extraction_lookup_id, exc)
 
         context.update(fetch_barcoding_info(tolid))
-        context.update(self.fetch_biosample_data(context.get("technology_data", {})))
+        sampling_info = self.fetch_biosample_data(sequencing_summary.technology_data)
+        context.update(sampling_info.to_context_dict())
         context.update(self.build_author_context(context))
 
         print("Checking for Ensembl annotation...")
         try:
-            if assemblies_type == "prim_alt":
-                res = create_ensembl_dict(context["prim_accession"], species, context.tax_id)
-                print(res)
-            elif assemblies_type == "hap_asm":
-                res = create_ensembl_dict(context["hap1_accession"], species, context.tax_id)
+            ensembl_accession = assembly_bundle.preferred_accession()
+            if ensembl_accession:
+                res = create_ensembl_dict(ensembl_accession, species, context.tax_id)
                 print(res)
             else:
                 res = {}
@@ -189,7 +189,7 @@ class DataNoteOrchestrator:
             if not res:
                 print(
                     f"No Ensembl annotation found for {species} / "
-                    f"{context.get('prim_accession') or context.get('hap1_accession')}"
+                    f"{assembly_bundle.preferred_accession()}"
                 )
             else:
                 context.update(res)
@@ -197,9 +197,6 @@ class DataNoteOrchestrator:
                     print(f"Ensembl annotation: {res['ensembl_annotation_url']}")
         except Exception as exc:
             print(f"Warning: Ensembl fetch failed for {bioproject} ({assemblies_type}): {exc}")
-
-        if assemblies_type in ["prim_alt", "hap_asm"]:
-            context.update(self.fetch_btk_info(assemblies_type, assembly_accessions))
 
         context.update(self.process_server_data(assemblies_type, context["tolid"]))
 
@@ -211,7 +208,7 @@ class DataNoteOrchestrator:
 
         context["ebp_metric"] = calc_ebp_metric(context)
 
-        context = build_all_tables(context)
+        context = self.profile.build_tables(context)
         if not isinstance(context, NoteContext):
             context = NoteContext.from_mapping(context)
 
@@ -228,10 +225,10 @@ class DataNoteOrchestrator:
     ) -> AssemblySelection:
         return self.assembly_service.build_context(umbrella_data, tax_id, child_accessions=child_accessions)
 
-    def empty_sequencing_context(self) -> dict[str, Any]:
+    def empty_sequencing_context(self) -> SequencingSummary:
         return self.sequencing_service.empty_context()
 
-    def process_sequencing_workflow(self, bioprojects: Any, tolid: str) -> dict[str, Any]:
+    def process_sequencing_workflow(self, bioprojects: Any, tolid: str) -> SequencingSummary:
         return self.sequencing_service.build_context(bioprojects, tolid)
 
     def process_extraction_info(self, library_name: str | None) -> dict[str, Any]:
@@ -299,22 +296,17 @@ class DataNoteOrchestrator:
 
         return extraction_context
 
-    def fetch_biosample_data(self, technology_data: dict[str, Any]) -> dict[str, Any]:
+    def fetch_biosample_data(self, technology_data: dict[str, Any]) -> SamplingInfo:
         print("Accessing BioSample information from BioSamples.")
-        biosample_context: dict[str, Any] = {}
-
         pacbio_sample_dict, rna_sample_dict, hic_sample_dict, isoseq_sample_dict = create_biosample_dict(
             technology_data
         )
-        if pacbio_sample_dict:
-            biosample_context.update(pacbio_sample_dict)
-        if rna_sample_dict:
-            biosample_context.update(rna_sample_dict)
-        if hic_sample_dict:
-            biosample_context.update(hic_sample_dict)
-        if isoseq_sample_dict:
-            biosample_context.update(isoseq_sample_dict)
-        return biosample_context
+        return SamplingInfo.from_legacy_dicts(
+            pacbio=pacbio_sample_dict,
+            rna=rna_sample_dict,
+            hic=hic_sample_dict,
+            isoseq=isoseq_sample_dict,
+        )
 
     def build_author_context(self, context: Mapping[str, Any]) -> dict[str, Any]:
         return self.author_service.build_context(context)
@@ -324,36 +316,33 @@ class DataNoteOrchestrator:
 
     def fetch_ncbi_datasets(
         self,
-        assemblies_type: str | None,
-        assembly_accessions: dict[str, Any],
-    ) -> dict[str, Any]:
-        return self.ncbi_datasets_service.build_context(assemblies_type, assembly_accessions)
+        assembly_selection: AssemblySelection,
+    ) -> AssemblyDatasetsInfo:
+        return self.ncbi_datasets_service.build_context(assembly_selection)
 
     def process_chromosomes(
         self,
-        assembly_accessions: dict[str, Any],
-        assemblies_type: str | None,
+        assembly_selection: AssemblySelection,
         context: dict[str, Any],
-    ) -> dict[str, Any]:
-        return self.chromosome_service.build_context(assembly_accessions, assemblies_type, context)
+    ) -> ChromosomeSummary:
+        return self.chromosome_service.build_context(assembly_selection, context)
 
     def process_local_data(
         self,
-        assemblies_type: str | None,
+        assembly_selection: AssemblySelection,
         species: str | None,
-        context: dict[str, Any],
+        tolid: str | None,
     ) -> dict[str, Any]:
-        return self.local_metadata_service.build_context(assemblies_type, context, species=species)
+        return self.local_metadata_service.build_context(assembly_selection, tolid=tolid, species=species)
 
     def fetch_btk_info(
         self,
-        assemblies_type: str | None,
-        assembly_accessions: dict[str, Any],
-    ) -> dict[str, Any]:
-        return self.btk_service.build_context(assemblies_type, assembly_accessions)
+        assembly_selection: AssemblySelection,
+    ) -> BtkSummary:
+        return self.btk_service.build_context(assembly_selection)
 
     def process_server_data(self, assemblies_type: str | None, tolid: str) -> dict[str, Any]:
         return self.server_data_service.build_context(assemblies_type, tolid)
 
-    def write_note(self, assemblies_type: str, template_file: str, context: dict[str, Any]) -> str:
-        return self.rendering_service.write_note(assemblies_type, template_file, context)
+    def write_note(self, template_file: str, context: dict[str, Any]) -> str:
+        return self.rendering_service.write_note(template_file, context)
