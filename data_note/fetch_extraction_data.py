@@ -36,6 +36,39 @@ def _portal_datasource():
         logger.warning("ToL Portal lookup unavailable: %s", exc)
         return None
 
+
+def _resolve_lr_sample_prep_tsv(tsv_path: str | None = None) -> Path | None:
+    configured = tsv_path or os.getenv("DATA_NOTE_LR_SAMPLE_PREP_TSV")
+    candidates: list[Path] = []
+    assets_root = Path(
+        os.getenv("DATA_NOTE_GN_ASSETS")
+        or os.getenv("DATA_NOTE_SERVER_DATA")
+        or str(Path.home() / "gn_assets")
+    ).expanduser()
+    legacy_template_path = Path.home() / "genome_note_templates" / "LR_sample_prep.tsv"
+
+    if configured:
+        normalized = str(configured).strip().strip('"').strip("'")
+        candidates.append(Path(normalized).expanduser())
+        candidates.append(Path.cwd() / Path(normalized).name)
+
+    candidates.append(assets_root / "LR_sample_prep.tsv")
+    candidates.append(legacy_template_path)
+
+    seen: set[Path] = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if candidate.exists():
+            return candidate
+
+    logger.warning(
+        "LR sample prep TSV not found. Tried: %s",
+        ", ".join(str(path) for path in candidates),
+    )
+    return None
+
 def _normalize_identifier(value):
     if value is None:
         return ""
@@ -241,20 +274,9 @@ def fallback_fetch_from_lr_sample_prep(sanger_sample_id, tsv_path=None):
     """
     Fallback to fetching extraction info from LR_sample_prep.tsv if Portal has no usable data.
     """
-    if tsv_path is None:
-        tsv_path = os.getenv("DATA_NOTE_LR_SAMPLE_PREP_TSV", "~/genome_note_templates/LR_sample_prep.tsv")
-
-    # Normalize path: strip accidental quotes and expand "~"
-    tsv_path = str(tsv_path).strip().strip('"').strip("'")
-    tsv_file = Path(tsv_path).expanduser()
-    if not tsv_file.exists():
-        # Fallback to CWD if only a filename was intended
-        candidate = Path.cwd() / Path(tsv_path).name
-        if candidate.exists():
-            tsv_file = candidate
-        else:
-            logger.warning("TSV file not found. Tried: %s and %s", tsv_file, candidate)
-            return {}
+    tsv_file = _resolve_lr_sample_prep_tsv(tsv_path)
+    if tsv_file is None:
+        return {}
 
     df = pd.read_csv(tsv_file, sep="\t")
     df.columns = (
@@ -265,19 +287,33 @@ def fallback_fetch_from_lr_sample_prep(sanger_sample_id, tsv_path=None):
         .str.replace(r"[^\w_]", "", regex=True)  # optional: remove punctuation
 )
 
-    df["sanger_sample_id"] = df["sanger_sample_id"].astype(str).str.strip().str.upper()
-    sanger_sample_id = sanger_sample_id.strip().upper()
+    lookup_id = sanger_sample_id.strip().upper()
 
-    match = df[df["sanger_sample_id"] == sanger_sample_id]
+    candidate_columns: list[str] = []
+    if "sanger_sample_id" in df.columns:
+        candidate_columns.append("sanger_sample_id")
+    for column in ("tol_id", "to_l_id", "tolid"):
+        if column in df.columns and column not in candidate_columns:
+            candidate_columns.append(column)
+
+    for column in candidate_columns:
+        df[column] = df[column].astype(str).str.strip().str.upper()
+
+    match = pd.DataFrame()
+    for column in candidate_columns:
+        match = df[df[column] == lookup_id]
+        if not match.empty:
+            break
 
     if match.empty:
-        logger.warning("Sanger sample ID %s not found in %s.", sanger_sample_id, tsv_path)
+        logger.warning("Extraction lookup ID %s not found in %s.", lookup_id, tsv_file)
         return {}
     
     row = match.iloc[0]
 
     protocol_value = row.get("extraction_protocolkit_version")
     extracted_data = {
+    "sanger_sample_id": row.get("sanger_sample_id"),
     "qubit_ngul": row.get("qubit_quant_ngul_esp2"),
     "dna_yield_ng": format_with_nbsp(row.get("total_dna_ng_esp2")),
     "volume_ul": row.get("final_elution_volume_ul"),
@@ -290,7 +326,16 @@ def fallback_fetch_from_lr_sample_prep(sanger_sample_id, tsv_path=None):
     "extraction_protocol": protocol_value,
     "protocol": protocol_value,
     "spri_type": row.get("spri_type"),
-    "disruption_method": row.get("crush_method")
+    "disruption_method": row.get("crush_method"),
+    "tissue_weight_mg": row.get("tissue_mass_mg"),
+    "tissue_type": row.get("tissue_type"),
+    "lysis": row.get("lysis"),
+    "shearing_date": row.get("shear_date_started"),
+    "mr_machine_id": row.get("mr_machine_id"),
+    "mr_speed": row.get("mr_speed"),
+    "spri_input_volume_ul": row.get("vol_input_spri_ul"),
+    "post_shear_spri_volume_ul": row.get("postshear_spri_volume"),
+    "date_complete": row.get("date_complete"),
     }
 
     #print(extracted_data)  # debugging

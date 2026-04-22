@@ -9,6 +9,7 @@ from data_note.models import (
     AssemblyRecord,
     AssemblySelection,
     BaseNoteInfo,
+    FlowCytometryInfo,
     NoteContext,
     NoteData,
     SequencingSummary,
@@ -79,6 +80,13 @@ class ContextAssemblerTests(unittest.TestCase):
                 pacbio_protocols=["PROTO1"],
                 run_accessions={"pacbio_run_accessions": "ERR1"},
             ),
+            flow_cytometry=FlowCytometryInfo(
+                flow_pg=0.73,
+                flow_mb="710.00",
+                flow_buffer="GPB3%PVPBmet",
+                buffer_desc="Example buffer",
+                standard_desc="Example standard",
+            ),
             annotation=AnnotationInfo(
                 annot_url="https://beta.ensembl.org/species/example",
                 genes="12 345",
@@ -111,6 +119,7 @@ class ContextAssemblerTests(unittest.TestCase):
         self.assertEqual(context["family"], "Hominidae")
         self.assertEqual(context["prim_accession"], "GCA_1.1")
         self.assertEqual(context["pacbio_reads_millions"], "12.3")
+        self.assertEqual(context["flow_pg"], 0.73)
         self.assertEqual(context["genes"], "12 345")
         self.assertEqual(context["author_people"][0]["given-names"], "Alice")
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from data_note.profiles import AsgProfile, DarwinProfile, PsycheProfile, get_profile
+from data_note.profiles import AsgProfile, DarwinProfile, PlantProfile, PsycheProfile, get_profile
 from data_note.profiles.base import TableSpec
 
 
@@ -19,6 +19,10 @@ class ProfileTests(unittest.TestCase):
     def test_get_profile_resolves_asg(self) -> None:
         profile = get_profile("asg")
         self.assertIsInstance(profile, AsgProfile)
+
+    def test_get_profile_resolves_plant(self) -> None:
+        profile = get_profile("plant")
+        self.assertIsInstance(profile, PlantProfile)
 
     def test_get_profile_rejects_unknown_name(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unknown data_note profile"):
@@ -46,6 +50,18 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(
             tuple(spec.key for spec in profile.figure_specs()),
             ("Fig_2_Gscope", "Fig_3_Pretext", "Fig_4_Merian", "Fig_5_Merqury", "Fig_6_Snail", "Fig_7_Blob"),
+        )
+
+    def test_plant_profile_currently_inherits_darwin_table_and_figure_plan(self) -> None:
+        profile = PlantProfile()
+        self.assertEqual(
+            tuple(spec.key for spec in profile.table_specs()),
+            ("table1", "table2", "table3", "table4", "table5"),
+        )
+        self.assertTrue(all(spec.builder.__module__ == "data_note.tables.darwin" for spec in profile.table_specs()))
+        self.assertEqual(
+            tuple(spec.key for spec in profile.figure_specs()),
+            ("Fig_2_Gscope", "Fig_3_Pretext", "Fig_4_Merqury", "Fig_5_Snail", "Fig_6_Blob"),
         )
 
     def test_asg_profile_has_metagenome_table_and_figure_plan(self) -> None:

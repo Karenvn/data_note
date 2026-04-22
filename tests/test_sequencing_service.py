@@ -5,7 +5,7 @@ import unittest
 import pandas as pd
 
 from data_note.models import RunGroup, RunRecord, SequencingSummary, SequencingTotals, TechnologyRecord
-from data_note.services.sequencing_fetch_service import SequencingFetchService
+from data_note.services.sequencing_fetch_service import SequencingFetchResult, SequencingFetchService
 from data_note.services.sequencing_service import SequencingService
 
 
@@ -14,8 +14,8 @@ class StubSequencingFetchService(SequencingFetchService):
         super().__init__(session_get=lambda *args, **kwargs: None)
         self._dataframe = dataframe
 
-    def fetch_for_bioprojects(self, bioprojects: list[str]) -> pd.DataFrame:
-        return self._dataframe
+    def fetch_for_bioprojects_with_sources(self, bioprojects: list[str]) -> SequencingFetchResult:
+        return SequencingFetchResult(dataframe=self._dataframe, source_accessions=bioprojects)
 
 
 class SequencingServiceTests(unittest.TestCase):
@@ -148,6 +148,49 @@ class SequencingServiceTests(unittest.TestCase):
         self.assertEqual(
             [run.read_accession for run in summary.run_group("Hi-C").runs],
             ["ERR_HIC"],
+        )
+
+    def test_build_context_processes_only_projects_with_read_data(self) -> None:
+        runinfo_df = pd.DataFrame(
+            [
+                {
+                    "study_accession": "PRJEB85043",
+                    "run_accession": "ERR1",
+                    "sample_accession": "SAMEA1",
+                    "fastq_bytes": 1_073_741_824,
+                    "submitted_bytes": 2_147_483_648,
+                    "read_count": 1_234_567,
+                    "instrument_model": "REVIO",
+                    "base_count": 2_500_000_000,
+                    "instrument_platform": "PACBIO_SMRT",
+                    "library_strategy": "WGS",
+                    "library_name": "LIB1",
+                    "library_construction_protocol": "PROTO1",
+                }
+            ]
+        )
+        fetch_service = StubSequencingFetchService(runinfo_df)
+        fetch_service.fetch_for_bioprojects_with_sources = lambda bioprojects: SequencingFetchResult(
+            dataframe=runinfo_df,
+            source_accessions=["PRJEB85043"],
+        )
+        service = SequencingService(
+            fetch_service=fetch_service,
+            biosample_tolid_getter=lambda biosamples: {"SAMEA1": "ixFooBar1"},
+        )
+
+        with self.assertLogs("data_note.services.sequencing_service", level="INFO") as logs:
+            summary = service.build_context(["PRJEB85043", "PRJEB86086", "PRJEB86087"], "ixFooBar1")
+
+        self.assertEqual(summary.run_group("PacBio").runs[0].read_accession, "ERR1")
+        combined_logs = "\n".join(logs.output)
+        self.assertIn(
+            "Scanning sequencing BioProject candidate(s): PRJEB85043, PRJEB86086, PRJEB86087.",
+            combined_logs,
+        )
+        self.assertIn(
+            "Processing sequencing information for bioproject(s): PRJEB85043.",
+            combined_logs,
         )
 
 

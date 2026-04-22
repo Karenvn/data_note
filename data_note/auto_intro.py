@@ -113,7 +113,7 @@ def make_core_sentence(genus: str, family: str, species: str, g: int, f: int) ->
     date = datetime.now().strftime("%B %Y")
     # g is the number of genomes within the genus, f the number within the family
     g_word, f_word = text_num(g), text_num(f)
-    cite = "[data obtained via NCBI datasets; @oleary2024NCBI]"
+    cite = "[data obtained via NCBI datasets, @oleary2024NCBI]"
     if g == 1:
         return (f"This assembly is the first high‑quality genome for the genus *{genus}* and one of "
                 f"{f_word} {plural(f, 'genome')} available for the family {family} as of {date} {cite}.")

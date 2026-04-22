@@ -29,7 +29,9 @@ class ServerDataServiceTests(unittest.TestCase):
         self.assertIsInstance(metrics, QualityMetrics)
         self.assertEqual(metrics.genomescope.size_mb, "200.1")
         self.assertEqual(metrics.merqury.record("prim").qv, "55.0")
+        self.assertIsNone(metrics.merqury.record("hap1"))
         self.assertEqual(metrics.to_context_dict()["combined_kmer_completeness"], "99.0")
+        self.assertNotIn("hap1_QV", metrics.to_context_dict())
 
     def test_build_context_returns_typed_quality_metrics_for_haplotype_assemblies(self) -> None:
         service = ServerDataService(

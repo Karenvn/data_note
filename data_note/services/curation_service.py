@@ -20,6 +20,8 @@ from .local_metadata_service import LocalMetadataService
 
 logger = logging.getLogger(__name__)
 
+_ZERO_PLACEHOLDER_FIELDS = {"tissue_weight_mg"}
+
 
 @dataclass(slots=True)
 class CurationService:
@@ -92,19 +94,47 @@ class CurationService:
             except Exception:
                 return False
 
+        def _should_backfill(key: str, current_value: Any, fallback_value: Any) -> bool:
+            if _is_missing(current_value):
+                return True
+            if key not in _ZERO_PLACEHOLDER_FIELDS:
+                return False
+            if current_value not in (0, 0.0, "0", "0.0"):
+                return False
+            return not _is_missing(fallback_value) and fallback_value not in (0, 0.0, "0", "0.0")
+
+        def _fallback_lookup_ids() -> list[str]:
+            lookup_ids = [lookup_id]
+            for candidate in (
+                extraction_context.get("sanger_sample_id"),
+                extraction_context.get("submission_id"),
+            ):
+                candidate_str = str(candidate).strip() if candidate is not None else ""
+                if candidate_str and candidate_str not in lookup_ids:
+                    lookup_ids.append(candidate_str)
+            return lookup_ids
+
+        fallback_attrs: dict[str, Any] = {}
+
         if needs_fallback:
             logger.info("Extraction info incomplete or missing. Falling back to local LR_sample_prep.tsv.")
-            fallback_attrs = self.extraction_fallback_fetcher(lookup_id)
-            if fallback_attrs:
-                for key, value in fallback_attrs.items():
-                    if _is_missing(extraction_context.get(key)):
-                        extraction_context[key] = value
-            else:
+            for fallback_lookup_id in _fallback_lookup_ids():
+                fallback_attrs = self.extraction_fallback_fetcher(fallback_lookup_id)
+                if fallback_attrs:
+                    for key, value in fallback_attrs.items():
+                        if _should_backfill(key, extraction_context.get(key), value):
+                            extraction_context[key] = value
+                    break
+            if not fallback_attrs:
                 logger.warning("No fallback extraction info found for %s.", lookup_id)
-        elif _is_missing(extraction_context.get("gqn")):
-            fallback_attrs = self.extraction_fallback_fetcher(lookup_id)
-            if fallback_attrs and not _is_missing(fallback_attrs.get("gqn")):
-                extraction_context["gqn"] = fallback_attrs.get("gqn")
+        else:
+            for fallback_lookup_id in _fallback_lookup_ids():
+                fallback_attrs = self.extraction_fallback_fetcher(fallback_lookup_id)
+                if fallback_attrs:
+                    for key, value in fallback_attrs.items():
+                        if _should_backfill(key, extraction_context.get(key), value):
+                            extraction_context[key] = value
+                    break
 
         extraction_protocol = extraction_context.get("extraction_protocol")
         legacy_protocol = extraction_context.get("protocol")

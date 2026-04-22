@@ -52,14 +52,39 @@ class SequencingFetchServiceTests(unittest.TestCase):
                 with patch.object(
                     SequencingFetchService, "fetch_read_runs_for_bioproject", return_value=ena_rows
                 ) as mock_ena:
-                    df = service.fetch_for_bioprojects(["PRJEB1"])
+                    result = service.fetch_for_bioprojects_with_sources(["PRJEB1"])
 
-        self.assertEqual(df["run_accession"].tolist(), ["ERR1"])
+        self.assertEqual(result.dataframe["run_accession"].tolist(), ["ERR1"])
+        self.assertEqual(result.source_accessions, ["PRJEB1"])
         mock_runinfo.assert_called_once_with("PRJEB1")
         mock_summary.assert_called_once_with("PRJEB1")
         mock_ena.assert_called_once_with("PRJEB1")
 
-    def test_fetch_rows_for_accession_logs_single_message_when_all_sources_are_empty(self) -> None:
+    def test_fetch_for_bioprojects_with_sources_omits_accessions_without_runs(self) -> None:
+        service = SequencingFetchService()
+        rows_by_accession = {
+            "PRJEB85043": [
+                {
+                    "run_accession": "ERR1",
+                    "sample_accession": "SAMEA1",
+                }
+            ],
+            "PRJEB86086": [],
+            "PRJEB86087": [],
+        }
+
+        with patch.object(
+            SequencingFetchService,
+            "fetch_rows_for_accession",
+            side_effect=lambda accession: rows_by_accession[accession],
+        ) as mock_fetch:
+            result = service.fetch_for_bioprojects_with_sources(["PRJEB85043", "PRJEB86086", "PRJEB86087"])
+
+        self.assertEqual(result.source_accessions, ["PRJEB85043"])
+        self.assertEqual(result.dataframe["run_accession"].tolist(), ["ERR1"])
+        self.assertEqual(mock_fetch.call_count, 3)
+
+    def test_fetch_rows_for_accession_logs_single_debug_message_when_all_sources_are_empty(self) -> None:
         service = SequencingFetchService()
 
         with patch.object(SequencingFetchService, "fetch_runinfo_rows_for_accession", return_value=[]) as mock_runinfo:
@@ -69,7 +94,7 @@ class SequencingFetchServiceTests(unittest.TestCase):
                 with patch.object(
                     SequencingFetchService, "fetch_read_runs_for_bioproject", return_value=[]
                 ) as mock_ena:
-                    with self.assertLogs("data_note.services.sequencing_fetch_service", level="INFO") as logs:
+                    with self.assertLogs("data_note.services.sequencing_fetch_service", level="DEBUG") as logs:
                         rows = service.fetch_rows_for_accession("PRJEB83598")
 
         self.assertEqual(rows, [])
@@ -80,6 +105,21 @@ class SequencingFetchServiceTests(unittest.TestCase):
         mock_runinfo.assert_called_once_with("PRJEB83598")
         mock_summary.assert_called_once_with("PRJEB83598")
         mock_ena.assert_called_once_with("PRJEB83598")
+
+    def test_fetch_for_bioprojects_with_sources_logs_once_when_all_candidates_are_empty(self) -> None:
+        service = SequencingFetchService()
+
+        with patch.object(SequencingFetchService, "fetch_rows_for_accession", return_value=[]) as mock_fetch:
+            with self.assertLogs("data_note.services.sequencing_fetch_service", level="INFO") as logs:
+                result = service.fetch_for_bioprojects_with_sources(["PRJEB86086", "PRJEB86087"])
+
+        self.assertTrue(result.dataframe.empty)
+        self.assertEqual(result.source_accessions, [])
+        self.assertIn(
+            "No read-run metadata found across BioProjects: PRJEB86086, PRJEB86087.",
+            "\n".join(logs.output),
+        )
+        self.assertEqual(mock_fetch.call_count, 2)
 
     @patch("data_note.services.sequencing_fetch_service.requests.get")
     def test_fetch_sra_summary_rows_for_accession_parses_ncbi_esummary(self, mock_get: Mock) -> None:

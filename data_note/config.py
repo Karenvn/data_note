@@ -31,6 +31,7 @@ class AppConfig:
     profile_name: str
     server_data_root: Path
     corrections_file: Path
+    cyto_info_tsv: Path
     lr_sample_prep_tsv: Path
     author_db_path: Path
     portal_url: str | None
@@ -67,10 +68,16 @@ class AppConfig:
                     str(home / "genome_note_templates" / "text_corrections.json"),
                 )
             ),
+            cyto_info_tsv=_expand_path(
+                env.get(
+                    "DATA_NOTE_CYTO_INFO_TSV",
+                    str(server_data_root / "cyto_info.tsv"),
+                )
+            ),
             lr_sample_prep_tsv=_expand_path(
                 env.get(
                     "DATA_NOTE_LR_SAMPLE_PREP_TSV",
-                    str(home / "genome_note_templates" / "LR_sample_prep.tsv"),
+                    str(server_data_root / "LR_sample_prep.tsv"),
                 )
             ),
             author_db_path=_expand_path(
@@ -97,6 +104,7 @@ class AppConfig:
         self._set("DATA_NOTE_GN_ASSETS", self.server_data_root)
         self._set("DATA_NOTE_SERVER_DATA", self.server_data_root)
         self._set("DATA_NOTE_CORRECTIONS_FILE", self.corrections_file)
+        self._set("DATA_NOTE_CYTO_INFO_TSV", self.cyto_info_tsv)
         self._set("DATA_NOTE_LR_SAMPLE_PREP_TSV", self.lr_sample_prep_tsv)
         self._set("DATA_NOTE_AUTHOR_DB", self.author_db_path)
         self._set("PORTAL_API_PATH", self.portal_api_path)

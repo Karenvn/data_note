@@ -76,16 +76,20 @@ class SequencingService:
 
     def build_context(self, bioprojects: Any, tolid: str) -> SequencingSummary:
         bioproject_list = self._normalise_bioprojects(bioprojects)
-
         logger.info(
-            "Processing sequencing information for bioproject(s): %s.",
+            "Scanning sequencing BioProject candidate(s): %s.",
             ", ".join(bioproject_list),
         )
-        read_study_df = self.fetch_service.fetch_for_bioprojects(bioproject_list)
+        fetch_result = self.fetch_service.fetch_for_bioprojects_with_sources(bioproject_list)
+        read_study_df = fetch_result.dataframe
         if read_study_df.empty:
             raise RuntimeError(
                 f"No SRA RunInfo rows found for BioProjects: {', '.join(bioproject_list)}"
             )
+        logger.info(
+            "Processing sequencing information for bioproject(s): %s.",
+            ", ".join(fetch_result.source_accessions),
+        )
 
         if "sample_accession" not in read_study_df.columns:
             raise RuntimeError(

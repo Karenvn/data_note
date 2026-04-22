@@ -13,6 +13,7 @@ from .assembly import (
 from .base_note import BaseNoteInfo
 from .curation import BarcodingInfo, CurationBundle, CurationInfo, ExtractionInfo
 from .figure import FigureAsset, FigureBundle
+from .flow_cytometry import FlowCytometryInfo
 from .metadata import AnnotationInfo, TaxonomyInfo
 from .note_data import NoteData
 from .note_context import NoteContext
@@ -41,6 +42,7 @@ __all__ = [
     "ExtractionInfo",
     "FigureAsset",
     "FigureBundle",
+    "FlowCytometryInfo",
     "GenomeScopeSummary",
     "MerquryRecord",
     "MerqurySummary",

@@ -20,6 +20,7 @@ from .services import (
     BtkService,
     ChromosomeService,
     CurationService,
+    FlowCytometryService,
     NcbiDatasetsService,
     RenderContextBuilder,
     RenderingService,
@@ -59,6 +60,7 @@ class DataNoteOrchestrator:
         self.btk_service = BtkService()
         self.chromosome_service = ChromosomeService()
         self.curation_service = CurationService()
+        self.flow_cytometry_service = FlowCytometryService()
         self.ncbi_datasets_service = NcbiDatasetsService()
         self.render_context_builder = RenderContextBuilder()
         self.assembly_workflow_service = AssemblyWorkflowService(
@@ -120,6 +122,12 @@ class DataNoteOrchestrator:
         context = self.render_context_builder.snapshot(note_data)
 
         species = context.species
+        try:
+            note_data.flow_cytometry = self.flow_cytometry_service.build_context(species)
+        except Exception as exc:
+            logger.warning("Failed to process flow cytometry data for %r: %s", species, exc)
+        context = self.render_context_builder.snapshot(note_data)
+
         child_accessions = get_child_accessions_for_bioproject(umbrella_data)
         note_data.base.child_bioprojects = child_accessions
         note_data.base.update(get_parent_bioprojects(bioproject))

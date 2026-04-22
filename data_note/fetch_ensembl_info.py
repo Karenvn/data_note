@@ -1,6 +1,23 @@
 #!/usr/bin/env python3
 """
-Ensembl search with GTF parsing and beta metadata
+Ensembl search with GTF parsing and beta metadata.
+
+Current behaviour as of 2026-04:
+- Annotation files are discovered and downloaded from the legacy Ensembl FTP
+  layout (`ftp.ensembl.org` / `ftp.ebi.ac.uk`).
+- Beta / new-platform GraphQL is used only to look up a human-readable species
+  page and matching assembly accession metadata.
+- This means the script currently spans both systems, but only the legacy FTP
+  side is used for the actual GTF/GFF annotation payload.
+
+Expected future changes:
+- Once Ensembl publishes a stable new-platform bulk-download path for
+  annotations, replace the legacy FTP directory scraping in this module with
+  that supported endpoint.
+- Keep the legacy FTP path only as a fallback while it remains available for
+  frozen older releases.
+- Re-check usage of beta GraphQL before depending on it more heavily <- it is
+  still documented by Ensembl as a beta interface.
 """
 
 import os
@@ -16,13 +33,37 @@ import requests
 HEADERS = {"Accept": "application/json", "User-Agent": "genome-notes/1.0"}
 DEBUG_ENS = bool(int(os.environ.get("GN_DEBUG_ENSEMBL", "0")))
 
-ORG_BASE = "https://ftp.ebi.ac.uk/pub/ensemblorganisms/"
-ENS_MAIN_GFF3 = "https://ftp.ensembl.org/pub/current_gff3/"
-ENS_MAIN_GTF = "https://ftp.ensembl.org/pub/current_gtf/"
+LEGACY_ORG_BASE = "https://ftp.ebi.ac.uk/pub/ensemblorganisms/"
+LEGACY_ENS_MAIN_GFF3 = "https://ftp.ensembl.org/pub/current_gff3/"
+LEGACY_ENS_MAIN_GTF = "https://ftp.ensembl.org/pub/current_gtf/"
+DEFAULT_BETA_GRAPHQL_URL = "https://beta.ensembl.org/data/graphql"
 
 def debug_print(msg: str):
     if DEBUG_ENS:
         print(f"[ENSEMBL] {msg}")
+
+
+def _configured_url(env_name: str, default: str, *, trailing_slash: bool = True) -> str:
+    value = os.environ.get(env_name, default).strip()
+    if trailing_slash:
+        return value.rstrip("/") + "/"
+    return value.rstrip("/")
+
+
+def _organisms_base() -> str:
+    return _configured_url("GN_ENSEMBL_ORGANISMS_BASE", LEGACY_ORG_BASE)
+
+
+def _main_gff3_base() -> str:
+    return _configured_url("GN_ENSEMBL_MAIN_GFF3_BASE", LEGACY_ENS_MAIN_GFF3)
+
+
+def _main_gtf_base() -> str:
+    return _configured_url("GN_ENSEMBL_MAIN_GTF_BASE", LEGACY_ENS_MAIN_GTF)
+
+
+def _beta_graphql_url() -> str:
+    return _configured_url("GN_ENSEMBL_GRAPHQL_URL", DEFAULT_BETA_GRAPHQL_URL, trailing_slash=False)
 
 # Import the formatting function from your helpers module
 try:
@@ -109,6 +150,26 @@ def _find_annotation_file(dir_url: str) -> Optional[str]:
 def _extract_assembly_from_url(url: str) -> Optional[str]:
     match = re.search(r"(GC[AF]_\d+\.\d+)", url)
     return match.group(1) if match else None
+
+
+def _select_matching_genome(genomes: List[dict], target_accession: Optional[str]) -> Optional[dict]:
+    if not genomes:
+        return None
+    if not target_accession:
+        return genomes[0]
+
+    target_accession = target_accession.strip()
+    for genome in genomes:
+        if genome.get("assembly_accession") == target_accession:
+            return genome
+
+    target_base = target_accession.split(".")[0]
+    for genome in genomes:
+        accession = genome.get("assembly_accession")
+        if accession and accession.split(".")[0] == target_base:
+            return genome
+
+    return genomes[0]
 
 def process_gtf(annot_file):
     """Process GTF file and extract annotation statistics."""
@@ -231,7 +292,7 @@ def process_gtf(annot_file):
 
 def fetch_beta_metadata(taxon_id, target_accession=None):
     """Query the beta site GraphQL API to retrieve metadata."""
-    url = "https://beta.ensembl.org/data/graphql"
+    url = _beta_graphql_url()
     query = """
     query Annotation($taxon: String) {
         genomes(by_keyword: {species_taxonomy_id: $taxon }) {
@@ -278,22 +339,10 @@ def fetch_beta_metadata(taxon_id, target_accession=None):
             data = response.json()
             genomes = data.get("data", {}).get("genomes", [])
             if genomes:
-                if target_accession:
-                    target_base = target_accession.split('.')[0]
-                    for genome in genomes:
-                        if "assembly_accession" in genome:
-                            genome_base = genome["assembly_accession"].split('.')[0]
-                            if genome_base == target_base:
-                                accession = genome["assembly_accession"]
-                                species_id = genome["genome_id"]
-                                annot_url = f"https://beta.ensembl.org/species/{species_id}"
-                                return {"annot_accession": accession, "annot_url": annot_url}
-
-                # Fallback to first genome if target not found
-                first = genomes[0]
-                if first.get("assembly_accession"):
-                    accession = first["assembly_accession"]
-                    species_id = first["genome_id"]
+                selected = _select_matching_genome(genomes, target_accession)
+                if selected and selected.get("assembly_accession") and selected.get("genome_id"):
+                    accession = selected["assembly_accession"]
+                    species_id = selected["genome_id"]
                     annot_url = f"https://beta.ensembl.org/species/{species_id}"
                     return {"annot_accession": accession, "annot_url": annot_url}
 
@@ -315,10 +364,14 @@ def fetch_beta_metadata(taxon_id, target_accession=None):
 
 def search_ensembl_organisms(assembly: str, species: str) -> Optional[tuple]:
     """Direct search for BRAKER/Ensembl in organisms. Returns (url, method) tuple."""
+    # TODO(ensembl-transition): this still scrapes the legacy FTP-style directory
+    # layout for the real annotation files. When Ensembl provides a stable
+    # supported download endpoint on the new platform, switch this lookup over.
     variants = _get_species_variants(species)
+    org_base = _organisms_base()
     
     for variant in variants:
-        base_url = f"{ORG_BASE}{variant}/{assembly}/"
+        base_url = f"{org_base}{variant}/{assembly}/"
         
         # Test both methods directly
         for method, method_name in [("braker", "BRAKER"), ("ensembl", "Ensembl Genebuild")]:
@@ -348,7 +401,7 @@ def search_ensembl_main(species: str) -> Optional[tuple]:
     
     variants = _get_species_variants(species)
     
-    for base_url in [ENS_MAIN_GTF, ENS_MAIN_GFF3]:
+    for base_url in [_main_gtf_base(), _main_gff3_base()]:
         for variant in variants:
             species_url = f"{base_url}{variant}/"
             html = _http_text(species_url)
@@ -365,6 +418,9 @@ def search_ensembl_main(species: str) -> Optional[tuple]:
 def create_ensembl_dict(assembly: str, species: str, tax_id: Union[str, int]) -> Dict[str, str]:
     """
     Complete Ensembl annotation search with GTF parsing and beta metadata.
+
+    The returned annotation statistics still come from the legacy FTP-hosted
+    annotation files. Beta GraphQL is currently supplemental metadata only.
     """
     assembly = assembly.strip().rstrip("/")
     species = species.strip()

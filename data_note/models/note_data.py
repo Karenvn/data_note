@@ -7,6 +7,7 @@ from .author import AuthorInfo
 from .assembly import AssemblyBundle
 from .base_note import BaseNoteInfo
 from .curation import CurationBundle
+from .flow_cytometry import FlowCytometryInfo
 from .metadata import AnnotationInfo, TaxonomyInfo
 from .quality import QualityMetrics
 from .sampling import SamplingInfo
@@ -19,6 +20,7 @@ class NoteData:
     taxonomy: TaxonomyInfo | None = None
     assembly: AssemblyBundle | None = None
     sequencing: SequencingSummary | None = None
+    flow_cytometry: FlowCytometryInfo | None = None
     curation: CurationBundle | None = None
     sampling: SamplingInfo | None = None
     quality: QualityMetrics | None = None
@@ -34,6 +36,8 @@ class NoteData:
             sections.append(self.assembly)
         if self.sequencing is not None:
             sections.append(self.sequencing)
+        if self.flow_cytometry is not None:
+            sections.append(self.flow_cytometry)
         if self.curation is not None:
             sections.append(self.curation)
         if self.sampling is not None:

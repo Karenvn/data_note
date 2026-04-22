@@ -9,6 +9,7 @@ __all__ = [
     "ContextAssembler",
     "CurationService",
     "FigureService",
+    "FlowCytometryService",
     "LocalMetadataService",
     "NcbiDatasetsService",
     "RenderContextBuilder",
@@ -62,6 +63,10 @@ def __getattr__(name: str):
         from .figure_service import FigureService
 
         return FigureService
+    if name == "FlowCytometryService":
+        from .flow_cytometry_service import FlowCytometryService
+
+        return FlowCytometryService
     if name == "LocalMetadataService":
         from .local_metadata_service import LocalMetadataService
 

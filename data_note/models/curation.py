@@ -57,6 +57,14 @@ class ExtractionInfo:
     protocol: Any = None
     spri_type: Any = None
     disruption_method: Any = None
+    tissue_type: Any = None
+    lysis: Any = None
+    shearing_date: Any = None
+    mr_machine_id: Any = None
+    mr_speed: Any = None
+    spri_input_volume_ul: Any = None
+    post_shear_spri_volume_ul: Any = None
+    date_complete: Any = None
     extraction_mode: Any = None
     extraction_uid: Any = None
     tissue_weight_mg: Any = None

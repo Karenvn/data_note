@@ -37,6 +37,12 @@ For explicit profile selection, use:
 python -m data_note --profile darwin --template_file ~/genome_note_templates/dtol_template.md bioprojects.txt
 ```
 
+`plant` is now also available as a profile name. It currently inherits the Darwin table and figure plan, but gives plant notes a dedicated profile name so they can diverge later without affecting Darwin notes. It works with plant-specific templates such as:
+
+```bash
+python -m data_note --profile plant --template_file ~/genome_note_templates/dtol_plant_template.md bioprojects.txt
+```
+
 `psyche` is also available as a profile name. It now has its own table module, with the first extracted differences from Darwin:
 - Table 3 adds assigned Merian elements and, for dual chromosome-level haplotypes, reports haplotype 1 only.
 - Table 5 includes the extra Psyche software rows.
@@ -107,6 +113,7 @@ Important variables include:
 - `DATA_NOTE_SERVER_DATA` (legacy alias)
 - `DATA_NOTE_PROFILE` (`darwin` by default)
 - `DATA_NOTE_CORRECTIONS_FILE`
+- `DATA_NOTE_CYTO_INFO_TSV`
 - `DATA_NOTE_LR_SAMPLE_PREP_TSV`
 - `DATA_NOTE_AUTHOR_DB`
 
@@ -122,11 +129,20 @@ Optional internal variables include:
 - `YAML_SSH_HOST` (optional; defaults to `tol22` for local server fetches)
 - `YAML_SSH_IDENTITY_FILE`
 
+Optional Ensembl transition variables include:
+
+- `GN_ENSEMBL_GRAPHQL_URL`
+- `GN_ENSEMBL_ORGANISMS_BASE`
+- `GN_ENSEMBL_MAIN_GFF3_BASE`
+- `GN_ENSEMBL_MAIN_GTF_BASE`
+
 ## Assumptions and limitations
 
 - The core pipeline is designed to work from public assembly project metadata.
 - Data for each BioProject should be available in ENA using a structure matching the Earth BioGenome Project recommendation for a Species X assembly project (see https://www.earthbiogenome.org/report-on-assembly-standards).
 - Assembly quality assets such as BlobToolKit, GenomeScope, Merqury run results, a chromosome map, ancestral linkage groups plots, and metagenome analyses are expected to exist already.
+- Optional plant flow-cytometry data is expected at `DATA_NOTE_CYTO_INFO_TSV`, defaulting to `~/gn_assets/cyto_info.tsv`.
+- Optional LR extraction spreadsheet data is expected at `DATA_NOTE_LR_SAMPLE_PREP_TSV`, defaulting to `~/gn_assets/LR_sample_prep.tsv` with a legacy fallback to `~/genome_note_templates/LR_sample_prep.tsv`.
 - Templates are expected to be Jinja2-based markdown templates.
 - Some local metadata lookup steps rely on internal data, and are not required for the public core pipeline.
 

@@ -40,6 +40,12 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
 
 
 @dataclass(slots=True)
+class SequencingFetchResult:
+    dataframe: pd.DataFrame
+    source_accessions: list[str]
+
+
+@dataclass(slots=True)
 class SequencingFetchService:
     session_get: Callable[..., Any] = requests.get
 
@@ -58,7 +64,7 @@ class SequencingFetchService:
         if accession_rows:
             return accession_rows
 
-        logger.info(
+        logger.debug(
             "No read-run metadata found for %s across SRA RunInfo, NCBI E-utilities, or ENA filereport.",
             accession,
         )
@@ -181,14 +187,21 @@ class SequencingFetchService:
 
         return []
 
-    def fetch_for_bioprojects(self, bioprojects: list[str]) -> pd.DataFrame:
+    def fetch_for_bioprojects_with_sources(self, bioprojects: list[str]) -> SequencingFetchResult:
         rows: list[dict[str, Any]] = []
+        source_accessions: list[str] = []
         for accession in bioprojects:
             accession_rows = self.fetch_rows_for_accession(accession)
+            if accession_rows:
+                source_accessions.append(accession)
             rows.extend(accession_rows)
 
         if not rows:
-            return pd.DataFrame()
+            logger.info(
+                "No read-run metadata found across BioProjects: %s.",
+                ", ".join(bioprojects),
+            )
+            return SequencingFetchResult(dataframe=pd.DataFrame(), source_accessions=[])
 
         seen: set[str] = set()
         deduped: list[dict[str, Any]] = []
@@ -199,7 +212,13 @@ class SequencingFetchService:
             if run_accession:
                 seen.add(run_accession)
             deduped.append(row)
-        return pd.DataFrame(deduped)
+        return SequencingFetchResult(
+            dataframe=pd.DataFrame(deduped),
+            source_accessions=source_accessions,
+        )
+
+    def fetch_for_bioprojects(self, bioprojects: list[str]) -> pd.DataFrame:
+        return self.fetch_for_bioprojects_with_sources(bioprojects).dataframe
 
     def fetch_experiment_protocol(self, experiment_accession: str) -> str:
         url = "https://trace.ncbi.nlm.nih.gov/Traces/sra-db-be/exp"
