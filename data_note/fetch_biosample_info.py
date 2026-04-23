@@ -2,13 +2,37 @@
 
 
 
-import logging
-import requests
 import json
+import logging
+import re
+
 import pandas as pd
+import requests
 from .formatting_utils import format_with_nbsp, clean_numeric_string, safe_convert
 
 logger = logging.getLogger(__name__)
+
+_PLACEHOLDER_COLLECTION_DATETIME_RE = re.compile(
+    r"^(?P<date>\d{4}-\d{2}-\d{2})T(?:00:00:00|12:00:00)(?:\.0+)?(?:Z|[+-]\d{2}:\d{2})?$"
+)
+
+
+def normalize_collection_date(value):
+    """
+    Collapse placeholder BioSamples datetimes back to a date-only string.
+
+    Some submission batches serialise day-precision collection dates as
+    YYYY-MM-DDT12:00:00. Preserve true datetimes, but strip known placeholder
+    times so note output stays aligned with the recorded precision.
+    """
+    if value in (None, ""):
+        return ""
+
+    stripped = str(value).strip()
+    match = _PLACEHOLDER_COLLECTION_DATETIME_RE.match(stripped)
+    if match:
+        return match.group("date")
+    return stripped
 
 def fetch_biosample_info(biosample_acc):
     """
@@ -86,7 +110,7 @@ def process_biosamples_sample_dict(row, tech_prefix):
         f'{tech_prefix}_collector': row.get('collected_by', '').title(),
         f'{tech_prefix}_collector_institute': row.get('collecting_institution', '').title(),
         f'{tech_prefix}_gal_name': row.get('gal', '').title(),
-        f'{tech_prefix}_coll_date': row.get('collection_date', ''),
+        f'{tech_prefix}_coll_date': normalize_collection_date(row.get('collection_date', '')),
         f'{tech_prefix}_coll_location': format_location(
             row.get('geographic_location_(region_and_locality)', ''),
             row.get('geographic_location_(country_and/or_sea)', '')).title(),
