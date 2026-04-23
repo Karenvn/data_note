@@ -34,6 +34,7 @@ class ProfileTests(unittest.TestCase):
             tuple(spec.key for spec in profile.table_specs()),
             ("table1", "table2", "table3", "table4", "table5"),
         )
+        self.assertFalse(profile.uses_flow_cytometry())
         self.assertTrue(all(spec.builder.__module__ == "data_note.tables.darwin" for spec in profile.table_specs()))
         self.assertEqual(
             tuple(spec.key for spec in profile.figure_specs()),
@@ -46,6 +47,7 @@ class ProfileTests(unittest.TestCase):
             tuple(spec.key for spec in profile.table_specs()),
             ("table1", "table2", "table3", "table4", "table5"),
         )
+        self.assertFalse(profile.uses_flow_cytometry())
         self.assertTrue(all(spec.builder.__module__ == "data_note.tables.psyche" for spec in profile.table_specs()))
         self.assertEqual(
             tuple(spec.key for spec in profile.figure_specs()),
@@ -58,6 +60,7 @@ class ProfileTests(unittest.TestCase):
             tuple(spec.key for spec in profile.table_specs()),
             ("table1", "table2", "table3", "table4", "table5"),
         )
+        self.assertTrue(profile.uses_flow_cytometry())
         self.assertTrue(all(spec.builder.__module__ == "data_note.tables.darwin" for spec in profile.table_specs()))
         self.assertEqual(
             tuple(spec.key for spec in profile.figure_specs()),
@@ -70,6 +73,7 @@ class ProfileTests(unittest.TestCase):
             tuple(spec.key for spec in profile.table_specs()),
             ("table1", "table2", "table3", "table4", "table5", "table6"),
         )
+        self.assertFalse(profile.uses_flow_cytometry())
         self.assertTrue(all(spec.builder.__module__ == "data_note.tables.asg" for spec in profile.table_specs()))
         self.assertEqual(
             tuple(spec.key for spec in profile.figure_specs()),

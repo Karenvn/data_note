@@ -361,10 +361,9 @@ def fetch_barcoding_info(tolid):
     f = DataSourceFilter()
     f.and_ = {"benchling_tolid.id": {"eq": {"value": tolid, "negate": False}}}
 
-    samples = list(ds.get_list("sample", object_filters=f))
+    sample = _first_result(ds, "sample", f)
 
-    if samples:
-        sample = samples[0]
+    if sample:
         attrs = sample.attributes
         barcode_dict["sts_tremoved"] = attrs.get("sts_tremoved")
         barcode_dict["barcode_hub"] = attrs.get("sts_barcode_hub")

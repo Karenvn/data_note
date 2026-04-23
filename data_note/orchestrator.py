@@ -122,10 +122,11 @@ class DataNoteOrchestrator:
         context = self.render_context_builder.snapshot(note_data)
 
         species = context.species
-        try:
-            note_data.flow_cytometry = self.flow_cytometry_service.build_context(species)
-        except Exception as exc:
-            logger.warning("Failed to process flow cytometry data for %r: %s", species, exc)
+        if self.profile.uses_flow_cytometry():
+            try:
+                note_data.flow_cytometry = self.flow_cytometry_service.build_context(species)
+            except Exception as exc:
+                logger.warning("Failed to process flow cytometry data for %r: %s", species, exc)
         context = self.render_context_builder.snapshot(note_data)
 
         child_accessions = get_child_accessions_for_bioproject(umbrella_data)

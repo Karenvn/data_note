@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import os
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from data_note.fetch_extraction_data import _resolve_lr_sample_prep_tsv, fallback_fetch_from_lr_sample_prep
+from data_note.fetch_extraction_data import _resolve_lr_sample_prep_tsv, fallback_fetch_from_lr_sample_prep, fetch_barcoding_info
 
 
 class ExtractionDataFallbackTests(unittest.TestCase):
@@ -99,6 +100,55 @@ class ExtractionDataFallbackTests(unittest.TestCase):
         self.assertEqual(result["sanger_sample_id"], "DTOL13262041")
         self.assertEqual(float(result["tissue_weight_mg"]), 23.4)
         self.assertEqual(result["spri_type"], "1x ProNex (manual)")
+
+
+class BarcodingInfoTests(unittest.TestCase):
+    def test_fetch_barcoding_info_prefers_latest_completed_sample_when_multiple_match_tolid(self) -> None:
+        older_sample = SimpleNamespace(
+            attributes={
+                "benchling_completion_date": "2024-01-01",
+                "sts_tremoved": "Y",
+                "sts_barcode_hub": "NATURAL HISTORY MUSEUM",
+                "sts_eln_id": "old-eln",
+                "benchling_sample_set_id": "OLD_SET",
+            }
+        )
+        newer_sample = SimpleNamespace(
+            attributes={
+                "benchling_completion_date": "2025-01-01",
+                "sts_tremoved": "N",
+                "sts_barcode_hub": "NOT_COLLECTED",
+                "sts_eln_id": "new-eln",
+                "benchling_sample_set_id": "NEW_SET",
+            }
+        )
+
+        class DummyFilter:
+            def __init__(self) -> None:
+                self.and_ = None
+
+        class FakeDataSource:
+            def get_list(self, object_name, object_filters=None):
+                self.object_name = object_name
+                self.object_filters = object_filters
+                return [older_sample, newer_sample]
+
+        ds = FakeDataSource()
+        with patch("data_note.fetch_extraction_data._portal_datasource", return_value=ds), patch(
+            "data_note.fetch_extraction_data.DataSourceFilter",
+            DummyFilter,
+        ):
+            result = fetch_barcoding_info("icExample1")
+
+        self.assertEqual(ds.object_name, "sample")
+        self.assertEqual(
+            ds.object_filters.and_,
+            {"benchling_tolid.id": {"eq": {"value": "icExample1", "negate": False}}},
+        )
+        self.assertEqual(result["sts_tremoved"], "N")
+        self.assertEqual(result["barcode_hub"], "NOT_COLLECTED")
+        self.assertEqual(result["eln_id"], "new-eln")
+        self.assertEqual(result["sample_set_id"], "NEW_SET")
 
 
 if __name__ == "__main__":

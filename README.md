@@ -37,7 +37,7 @@ For explicit profile selection, use:
 python -m data_note --profile darwin --template_file ~/genome_note_templates/dtol_template.md bioprojects.txt
 ```
 
-`plant` is now also available as a profile name. It currently inherits the Darwin table and figure plan, but gives plant notes a dedicated profile name so they can diverge later without affecting Darwin notes. It works with plant-specific templates such as:
+`plant` is now also available as a profile name. It currently inherits the Darwin table and figure plan, but gives plant notes a dedicated profile name so they can diverge later without affecting Darwin notes. It is also the profile that enables plant flow-cytometry enrichment. It works with plant-specific templates such as:
 
 ```bash
 python -m data_note --profile plant --template_file ~/genome_note_templates/dtol_plant_template.md bioprojects.txt

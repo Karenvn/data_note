@@ -26,6 +26,9 @@ class ProgrammeProfile(ABC):
     def figure_specs(self) -> tuple[FigureSpec, ...]:
         raise NotImplementedError
 
+    def uses_flow_cytometry(self) -> bool:
+        return False
+
     def build_tables(self, context: dict[str, Any]) -> dict[str, Any]:
         tables: dict[str, dict[str, Any]] = {}
         for spec in self.table_specs():
