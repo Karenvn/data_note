@@ -1,193 +1,74 @@
 #!/usr/bin/env python3
 
-import os
-import re
-import requests
-from Bio import Entrez
+from __future__ import annotations
 
+from typing import Any
+
+from .chromosome_analyzer import ChromosomeAnalyzer
 from .models import AssemblyCoverageInput
+from .ncbi_sequence_report_client import NcbiSequenceReportClient
 
-# Setup Entrez credentials
-Entrez.email = os.getenv('ENTREZ_EMAIL', 'default_email')
-Entrez.api_key = os.getenv('ENTREZ_API_KEY', 'default_api_key')
-
-
-def fetch_sequence_reports(accession):
-    """
-    Fetch all sequence reports from NCBI Datasets API and return assembled-molecule entries.
-    """
-    api_url = f"https://api.ncbi.nlm.nih.gov/datasets/v2/genome/accession/{accession}/sequence_reports"
-    headers = {'accept': 'application/json', 'User-Agent': f'Python script; {Entrez.email}'}
-    resp = requests.get(api_url, headers=headers)
-    resp.raise_for_status()
-    reports = resp.json().get('reports', [])
-    # include both assembled chromosomes and their unlocalised scaffolds
-    return [r for r in reports if r.get('role') in ('assembled-molecule','unlocalized-scaffold')]
+_SEQUENCE_REPORT_CLIENT = NcbiSequenceReportClient()
+_CHROMOSOME_ANALYZER = ChromosomeAnalyzer()
+_COVERAGE_ANALYZER = ChromosomeAnalyzer(
+    chromosome_length_fetcher=lambda accession: get_chromosome_lengths(accession)
+)
 
 
-def get_longest_scaffold(accession):
-    """
-    Return the length (Mb) of the longest assembled-molecule (scaffold or chromosome).
-    """
-    reports = fetch_sequence_reports(accession)
-    if not reports:
-        return None
-    longest = max(reports, key=lambda r: r.get('length', 0))
-    return round(longest.get('length', 0) / 1e6, 2)
+def fetch_sequence_reports(accession: str) -> list[dict[str, Any]]:
+    return _SEQUENCE_REPORT_CLIENT.fetch_reports(accession)
 
 
-def custom_sort_order(molecule):
-    """
-    Sort chromosomes by numeric prefix then suffix, followed by named sex/autosome variants:
-    - Pure digits (1,2,3...) in numeric order
-    - Digits plus letter suffix (e.g. '1A','2B') by numeric then suffix
-    - Named chromosomes: X, X1, X2, Y, W, Z, Z1, Z2, B, B1, B2
-    - All others last
-    """
-    m = re.match(r"^(\d+)([A-Za-z]*)$", molecule)
-    if m:
-        return (int(m.group(1)), m.group(2))
-    order_map = {
-        'X': (1000, ''), 'X1': (1000, '1'), 'X2': (1000, '2'),
-        'Y': (2000, ''),
-        'W': (3000, ''),
-        'Z': (4000, ''), 'Z1': (4000, '1'), 'Z2': (4000, '2'),
-        'B': (5000, ''), 'B1': (5000, '1'), 'B2': (5000, '2')
-    }
-    return order_map.get(molecule, (float('inf'), molecule))
+def get_longest_scaffold(accession: str) -> float | None:
+    return _CHROMOSOME_ANALYZER.get_longest_scaffold(fetch_sequence_reports(accession))
 
 
-def extract_chromosomes_only(accession):
-    """
-    Fetch sequence reports, include only:
-      - role='assembled-molecule' and assigned_molecule_location_type='Chromosome'
-      - role='unlocalized-scaffold' (assigned to a chromosome)
-    Exclude any role='unplaced-scaffold'.
-
-    Sum lengths per chromosome name, record the primary accession and GC% for true chromosomes.
-    Returns list of dicts: {'INSDC', 'molecule', 'length'(Mb), 'GC'}.
-    """
-    reports = fetch_sequence_reports(accession)
-    chr_data = {}
-    for rec in reports:
-        name = rec.get('chr_name')
-        role = rec.get('role')
-        loc = rec.get('assigned_molecule_location_type', '')
-        if not name:
-            continue
-        # include only true chromosomes and their unlocalized scaffolds
-        if (role == 'assembled-molecule' and loc == 'Chromosome') or role == 'unlocalized-scaffold':
-            length = rec.get('length', 0)
-            entry = chr_data.setdefault(name, {'length': 0, 'INSDC': None, 'GC': None})
-            entry['length'] += length
-            # record accession/GC only for genuine chromosomes
-            if role == 'assembled-molecule' and loc == 'Chromosome':
-                entry['INSDC'] = rec.get('genbank_accession')
-                entry['GC'] = rec.get('gc_percent')
-    # build final list skipping names without a primary accession
-    chrom_list = []
-    for name, info in chr_data.items():
-        # exclude organelle molecules
-        if name.upper() in {'MT', 'PLTD'}:
-            continue
-        if not info['INSDC']:
-            continue
-        chrom_list.append({
-            'INSDC': info['INSDC'],
-            'molecule': name,
-            'length': round(info['length'] / 1e6, 2),
-            'GC': info['GC']
-        })
-    chrom_list.sort(key=lambda x: custom_sort_order(x['molecule']))
-    return chrom_list
+def custom_sort_order(molecule: str) -> tuple[Any, Any]:
+    return _CHROMOSOME_ANALYZER.custom_sort_order(molecule)
 
 
-def prim_chromosome_table(accession):
-    """
-    Return a sorted list of true chromosomes for primary assembly.
-    """
+def extract_chromosomes_only(accession: str) -> list[dict[str, Any]]:
+    return _CHROMOSOME_ANALYZER.extract_chromosomes_only(fetch_sequence_reports(accession))
+
+
+def prim_chromosome_table(accession: str) -> list[dict[str, Any]]:
     return extract_chromosomes_only(accession)
 
 
-def combine_haplotype_chromosome_tables(hap1_acc, hap2_acc):
-    """
-    Return side-by-side rows for two haplotype chromosome lists.
-    """
-    hap1 = extract_chromosomes_only(hap1_acc)
-    hap2 = extract_chromosomes_only(hap2_acc)
-    hap1.sort(key=lambda x: custom_sort_order(x['molecule']))
-    hap2.sort(key=lambda x: custom_sort_order(x['molecule']))
-    combined = []
-    for i in range(max(len(hap1), len(hap2))):
-        combined.append({
-            'hap1_INSDC': hap1[i]['INSDC'] if i < len(hap1) else "",
-            'hap1_molecule': hap1[i]['molecule'] if i < len(hap1) else "",
-            'hap1_length': hap1[i]['length'] if i < len(hap1) else "",
-            'hap1_GC': hap1[i]['GC'] if i < len(hap1) else "",
-            'hap2_INSDC': hap2[i]['INSDC'] if i < len(hap2) else "",
-            'hap2_molecule': hap2[i]['molecule'] if i < len(hap2) else "",
-            'hap2_length': hap2[i]['length'] if i < len(hap2) else "",
-            'hap2_GC': hap2[i]['GC'] if i < len(hap2) else ""
-        })
-    return combined
+def combine_haplotype_chromosome_tables(hap1_acc: str, hap2_acc: str) -> list[dict[str, Any]]:
+    return _CHROMOSOME_ANALYZER.combine_haplotype_chromosome_tables(
+        fetch_sequence_reports(hap1_acc),
+        fetch_sequence_reports(hap2_acc),
+    )
 
 
-def get_chromosome_lengths(accession):
-    """
-    Total base-pair length of all true chromosomes + their unlocalized scaffolds.
-    """
-    chroms = extract_chromosomes_only(accession)
-    # extract_chromosomes_only lengths are in Mb
-    return sum(int(c['length'] * 1e6) for c in chroms)
+def get_chromosome_lengths(accession: str) -> int:
+    return _CHROMOSOME_ANALYZER.get_chromosome_lengths(fetch_sequence_reports(accession))
 
 
-def calculate_percentage_assembled(info: AssemblyCoverageInput | dict):
-    """
-    Compute percentage of total genome sequence assigned to chromosomes.
-    Works for prim_alt and hap_asm.
-    """
-    if isinstance(info, AssemblyCoverageInput):
-        coverage = info
-    else:
-        coverage = AssemblyCoverageInput.from_mapping(info)
-
-    coverage.validate()
-    asm = coverage.assemblies_type
-    if asm == 'prim_alt':
-        total_chr = get_chromosome_lengths(coverage.primary_accession)
-        genome = coverage.genome_length_unrounded or 0
-        pct = round((total_chr / genome) * 100, 2) if genome else 0
-        return {'total_chromosome_length': total_chr,
-                'genome_length_unrounded': genome,
-                'perc_assembled': pct}
-    elif asm == 'hap_asm':
-        total1 = get_chromosome_lengths(coverage.hap1_accession)
-        total2 = get_chromosome_lengths(coverage.hap2_accession)
-        g1 = coverage.hap1_genome_length_unrounded or 0
-        g2 = coverage.hap2_genome_length_unrounded or 0
-        p1 = round((total1 / g1) * 100, 2) if g1 else 0
-        p2 = round((total2 / g2) * 100, 2) if g2 else 0
-        return {'hap1_chromosome_length': total1,
-                'hap2_chromosome_length': total2,
-                'hap1_perc_assembled': p1,
-                'hap2_perc_assembled': p2}
-    else:
-        raise ValueError("Unsupported assembly type")
+def calculate_percentage_assembled(info: AssemblyCoverageInput | dict[str, Any]) -> dict[str, Any]:
+    return _COVERAGE_ANALYZER.calculate_percentage_assembled(info)
 
 
-def identify_sex_chromosomes(chr_list):
-    """
-    Return sorted list of sex chromosomes and their variants found.
-    """
-    valid = {'X','X1','X2','Y','W','Z','Z1','Z2'}
-    found = {c['molecule'].upper() for c in chr_list if c['molecule'].upper() in valid}
-    return sorted(found)
+def identify_sex_chromosomes(chr_list: list[dict[str, Any]]) -> list[str]:
+    return _CHROMOSOME_ANALYZER.identify_sex_chromosomes(chr_list)
 
 
-def identify_supernumerary_chromosomes(chr_list):
-    """
-    Return sorted list of supernumerary B chromosomes and their variants found.
-    """
-    valid = {'B','B1','B2','B3', 'B4'}
-    found = {c['molecule'].upper() for c in chr_list if c['molecule'].upper() in valid}
-    return sorted(found)
+def identify_supernumerary_chromosomes(chr_list: list[dict[str, Any]]) -> list[str]:
+    return _CHROMOSOME_ANALYZER.identify_supernumerary_chromosomes(chr_list)
+
+
+__all__ = [
+    "ChromosomeAnalyzer",
+    "NcbiSequenceReportClient",
+    "calculate_percentage_assembled",
+    "combine_haplotype_chromosome_tables",
+    "custom_sort_order",
+    "extract_chromosomes_only",
+    "fetch_sequence_reports",
+    "get_chromosome_lengths",
+    "get_longest_scaffold",
+    "identify_sex_chromosomes",
+    "identify_supernumerary_chromosomes",
+    "prim_chromosome_table",
+]

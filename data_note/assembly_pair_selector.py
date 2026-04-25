@@ -4,10 +4,11 @@ from dataclasses import dataclass
 import logging
 from typing import Any, Callable
 
-from .fetch_ncbi_data import fetch_prim_assembly_info
+from .ncbi_datasets_client import NcbiDatasetsClient
 from .models import AssemblyCandidate, AssemblyRecord
 
 logger = logging.getLogger(__name__)
+_DEFAULT_DATASETS_CLIENT = NcbiDatasetsClient()
 
 
 @dataclass(slots=True)
@@ -156,7 +157,7 @@ class AssemblyPairSelector:
         if accession in self._contiguity_cache:
             return self._contiguity_cache[accession]
 
-        fetcher = self.contiguity_fetcher or fetch_prim_assembly_info
+        fetcher = self.contiguity_fetcher or _DEFAULT_DATASETS_CLIENT.fetch_primary_assembly_info
         try:
             metrics = fetcher(accession) or {}
         except Exception as exc:

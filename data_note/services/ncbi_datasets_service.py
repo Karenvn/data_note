@@ -1,28 +1,44 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 from typing import Any, Callable
 
 from ..models import AssemblyDatasetRecord, AssemblyDatasetsInfo, AssemblySelection
-from ..fetch_ncbi_data import (
-    fetch_assembly_info,
-    fetch_prim_assembly_info,
-    get_organelle_info,
-    get_organelle_template_data,
-)
-from ..process_chromosome_data import get_longest_scaffold
+from ..chromosome_analyzer import ChromosomeAnalyzer
+from ..ncbi_datasets_client import NcbiDatasetsClient
+from ..ncbi_organelle_client import NcbiOrganelleClient
+from ..ncbi_sequence_report_client import NcbiSequenceReportClient
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_DATASETS_CLIENT = NcbiDatasetsClient()
+_DEFAULT_ORGANELLE_CLIENT = NcbiOrganelleClient()
+_DEFAULT_SEQUENCE_REPORT_CLIENT = NcbiSequenceReportClient()
+_DEFAULT_CHROMOSOME_ANALYZER = ChromosomeAnalyzer()
 
 
 @dataclass(slots=True)
 class NcbiDatasetsService:
-    primary_info_fetcher: Callable[[str], dict[str, Any]] = fetch_prim_assembly_info
-    haplotype_info_fetcher: Callable[[str, str], dict[str, Any]] = fetch_assembly_info
-    organelle_template_fetcher: Callable[[str], Any] = get_organelle_template_data
-    organelle_info_fetcher: Callable[[str], dict[str, Any]] = get_organelle_info
-    longest_scaffold_fetcher: Callable[[str], Any] = get_longest_scaffold
+    primary_info_fetcher: Callable[[str], dict[str, Any]] = field(
+        default_factory=lambda: _DEFAULT_DATASETS_CLIENT.fetch_primary_assembly_info
+    )
+    haplotype_info_fetcher: Callable[[str, str], dict[str, Any]] = field(
+        default_factory=lambda: _DEFAULT_DATASETS_CLIENT.fetch_haplotype_assembly_info
+    )
+    organelle_template_fetcher: Callable[[str], Any] = field(
+        default_factory=lambda: _DEFAULT_ORGANELLE_CLIENT.fetch_organelle_template_data
+    )
+    organelle_info_fetcher: Callable[[str], dict[str, Any]] = field(
+        default_factory=lambda: _DEFAULT_ORGANELLE_CLIENT.fetch_organelle_info
+    )
+    longest_scaffold_fetcher: Callable[[str], Any] = field(
+        default_factory=lambda: (
+            lambda accession: _DEFAULT_CHROMOSOME_ANALYZER.get_longest_scaffold(
+                _DEFAULT_SEQUENCE_REPORT_CLIENT.fetch_reports(accession)
+            )
+        )
+    )
 
     def build_context(
         self,

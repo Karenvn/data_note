@@ -4,25 +4,37 @@ from dataclasses import dataclass
 import logging
 from typing import Any, Callable
 
+from ..chromosome_analyzer import ChromosomeAnalyzer
 from ..formatting_utils import format_sex_chromosomes
 from ..models import AssemblySelection, ChromosomeSummary
-from ..process_chromosome_data import (
-    combine_haplotype_chromosome_tables,
-    identify_sex_chromosomes,
-    identify_supernumerary_chromosomes,
-    prim_chromosome_table,
-)
+from ..ncbi_sequence_report_client import NcbiSequenceReportClient
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_SEQUENCE_REPORT_CLIENT = NcbiSequenceReportClient()
+_DEFAULT_CHROMOSOME_ANALYZER = ChromosomeAnalyzer()
 
 
 @dataclass(slots=True)
 class ChromosomeService:
-    primary_table_fetcher: Callable[[str], list[dict[str, Any]]] = prim_chromosome_table
-    haplotype_table_combiner: Callable[[str, str], list[dict[str, Any]]] = combine_haplotype_chromosome_tables
-    sex_chromosome_identifier: Callable[[list[dict[str, Any]]], list[str]] = identify_sex_chromosomes
+    primary_table_fetcher: Callable[[str], list[dict[str, Any]]] = (
+        lambda accession: _DEFAULT_CHROMOSOME_ANALYZER.extract_chromosomes_only(
+            _DEFAULT_SEQUENCE_REPORT_CLIENT.fetch_reports(accession)
+        )
+    )
+    haplotype_table_combiner: Callable[[str, str], list[dict[str, Any]]] = (
+        lambda hap1, hap2: _DEFAULT_CHROMOSOME_ANALYZER.combine_haplotype_chromosome_tables(
+            _DEFAULT_SEQUENCE_REPORT_CLIENT.fetch_reports(hap1),
+            _DEFAULT_SEQUENCE_REPORT_CLIENT.fetch_reports(hap2),
+        )
+    )
+    sex_chromosome_identifier: Callable[[list[dict[str, Any]]], list[str]] = (
+        _DEFAULT_CHROMOSOME_ANALYZER.identify_sex_chromosomes
+    )
     sex_chromosome_formatter: Callable[[list[str]], str | None] = format_sex_chromosomes
-    supernumerary_chromosome_identifier: Callable[[list[dict[str, Any]]], list[str]] = identify_supernumerary_chromosomes
+    supernumerary_chromosome_identifier: Callable[[list[dict[str, Any]]], list[str]] = (
+        _DEFAULT_CHROMOSOME_ANALYZER.identify_supernumerary_chromosomes
+    )
     supernumerary_chromosome_formatter: Callable[[list[str]], str | None] = format_sex_chromosomes
 
     def build_context(

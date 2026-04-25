@@ -5,8 +5,9 @@ from dataclasses import dataclass, field
 import logging
 from typing import Any, Callable
 
+from ..chromosome_analyzer import ChromosomeAnalyzer
 from ..models import AssemblyBundle, AssemblyCoverageInput, AssemblySelection, NoteData, NoteContext
-from ..process_chromosome_data import calculate_percentage_assembled
+from ..ncbi_sequence_report_client import NcbiSequenceReportClient
 from .assembly_service import AssemblyService
 from .btk_service import BtkService
 from .chromosome_service import ChromosomeService
@@ -14,6 +15,13 @@ from .ncbi_datasets_service import NcbiDatasetsService
 from .render_context_builder import RenderContextBuilder
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_SEQUENCE_REPORT_CLIENT = NcbiSequenceReportClient()
+_DEFAULT_CHROMOSOME_ANALYZER = ChromosomeAnalyzer(
+    chromosome_length_fetcher=lambda accession: ChromosomeAnalyzer().get_chromosome_lengths(
+        _DEFAULT_SEQUENCE_REPORT_CLIENT.fetch_reports(accession)
+    )
+)
 
 
 @dataclass(slots=True)
@@ -23,7 +31,9 @@ class AssemblyWorkflowService:
     chromosome_service: ChromosomeService = field(default_factory=ChromosomeService)
     btk_service: BtkService = field(default_factory=BtkService)
     render_context_builder: RenderContextBuilder = field(default_factory=RenderContextBuilder)
-    coverage_calculator: Callable[[AssemblyCoverageInput], dict[str, Any]] = calculate_percentage_assembled
+    coverage_calculator: Callable[[AssemblyCoverageInput], dict[str, Any]] = field(
+        default_factory=lambda: _DEFAULT_CHROMOSOME_ANALYZER.calculate_percentage_assembled
+    )
 
     def build_bundle(
         self,
