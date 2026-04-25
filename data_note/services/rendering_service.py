@@ -9,7 +9,6 @@ from jinja2 import Environment, FileSystemLoader
 
 from ..asset_images import copy_gscope_image, copy_merian_image, copy_merqury_image
 from ..btk_images import download_and_process_btk
-from ..fetch_jira_info import download_jira_attachment
 from ..pretext_images import label_pretext_map
 from ..profiles.base import ProgrammeProfile
 from .figure_service import FigureService
@@ -25,7 +24,6 @@ class RenderingService:
     merian_image_copier: Callable[[str, str], tuple[Any, Any, Any]] = copy_merian_image
     merqury_image_copier: Callable[[str, str], tuple[Any, Any, Any]] = copy_merqury_image
     btk_image_processor: Callable[[str, str], list[tuple[Any, Any, Any]]] = download_and_process_btk
-    jira_attachment_downloader: Callable[[str, str], Any] = download_jira_attachment
     special_character_replacer: Callable[[str], str] = replace_special_characters
     figure_service: FigureService | None = None
 
@@ -42,7 +40,6 @@ class RenderingService:
     def write_note(self, template_file: str, context: dict[str, Any], profile: ProgrammeProfile) -> str:
         species_name = context["species"]
         tolid = context["tolid"]
-        jira_ticket = context.get("jira")
 
         if not species_name:
             raise ValueError("species_name cannot be None or empty")
@@ -54,11 +51,6 @@ class RenderingService:
         os.makedirs(output_dir, exist_ok=True)
 
         self._populate_images(profile, tolid, output_dir, context)
-
-        if jira_ticket:
-            self.jira_attachment_downloader(jira_ticket, output_dir)
-        else:
-            logger.info("No Jira ticket available; skipping Jira attachment download.")
 
         self._replace_context_text(context)
         self._ensure_tables(context)

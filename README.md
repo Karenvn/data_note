@@ -1,6 +1,6 @@
 # Genome notes markdown creation
 
-`data_note` is a Python workflow for generating genome note markdown from BioProject accession numbers. It collects assembly, sequencing, taxonomy, annotation, curation, sampling, and quality metadata from public sources, with optional addition of metadata from local systems. It then renders a Pandoc markdown note with associated figures in the required formats.
+`data_note` is a Python workflow for generating genome note markdown from BioProject accession numbers. It collects assembly, sequencing, taxonomy, annotation, curation, sampling, and quality metadata from public sources, with optional addition of metadata from local systems. It then renders a Pandoc markdown note with associated figures and references in the required formats.
 
 The repository is designed for preparation of genome notes in markdown. It treats metadata integration, text generation and figure preparation as a distinct workflow, separate from upstream pipelines that produce genome assembly and quality assessment outputs.
 
@@ -18,10 +18,10 @@ This repository covers:
 This repository does not aim to cover:
 
 - Pandoc-to-docx / PDF / JATS conversion
-- BibTeX cleanup and publication-specific bibliography repair
+- BibTeX cleanup and publication-specific bibliography management
 - final publication packaging
 
-Those publishing steps are a separate Pandoc/typesetting workflow.
+Those publishing steps are a separate Pandoc/typesetting workflow, such as [Inara](https://github.com/openjournals/inara/tree/main/test), [Seismica-sce-v2](https://github.com/WeAreSeismica/seismica-sce-v2) or the package used for Tree of Life genome notes: https://github.com/Karenvn/pandoc-data-note.
 
 ## Quick start
 
@@ -53,6 +53,46 @@ All profiles can now include an Iso-Seq column in the specimen/sequencing table 
 - ASG figure numbering, including metagenome figure slots.
 - ASG table numbering, with software versions moved to `table6`.
 - an optional metagenome `table5` hook driven by `metagenome_table_headers` and `metagenome_table_rows` when metagenome output is available.
+
+## Assembly Selection Overrides
+
+By default, `data_note` selects the primary assembly or haplotype 1 assembly automatically after tax-id filtering, then chooses the matching alternate or haplotype 2 assembly.
+
+For cases where the automatic choice is not the one you want, the CLI now supports explicit assembly-selection inputs:
+
+- `--assembly GCA_...`
+- `--alt-assembly GCA_...`
+- `--hap1-assembly GCA_...`
+- `--hap2-assembly GCA_...`
+
+Typical usage is:
+
+```bash
+python -m data_note --template_file ~/genome_note_templates/dtol_template.md --assembly GCA_123456789.1 bioprojects.txt
+```
+
+That tells the workflow to use the supplied primary assembly or haplotype 1 assembly accession and then infer the matching alternate or haplotype 2 when possible.
+
+If you want to force an explicit primary/alternate pair:
+
+```bash
+python -m data_note --template_file ~/genome_note_templates/dtol_template.md --assembly GCA_123456789.1 --alt-assembly GCA_123456790.1 bioprojects.txt
+```
+
+If you want to force an explicit haplotype pair:
+
+```bash
+python -m data_note --template_file ~/genome_note_templates/dtol_template.md --hap1-assembly GCA_123456789.1 --hap2-assembly GCA_123456790.1 bioprojects.txt
+```
+
+Rules:
+
+- use either `--assembly` with optional `--alt-assembly`, or `--hap1-assembly` with optional `--hap2-assembly`
+- `--alt-assembly` requires `--assembly`
+- `--hap2-assembly` requires `--hap1-assembly`
+- the supplied accession must still survive the normal tax-id and excluded-name filtering
+
+These flags apply to the current run as a whole. They are therefore most useful when `bioprojects.txt` contains a single BioProject, or when every BioProject in the input file should use the same explicit assembly choice.
 
 ## Architecture
 
@@ -129,6 +169,8 @@ Optional internal variables include:
 - `YAML_SSH_HOST` (optional; defaults to `tol22` for local server fetches)
 - `YAML_SSH_IDENTITY_FILE`
 
+Internal YAML handling now always treats the remote path recorded in Jira as the authoritative source. The file is refreshed into `YAML_CACHE_DIR` for manual inspection and is not copied into generated genome note output folders.
+
 Optional Ensembl transition variables include:
 
 - `GN_ENSEMBL_GRAPHQL_URL`
@@ -183,4 +225,4 @@ The repository also includes:
 
 ## Standards
 
-This repository is informed by the [Genomic Standards Consortium’s MIxS standard](https://genomicsstandardsconsortium.github.io/mixs/) for sequence-associated metadata. Where appropriate, the workflow attempts to structure metadata in ways that are compatible with MIxS concepts and checklists, although it does not yet implement a complete formal MIxS schema.
+This repository is informed by the [Genomic Standards Consortium’s MIxS standard](https://genomicsstandardsconsortium.github.io/mixs/) for sequence-associated metadata. Where appropriate, the workflow attempts to structure metadata in ways that are compatible with MIxS concepts and checklists, although it does not (yet) implement a complete formal MIxS schema.

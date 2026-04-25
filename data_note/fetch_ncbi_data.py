@@ -134,8 +134,19 @@ def fetch_and_extract_data(accession):
     # Extracting wgs_project_accession from wgs_info if available
     wgs_info = report.get('wgs_info', {})
     parsed_assembly_data['wgs_project_accession'] = wgs_info.get('wgs_project_accession', 'N/A')
+    parsed_assembly_data['linked_assemblies'] = extract_linked_assemblies(report)
 
     return parsed_assembly_data
+
+
+def extract_linked_assemblies(report):
+    """Extract linked assembly accessions from an NCBI Datasets assembly report."""
+    linked = []
+    for item in report.get('assembly_info', {}).get('linked_assemblies', []) or []:
+        accession = item.get('linked_assembly')
+        if accession:
+            linked.append(str(accession))
+    return linked
 
 
 def fetch_prim_assembly_info(accession):

@@ -9,29 +9,59 @@ AssemblyRole = Literal["primary", "alternate", "hap1", "hap2"]
 
 
 @dataclass(slots=True)
+class AssemblyCandidate:
+    accession: str
+    assembly_name: str
+    tax_id: str = ""
+    study_accession: str = ""
+    accession_field: str = "assembly_set_accession"
+    extras: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_mapping(
+        cls,
+        data: Mapping[str, Any],
+        *,
+        accession_key: str = "assembly_set_accession",
+    ) -> "AssemblyCandidate":
+        consumed = {
+            accession_key,
+            "assembly_name",
+            "tax_id",
+            "study_accession",
+        }
+        return cls(
+            accession=str(data.get(accession_key) or ""),
+            assembly_name=str(data.get("assembly_name") or ""),
+            tax_id=str(data.get("tax_id") or ""),
+            study_accession=str(data.get("study_accession") or ""),
+            accession_field=accession_key,
+            extras={key: value for key, value in data.items() if key not in consumed},
+        )
+
+    def to_mapping(self) -> dict[str, Any]:
+        mapping = dict(self.extras)
+        mapping[self.accession_field] = self.accession
+        mapping["assembly_name"] = self.assembly_name
+        if self.tax_id:
+            mapping["tax_id"] = self.tax_id
+        if self.study_accession:
+            mapping["study_accession"] = self.study_accession
+        return mapping
+
+    def to_record(self, role: AssemblyRole, *, assembly_name: str | None = None) -> "AssemblyRecord":
+        return AssemblyRecord(
+            accession=self.accession,
+            assembly_name=assembly_name if assembly_name is not None else self.assembly_name,
+            role=role,
+        )
+
+
+@dataclass(slots=True)
 class AssemblyRecord:
     accession: str
     assembly_name: str
     role: AssemblyRole
-
-    @classmethod
-    def from_legacy_dict(
-        cls,
-        data: dict[str, Any],
-        *,
-        accession_key: str,
-        assembly_name_key: str,
-        role: AssemblyRole,
-    ) -> "AssemblyRecord | None":
-        accession = data.get(accession_key)
-        assembly_name = data.get(assembly_name_key)
-        if not accession and not assembly_name:
-            return None
-        return cls(
-            accession=str(accession or ""),
-            assembly_name=str(assembly_name or ""),
-            role=role,
-        )
 
     def validate(self) -> None:
         if not self.accession:
@@ -98,6 +128,34 @@ class AssemblySelection:
     def preferred_assembly_name(self) -> str | None:
         record = self.preferred_record()
         return record.assembly_name if record is not None else None
+
+
+@dataclass(slots=True)
+class AssemblySelectionInput:
+    assembly_accession: str | None = None
+    alternate_accession: str | None = None
+    hap1_accession: str | None = None
+    hap2_accession: str | None = None
+
+    def has_any(self) -> bool:
+        return any(
+            [
+                self.assembly_accession,
+                self.alternate_accession,
+                self.hap1_accession,
+                self.hap2_accession,
+            ]
+        )
+
+    def validate(self) -> None:
+        if self.assembly_accession and (self.hap1_accession or self.hap2_accession):
+            raise ValueError(
+                "Use either assembly/alternate assembly inputs or hap1/hap2 assembly inputs, not both"
+            )
+        if self.alternate_accession and not self.assembly_accession:
+            raise ValueError("An alternate assembly input requires an assembly input")
+        if self.hap2_accession and not self.hap1_accession:
+            raise ValueError("A hap2 assembly input requires a hap1 assembly input")
 
 
 @dataclass(slots=True)

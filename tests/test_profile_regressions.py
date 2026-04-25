@@ -140,7 +140,6 @@ def _build_rendering_service() -> RenderingService:
                 (output_names or {}).get("blob", "Fig_6_Blob.png").removesuffix(".png"),
             ),
         ],
-        jira_attachment_downloader=lambda ticket, output_dir: None,
         special_character_replacer=lambda text, target_format="markdown": text,
     )
 

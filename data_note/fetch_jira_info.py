@@ -11,7 +11,6 @@ import xml.etree.ElementTree as ET
 from .grit_jira_auth import GritJiraAuth
 from .formatting_utils import percentage_change_from_a_to_b, format_with_nbsp
 import yaml
-import subprocess
 from pathlib import Path
 from urllib.parse import urlparse
 from .yaml_utils import fetch_or_copy_yaml
@@ -143,68 +142,65 @@ def get_auth():
 
     return GritJiraAuth(auth_credentials[0], auth_credentials[2])
 
-def download_jira_attachment_http(url: str, local_path: str, auth) -> str:
-    """
-    Fetch a JIRA attachment by HTTP GET (using basic auth),
-    save to `local_path`, and return that path.
-    """
-    r = _jira_get(url, auth=auth)
-    with open(local_path, "wb") as fh:
-        fh.write(r.content)
-    return local_path
-
-
 def parse_yaml_info(issue):  # this is a terrible name for a function that is actually organising a fallback
     """
-    Look first for a .yaml attachment on the JIRA issue.
-    If found, return (kind="attachment", url=<download-url>).
-    Otherwise, look for the server‐path field and return
-    (kind="server", path=<lustre‑path>).
-    If neither, return (None, None).
-    """
-    # 1) attachments
-    for att in issue["fields"].get("attachment", []):
-        if att.get("filename", "").endswith(".yaml"):
-            return "attachment", att["content"]  # JIRA download URL
+    Resolve the authoritative remote YAML path from the JIRA issue.
 
-    # 2) fallback to custom‑field
+    YAML attachments are intentionally ignored because the current pipeline
+    description lives on the remote server path stored in the custom field.
+    """
+    yaml_attachments = [
+        attachment.get("filename", "")
+        for attachment in issue["fields"].get("attachment", [])
+        if attachment.get("filename", "").lower().endswith((".yaml", ".yml"))
+    ]
     server_path = issue["fields"].get(YAML_FIELD_ID)
     if server_path:
+        if yaml_attachments:
+            logger.info(
+                "Ignoring YAML attachment(s) on %s and using remote YAML path from %s.",
+                issue.get("key", "JIRA issue"),
+                YAML_FIELD_ID,
+            )
         return "server", server_path
+
+    if yaml_attachments:
+        logger.warning(
+            "YAML attachment(s) found on %s but %s is empty; cannot fetch authoritative remote YAML.",
+            issue.get("key", "JIRA issue"),
+            YAML_FIELD_ID,
+        )
 
     return None, None
 
-def get_yaml_for_ticket(ticket, auth):
+def get_yaml_for_ticket(ticket, auth=None):
     """
-    Return a Path to the YAML file for the given JIRA ticket:
-    - if a .yaml attachment exists, download it via HTTP
-    - otherwise fall back to the server path via SCP
+    Return a Path to the authoritative YAML cache for the given JIRA ticket.
+
+    The YAML is always refreshed via SCP into YAML_CACHE_DIR so it remains
+    available for manual inspection without polluting rendered output folders.
     """
     issue = fetch_jira_issue(ticket)
     if not issue:
         return None
 
-    # parse_yaml_info now returns (kind, data)
     kind, data = parse_yaml_info(issue)
-
-    if kind == "attachment" and data:
-        local_path = _yaml_cache_dir() / f"{ticket}.yaml"
-        local_path.parent.mkdir(parents=True, exist_ok=True)
-        download_jira_attachment_http(data, str(local_path), auth)
-        return local_path
 
     if kind == "server" and data:
         ssh_user, ssh_host = _yaml_ssh_target()
 
-        return fetch_or_copy_yaml(
+        local_yaml = fetch_or_copy_yaml(
             local_base  = str(_yaml_cache_dir()),
             tolid       = ticket,
             remote_path = data,
             ssh_user    = ssh_user,
             ssh_host    = ssh_host
         )
+        if local_yaml:
+            logger.info("Cached YAML for %s at %s", ticket, local_yaml)
+        return local_yaml
 
-    logger.error("No YAML available for ticket %s", ticket)
+    logger.error("No remote YAML available for ticket %s", ticket)
     return None
 
 
@@ -415,65 +411,33 @@ def fetch_and_parse_jira_data(jira_ticket_id):
     jira_dict.pop('assembly_statistics', None)
     jira_dict.pop('gfastats', None)
 
-    attachments = response_data['fields'].get('attachment', [])
-    yaml_attachment = next(
-        (
-            attachment
-            for attachment in attachments
-            if attachment['filename'].endswith(('.yaml', '.yml'))
-        ),
-        None,
-    )
-
-    if yaml_attachment:
-        yaml_url = yaml_attachment['content']
+    local_yaml = get_yaml_for_ticket(jira_ticket_id, auth)
+    if local_yaml:
         try:
-            yaml_response = _jira_get(yaml_url, auth=auth)
-        except requests.exceptions.RequestException as exc:
-            logger.warning("Failed to download YAML attachment for %s: %s", jira_ticket_id, exc)
-        else:
-            yaml_versions = parse_yaml_attachment(yaml_response.text)
-            jira_dict.update(yaml_versions)
-    else:
-        local_yaml = get_yaml_for_ticket(jira_ticket_id, auth)
-        if local_yaml:
             with open(local_yaml) as fh:
                 yaml_versions = parse_yaml_attachment(fh.read())
+        except OSError as exc:
+            logger.warning("Failed to read cached YAML for %s: %s", jira_ticket_id, exc)
+        else:
             jira_dict.update(yaml_versions)
 
     return jira_dict
 
 
 def download_jira_attachment(jira_ticket_id, directory):
-    """Find a .yaml attachment on the JIRA issue and download it."""
-    jira_base_url = _jira_base_url()
-    if not jira_base_url:
-        logger.info("JIRA is not configured; skipping attachment download.")
-        return None
+    """
+    Legacy wrapper that keeps YAML out of the note output folder.
 
-    url = f"{jira_base_url}/rest/api/2/issue/{jira_ticket_id}?fields=attachment"
-
-    try:
-        auth = get_auth()
-    except Exception as exc:
-        logger.warning("JIRA authentication unavailable: %s", exc)
-        return None
-
-    response = _jira_get(url, auth=auth)
-    issue_data = response.json()
-    attachments = issue_data['fields'].get('attachment', [])
-
-    for attachment in attachments:
-        fn = attachment['filename']
-        if fn.lower().endswith(('.yaml', '.yml')):
-            download_url = attachment['content']
-            local_path = os.path.join(directory, fn)
-            logger.info("Downloading JIRA attachment to %s", local_path)
-            # delegate the actual GET + write to our helper:
-            return download_jira_attachment_http(download_url, local_path, auth)
-
-    logger.warning("No YAML attachment found on JIRA issue")
-    return None
+    The directory argument is retained for compatibility but ignored; the file
+    is refreshed into YAML_CACHE_DIR instead.
+    """
+    if directory:
+        logger.info(
+            "Ignoring legacy YAML output directory %s; caching under %s instead.",
+            directory,
+            _yaml_cache_dir(),
+        )
+    return get_yaml_for_ticket(jira_ticket_id)
 
 
 

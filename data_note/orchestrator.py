@@ -9,6 +9,7 @@ from Bio import Entrez
 from .models import (
     AssemblyBundle,
     AssemblySelection,
+    AssemblySelectionInput,
     NoteData,
 )
 from .services import (
@@ -31,12 +32,7 @@ from .services import (
 )
 from . import taxonomy_mapper
 from .auto_intro import summarise_genomes
-from .fetch_bioproject_assemblies import (
-    fetch_data,
-    get_child_accessions_for_bioproject,
-    get_parent_bioprojects,
-    get_umbrella_project_details,
-)
+from .bioproject_client import BioprojectClient
 from .io_utils import dict_to_csv, read_bioprojects_from_file
 from .profiles import ProgrammeProfile, get_profile
 
@@ -49,14 +45,23 @@ logger = logging.getLogger(__name__)
 
 
 class DataNoteOrchestrator:
-    def __init__(self, profile: ProgrammeProfile | str | None = None) -> None:
+    def __init__(
+        self,
+        profile: ProgrammeProfile | str | None = None,
+        assembly_selection_input: AssemblySelectionInput | None = None,
+    ) -> None:
         Entrez.email = os.getenv("ENTREZ_EMAIL", "default_email")
         Entrez.api_key = os.getenv("ENTREZ_API_KEY", "default_api_key")
         self.profile = profile if isinstance(profile, ProgrammeProfile) else get_profile(profile)
+        self.assembly_selection_input = assembly_selection_input
 
+        self.bioproject_client = BioprojectClient()
         self.annotation_service = AnnotationService()
         self.author_service = AuthorService()
-        self.assembly_service = AssemblyService()
+        self.assembly_service = AssemblyService(
+            bioproject_client=self.bioproject_client,
+            selection_input=self.assembly_selection_input,
+        )
         self.btk_service = BtkService()
         self.chromosome_service = ChromosomeService()
         self.curation_service = CurationService()
@@ -97,8 +102,8 @@ class DataNoteOrchestrator:
     def process_bioproject(self, bioproject: str) -> dict[str, Any]:
         note_data = NoteData()
 
-        umbrella_data = fetch_data(bioproject)
-        umbrella_project_dict = get_umbrella_project_details(umbrella_data, bioproject)
+        umbrella_data = self.bioproject_client.fetch_umbrella_project(bioproject)
+        umbrella_project_dict = self.bioproject_client.build_umbrella_project_details(umbrella_data, bioproject)
         note_data.base.update(umbrella_project_dict)
         context = self.render_context_builder.snapshot(note_data)
 
@@ -129,9 +134,9 @@ class DataNoteOrchestrator:
                 logger.warning("Failed to process flow cytometry data for %r: %s", species, exc)
         context = self.render_context_builder.snapshot(note_data)
 
-        child_accessions = get_child_accessions_for_bioproject(umbrella_data)
+        child_accessions = self.bioproject_client.fetch_child_accessions(umbrella_data)
         note_data.base.child_bioprojects = child_accessions
-        note_data.base.update(get_parent_bioprojects(bioproject))
+        note_data.base.update(self.bioproject_client.fetch_parent_projects(bioproject))
 
         assembly_bundle, context = self.assembly_workflow_service.build_bundle(
             note_data,

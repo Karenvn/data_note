@@ -58,19 +58,21 @@ class OrchestratorProfileTests(unittest.TestCase):
         orchestrator.render_context_builder = Mock()
         orchestrator.render_context_builder.snapshot.return_value = snapshot_context
         orchestrator.render_context_builder.build.return_value = final_context
+        orchestrator.bioproject_client = Mock()
+        orchestrator.bioproject_client.fetch_umbrella_project.return_value = {"study_accession": "PRJEB1"}
+        orchestrator.bioproject_client.build_umbrella_project_details.return_value = {
+            "bioproject": "PRJEB1",
+            "tax_id": "9606",
+            "species": "Example species",
+        }
+        orchestrator.bioproject_client.fetch_child_accessions.return_value = ["PRJEB1"]
+        orchestrator.bioproject_client.fetch_parent_projects.return_value = {}
 
         return orchestrator, flow_cytometry_service
 
     def _process_bioproject(self, profile_name: str) -> tuple[dict[str, object], Mock]:
         orchestrator, flow_cytometry_service = self._build_orchestrator(profile_name)
         with (
-            patch("data_note.orchestrator.fetch_data", return_value={"study_accession": "PRJEB1"}),
-            patch(
-                "data_note.orchestrator.get_umbrella_project_details",
-                return_value={"bioproject": "PRJEB1", "tax_id": "9606", "species": "Example species"},
-            ),
-            patch("data_note.orchestrator.get_child_accessions_for_bioproject", return_value=["PRJEB1"]),
-            patch("data_note.orchestrator.get_parent_bioprojects", return_value={}),
             patch("data_note.orchestrator.summarise_genomes", return_value="Example automatic summary."),
             patch("data_note.orchestrator.taxonomy_mapper.has_tax_id_override", return_value=False),
         ):

@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Mapping
 from urllib.parse import urlparse
 
+from .models import AssemblySelectionInput
+
 
 def _env_bool(value: str | None, *, default: bool = False) -> bool:
     if value is None:
@@ -43,6 +45,10 @@ class AppConfig:
     yaml_ssh_user: str | None
     yaml_ssh_host: str | None
     yaml_ssh_identity_file: Path
+    assembly_accession: str | None = None
+    alternate_assembly_accession: str | None = None
+    hap1_assembly_accession: str | None = None
+    hap2_assembly_accession: str | None = None
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> "AppConfig":
@@ -94,6 +100,10 @@ class AppConfig:
             yaml_ssh_identity_file=_expand_path(
                 env.get("YAML_SSH_IDENTITY_FILE", str(home / ".ssh" / "newkey"))
             ),
+            assembly_accession=env.get("DATA_NOTE_ASSEMBLY"),
+            alternate_assembly_accession=env.get("DATA_NOTE_ALT_ASSEMBLY"),
+            hap1_assembly_accession=env.get("DATA_NOTE_HAP1_ASSEMBLY"),
+            hap2_assembly_accession=env.get("DATA_NOTE_HAP2_ASSEMBLY"),
         )
 
     def apply_environment(self) -> None:
@@ -116,6 +126,22 @@ class AppConfig:
         self._set_optional("JIRA_DOMAIN", self.jira_domain)
         self._set_optional("YAML_SSH_USER", self.yaml_ssh_user)
         self._set_optional("YAML_SSH_HOST", self.yaml_ssh_host)
+        self._set_optional("DATA_NOTE_ASSEMBLY", self.assembly_accession)
+        self._set_optional("DATA_NOTE_ALT_ASSEMBLY", self.alternate_assembly_accession)
+        self._set_optional("DATA_NOTE_HAP1_ASSEMBLY", self.hap1_assembly_accession)
+        self._set_optional("DATA_NOTE_HAP2_ASSEMBLY", self.hap2_assembly_accession)
+
+    def assembly_selection_input(self) -> AssemblySelectionInput | None:
+        selection_input = AssemblySelectionInput(
+            assembly_accession=self.assembly_accession,
+            alternate_accession=self.alternate_assembly_accession,
+            hap1_accession=self.hap1_assembly_accession,
+            hap2_accession=self.hap2_assembly_accession,
+        )
+        if not selection_input.has_any():
+            return None
+        selection_input.validate()
+        return selection_input
 
     @staticmethod
     def _set(name: str, value: str | Path) -> None:

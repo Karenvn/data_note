@@ -1,11 +1,14 @@
 from .author import AuthorAffiliation, AuthorInfo, AuthorPerson
 from .assembly import (
     AssemblyBundle,
+    AssemblyCandidate,
     AssemblyCoverageInput,
     AssemblyDatasetRecord,
     AssemblyDatasetsInfo,
+    AssemblyMode,
     AssemblyRecord,
     AssemblySelection,
+    AssemblySelectionInput,
     BtkAssemblyRecord,
     BtkSummary,
     ChromosomeSummary,
@@ -24,10 +27,13 @@ from .sequencing import RunGroup, RunRecord, SequencingSummary, SequencingTotals
 __all__ = [
     "AssemblyCoverageInput",
     "AssemblyBundle",
+    "AssemblyCandidate",
     "AssemblyDatasetRecord",
     "AssemblyDatasetsInfo",
+    "AssemblyMode",
     "AssemblyRecord",
     "AssemblySelection",
+    "AssemblySelectionInput",
     "AuthorAffiliation",
     "AuthorInfo",
     "AuthorPerson",

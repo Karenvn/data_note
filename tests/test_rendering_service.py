@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import chdir
 import tempfile
 import unittest
 from pathlib import Path
@@ -96,6 +97,31 @@ class RenderingServiceTests(unittest.TestCase):
 
             self.assertNotIn("Fig_7_Metagenome_blob", context)
             self.assertNotIn("Fig_8_Metagenome_tree", context)
+
+    def test_write_note_does_not_create_yaml_in_output_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            template_path = tmp_path / "template.md"
+            template_path.write_text("# {{ species }}\n")
+
+            service = RenderingService(
+                gscope_image_copier=lambda tolid, output_dir, output_stem=None: None,
+                pretext_labeler=lambda tolid, context, output_dir, output_stem=None: None,
+                merian_image_copier=lambda tolid, output_dir, output_stem=None: None,
+                merqury_image_copier=lambda tolid, output_dir, output_stem=None: None,
+                btk_image_processor=lambda accession, output_dir, output_names=None: [],
+            )
+
+            context = {
+                "species": "Example species",
+                "tolid": "ixExample1",
+                "jira": "RC-1000",
+            }
+
+            with chdir(tmpdir):
+                output_dir = Path(service.write_note(str(template_path), context, AsgProfile()))
+
+            self.assertEqual([path.name for path in output_dir.iterdir()], ["ixExample1.md"])
 
 
 if __name__ == "__main__":

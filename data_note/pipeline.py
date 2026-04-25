@@ -46,5 +46,8 @@ class DataNotePipeline:
     def _orchestrator_instance(self):
         if self._orchestrator is None:
             self.config.apply_environment()
-            self._orchestrator = DataNoteOrchestrator(profile=self.config.profile_name)
+            self._orchestrator = DataNoteOrchestrator(
+                profile=self.config.profile_name,
+                assembly_selection_input=self.config.assembly_selection_input(),
+            )
         return self._orchestrator
