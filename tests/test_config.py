@@ -51,6 +51,42 @@ class ConfigTests(unittest.TestCase):
         config = load_config({"DATA_NOTE_PROFILE": "psyche"})
         self.assertEqual(config.profile_name, "psyche")
 
+    def test_primary_assembly_selection_input_from_env(self) -> None:
+        config = load_config(
+            {
+                "DATA_NOTE_ASSEMBLY": "GCA_123456789.1",
+                "DATA_NOTE_ALT_ASSEMBLY": "GCA_123456790.1",
+            }
+        )
+        selection_input = config.assembly_selection_input()
+        self.assertIsNotNone(selection_input)
+        assert selection_input is not None
+        self.assertEqual(selection_input.assembly_accession, "GCA_123456789.1")
+        self.assertEqual(selection_input.alternate_accession, "GCA_123456790.1")
+
+    def test_haplotype_assembly_selection_input_from_env(self) -> None:
+        config = load_config(
+            {
+                "DATA_NOTE_HAP1_ASSEMBLY": "GCA_123456789.1",
+                "DATA_NOTE_HAP2_ASSEMBLY": "GCA_123456790.1",
+            }
+        )
+        selection_input = config.assembly_selection_input()
+        self.assertIsNotNone(selection_input)
+        assert selection_input is not None
+        self.assertEqual(selection_input.hap1_accession, "GCA_123456789.1")
+        self.assertEqual(selection_input.hap2_accession, "GCA_123456790.1")
+
+    def test_invalid_mixed_assembly_selection_input_from_env_raises(self) -> None:
+        config = load_config(
+            {
+                "DATA_NOTE_ASSEMBLY": "GCA_123456789.1",
+                "DATA_NOTE_HAP1_ASSEMBLY": "GCA_123456790.1",
+            }
+        )
+        with self.assertRaises(ValueError):
+            config.assembly_selection_input()
+
 
 if __name__ == "__main__":
     unittest.main()

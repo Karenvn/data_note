@@ -8,7 +8,11 @@ from data_note.assembly_mode_detector import AssemblyModeDetector
 from data_note.assembly_pair_selector import AssemblyPairSelector
 from data_note.assembly_selection_resolver import AssemblySelectionResolver
 from data_note.bioproject_client import EnaPortalClient
-from data_note.legacy_bioproject_assemblies import fetch_and_update_assembly_details
+from data_note.legacy_bioproject_assemblies import (
+    extract_haplotype_assemblies as legacy_extract_haplotype_assemblies,
+    extract_prim_alt_assemblies as legacy_extract_prim_alt_assemblies,
+    fetch_and_update_assembly_details,
+)
 from data_note.models import AssemblyCandidate, AssemblySelectionInput
 from data_note.fetch_ncbi_data import extract_linked_assemblies
 
@@ -138,6 +142,68 @@ class EnaPortalClientTests(unittest.TestCase):
             ],
         )
 
+    def test_legacy_extract_prim_alt_wrapper_returns_dicts_from_typed_selection(self) -> None:
+        resolver = AssemblySelectionResolver(
+            taxonomy_mapper_module=_MapperStub(),
+            contiguity_fetcher=lambda accession: {
+                "GCA_PRIM_NEW.1": {
+                    "assembly_level": "chromosome",
+                    "scaffold_N50": 100.0,
+                    "contig_N50": 8.0,
+                },
+                "GCA_ALT_NEW.1": {
+                    "assembly_level": "chromosome",
+                    "scaffold_N50": 90.0,
+                    "contig_N50": 7.0,
+                },
+            }.get(accession, {}),
+        )
+        assembly_dicts = [
+            {
+                "assembly_name": "ixExample2.1 alternate haplotype",
+                "assembly_set_accession": "GCA_ALT_NEW.1",
+                "tax_id": "1234",
+            },
+            {
+                "assembly_name": "ixExample2.1",
+                "assembly_set_accession": "GCA_PRIM_NEW.1",
+                "tax_id": "1234",
+            },
+        ]
+
+        with patch("data_note.legacy_bioproject_assemblies._selection_resolver", return_value=resolver):
+            primary, alternate = legacy_extract_prim_alt_assemblies(assembly_dicts, "1234")
+
+        self.assertEqual(primary["prim_accession"], "GCA_PRIM_NEW.1")
+        self.assertEqual(alternate["alt_accession"], "GCA_ALT_NEW.1")
+
+    def test_legacy_extract_haplotype_wrapper_returns_dicts_from_typed_selection(self) -> None:
+        resolver = AssemblySelectionResolver(
+            taxonomy_mapper_module=_MapperStub(),
+            contiguity_fetcher=lambda accession: {
+                "GCA_H1_NEW.1": {
+                    "assembly_level": "chromosome",
+                    "scaffold_N50": 120.0,
+                    "contig_N50": 9.0,
+                },
+                "GCA_H2_NEW.1": {
+                    "assembly_level": "chromosome",
+                    "scaffold_N50": 110.0,
+                    "contig_N50": 8.0,
+                },
+            }.get(accession, {}),
+        )
+        assembly_dicts = [
+            {"assembly_name": "ixExample2.hap1.1", "assembly_set_accession": "GCA_H1_NEW.1", "tax_id": "1234"},
+            {"assembly_name": "ixExample2.hap2.1", "assembly_set_accession": "GCA_H2_NEW.1", "tax_id": "1234"},
+        ]
+
+        with patch("data_note.legacy_bioproject_assemblies._selection_resolver", return_value=resolver):
+            hap1, hap2 = legacy_extract_haplotype_assemblies(assembly_dicts, "1234")
+
+        self.assertEqual(hap1["hap1_accession"], "GCA_H1_NEW.1")
+        self.assertEqual(hap2["hap2_accession"], "GCA_H2_NEW.1")
+
 
 class AssemblySelectionResolverTests(unittest.TestCase):
     def test_determine_assembly_type_uses_haplotype_name_heuristic(self) -> None:
@@ -152,7 +218,7 @@ class AssemblySelectionResolverTests(unittest.TestCase):
 
         self.assertEqual(resolver.determine_assembly_type(assembly_dicts, "1234"), "hap_asm")
 
-    def test_extract_prim_alt_assemblies_prefers_highest_contiguity_primary_after_tax_filter(self) -> None:
+    def test_build_selection_prefers_highest_contiguity_primary_after_tax_filter(self) -> None:
         metrics = {
             "GCA_ALT_OLD.1": {"assembly_level": "chromosome", "scaffold_N50": 60.0, "contig_N50": 5.0},
             "GCA_ALT_NEW.1": {"assembly_level": "chromosome", "scaffold_N50": 90.0, "contig_N50": 7.0},
@@ -192,12 +258,12 @@ class AssemblySelectionResolverTests(unittest.TestCase):
             },
         ]
 
-        primary, alternate = resolver.extract_prim_alt_assemblies(assembly_dicts, "1234")
+        selection = resolver.build_selection(assembly_dicts, "1234")
 
-        self.assertEqual(primary["prim_accession"], "GCA_PRIM_NEW.1")
-        self.assertEqual(alternate["alt_accession"], "GCA_ALT_NEW.1")
+        self.assertEqual(selection.primary.accession, "GCA_PRIM_NEW.1")
+        self.assertEqual(selection.alternate.accession, "GCA_ALT_NEW.1")
 
-    def test_extract_haplotype_assemblies_prefers_highest_contiguity_hap1_and_matching_hap2(self) -> None:
+    def test_build_selection_prefers_highest_contiguity_hap1_and_matching_hap2(self) -> None:
         metrics = {
             "GCA_H1_OLD.1": {"assembly_level": "chromosome", "scaffold_N50": 80.0, "contig_N50": 5.0},
             "GCA_H2_OLD.1": {"assembly_level": "chromosome", "scaffold_N50": 75.0, "contig_N50": 4.0},
@@ -217,12 +283,12 @@ class AssemblySelectionResolverTests(unittest.TestCase):
             {"assembly_name": "ixWrongTax.hap1.1", "assembly_set_accession": "GCA_WRONG.1", "tax_id": "wrong-tax"},
         ]
 
-        hap1, hap2 = resolver.extract_haplotype_assemblies(assembly_dicts, "1234")
+        selection = resolver.build_selection(assembly_dicts, "1234")
 
-        self.assertEqual(hap1["hap1_accession"], "GCA_H1_NEW.1")
-        self.assertEqual(hap2["hap2_accession"], "GCA_H2_NEW.1")
+        self.assertEqual(selection.hap1.accession, "GCA_H1_NEW.1")
+        self.assertEqual(selection.hap2.accession, "GCA_H2_NEW.1")
 
-    def test_extract_prim_alt_assemblies_prefers_ncbi_linked_alternate_when_available(self) -> None:
+    def test_build_selection_prefers_ncbi_linked_alternate_when_available(self) -> None:
         metrics = {
             "GCA_PRIM_BEST.1": {
                 "assembly_level": "chromosome",
@@ -261,12 +327,12 @@ class AssemblySelectionResolverTests(unittest.TestCase):
             },
         ]
 
-        primary, alternate = resolver.extract_prim_alt_assemblies(assembly_dicts, "1234")
+        selection = resolver.build_selection(assembly_dicts, "1234")
 
-        self.assertEqual(primary["prim_accession"], "GCA_PRIM_BEST.1")
-        self.assertEqual(alternate["alt_accession"], "GCA_ALT_LINKED.1")
+        self.assertEqual(selection.primary.accession, "GCA_PRIM_BEST.1")
+        self.assertEqual(selection.alternate.accession, "GCA_ALT_LINKED.1")
 
-    def test_extract_haplotype_assemblies_prefers_ncbi_linked_hap2_when_available(self) -> None:
+    def test_build_selection_prefers_ncbi_linked_hap2_when_available(self) -> None:
         metrics = {
             "GCA_H1_BEST.1": {
                 "assembly_level": "chromosome",
@@ -297,10 +363,10 @@ class AssemblySelectionResolverTests(unittest.TestCase):
             {"assembly_name": "odd_pair.hap2.1", "assembly_set_accession": "GCA_H2_LINKED.1", "tax_id": "1234"},
         ]
 
-        hap1, hap2 = resolver.extract_haplotype_assemblies(assembly_dicts, "1234")
+        selection = resolver.build_selection(assembly_dicts, "1234")
 
-        self.assertEqual(hap1["hap1_accession"], "GCA_H1_BEST.1")
-        self.assertEqual(hap2["hap2_accession"], "GCA_H2_LINKED.1")
+        self.assertEqual(selection.hap1.accession, "GCA_H1_BEST.1")
+        self.assertEqual(selection.hap2.accession, "GCA_H2_LINKED.1")
 
     def test_filter_relevant_assemblies_applies_tax_id_and_name_filters(self) -> None:
         resolver = AssemblySelectionResolver(

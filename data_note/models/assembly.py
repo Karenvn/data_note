@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, Mapping
 
 
-AssemblyMode = Literal["prim_alt", "hap_asm", "multiple_primary"]
+AssemblyMode = Literal["prim_alt", "hap_asm"]
 AssemblyRole = Literal["primary", "alternate", "hap1", "hap2"]
 
 

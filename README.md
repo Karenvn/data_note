@@ -65,6 +65,13 @@ For cases where the automatic choice is not the one you want, the CLI now suppor
 - `--hap1-assembly GCA_...`
 - `--hap2-assembly GCA_...`
 
+The same run-wide override path is also available through environment variables:
+
+- `DATA_NOTE_ASSEMBLY`
+- `DATA_NOTE_ALT_ASSEMBLY`
+- `DATA_NOTE_HAP1_ASSEMBLY`
+- `DATA_NOTE_HAP2_ASSEMBLY`
+
 Typical usage is:
 
 ```bash
@@ -73,16 +80,18 @@ python -m data_note --template_file ~/genome_note_templates/dtol_template.md --a
 
 That tells the workflow to use the supplied primary assembly or haplotype 1 assembly accession and then infer the matching alternate or haplotype 2 when possible.
 
-If you want to force an explicit primary/alternate pair:
+To force an explicit primary/alternate pair:
 
 ```bash
-python -m data_note --template_file ~/genome_note_templates/dtol_template.md --assembly GCA_123456789.1 --alt-assembly GCA_123456790.1 bioprojects.txt
+python -m data_note --template_file ~/genome_note_templates/dtol_template.md \
+--assembly GCA_123456789.1 --alt-assembly GCA_123456790.1 bioprojects.txt
 ```
 
-If you want to force an explicit haplotype pair:
+To force an explicit haplotype pair:
 
 ```bash
-python -m data_note --template_file ~/genome_note_templates/dtol_template.md --hap1-assembly GCA_123456789.1 --hap2-assembly GCA_123456790.1 bioprojects.txt
+python -m data_note --template_file ~/genome_note_templates/dtol_template.md \
+--hap1-assembly GCA_123456789.1 --hap2-assembly GCA_123456790.1 bioprojects.txt
 ```
 
 Rules:
@@ -152,10 +161,16 @@ Important variables include:
 - `DATA_NOTE_GN_ASSETS` (preferred)
 - `DATA_NOTE_SERVER_DATA` (legacy alias)
 - `DATA_NOTE_PROFILE` (`darwin` by default)
+- `DATA_NOTE_ASSEMBLY` (explicit primary assembly override)
+- `DATA_NOTE_ALT_ASSEMBLY` (explicit alternate assembly override)
+- `DATA_NOTE_HAP1_ASSEMBLY` (explicit haplotype 1 override)
+- `DATA_NOTE_HAP2_ASSEMBLY` (explicit haplotype 2 override)
 - `DATA_NOTE_CORRECTIONS_FILE`
 - `DATA_NOTE_CYTO_INFO_TSV`
 - `DATA_NOTE_LR_SAMPLE_PREP_TSV`
 - `DATA_NOTE_AUTHOR_DB`
+
+The assembly override variables mirror the CLI flags and apply to the whole run. Use either the primary/alternate pair or the haplotype 1/2 pair, not both.
 
 Optional internal variables include:
 

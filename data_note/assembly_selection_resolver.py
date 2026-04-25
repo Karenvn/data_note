@@ -50,8 +50,11 @@ class AssemblySelectionResolver:
         assembly_dicts: list[AssemblyCandidateInput],
         tax_id: str,
         selection_input: AssemblySelectionInput | None = None,
+        *,
+        allowed_tax_ids: set[str] | None = None,
     ) -> AssemblySelection:
-        allowed_tax_ids = (self.taxonomy_mapper_module or taxonomy_mapper).get_allowed_tax_ids(tax_id)
+        if allowed_tax_ids is None:
+            allowed_tax_ids = (self.taxonomy_mapper_module or taxonomy_mapper).get_allowed_tax_ids(tax_id)
         relevant_assemblies = self.filter_relevant_assemblies(
             assembly_dicts,
             tax_id,
@@ -71,20 +74,13 @@ class AssemblySelectionResolver:
                 hap1=hap1_record,
                 hap2=hap2_record,
             )
-        elif assemblies_type == "prim_alt":
+        else:
             primary_record, alternate_record = self._pair_selector().select_prim_alt_records(relevant_assemblies)
             selection = AssemblySelection(
                 assemblies_type="prim_alt",
                 primary=primary_record,
                 alternate=alternate_record,
             )
-        elif assemblies_type == "multiple_primary":
-            selection = AssemblySelection(
-                assemblies_type="multiple_primary",
-                extras=self.extract_multiple_assemblies(assembly_dicts, tax_id),
-            )
-        else:
-            selection = AssemblySelection(assemblies_type="prim_alt")
 
         selection.validate()
         return selection
@@ -143,60 +139,6 @@ class AssemblySelectionResolver:
 
         raise ValueError("Assembly selection input did not contain a usable assembly accession")
 
-    def extract_prim_alt_assemblies(
-        self,
-        assembly_dicts: list[AssemblyCandidateInput],
-        tax_id: str,
-        *,
-        allowed_tax_ids: set[str] | None = None,
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
-        relevant_assemblies = self.filter_relevant_assemblies(
-            assembly_dicts,
-            tax_id,
-            allowed_tax_ids=allowed_tax_ids,
-        )
-        primary_record, alternate_record = self._pair_selector().select_prim_alt_records(relevant_assemblies)
-        primary_assembly_dict: dict[str, Any] = {}
-        alternate_haplotype_dict: dict[str, Any] = {}
-        if primary_record is not None:
-            primary_assembly_dict = {
-                "prim_accession": primary_record.accession,
-                "prim_assembly_name": primary_record.assembly_name,
-            }
-        if alternate_record is not None:
-            alternate_haplotype_dict = {
-                "alt_accession": alternate_record.accession,
-                "alt_assembly_name": alternate_record.assembly_name,
-            }
-        return primary_assembly_dict, alternate_haplotype_dict
-
-    def extract_haplotype_assemblies(
-        self,
-        assembly_dicts: list[AssemblyCandidateInput],
-        tax_id: str,
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
-        relevant_assemblies = self.filter_relevant_assemblies(assembly_dicts, tax_id)
-        hap1_record, hap2_record = self._pair_selector().select_haplotype_records(relevant_assemblies)
-        hap1_dict: dict[str, Any] = {}
-        hap2_dict: dict[str, Any] = {}
-        if hap1_record is not None:
-            hap1_dict = {
-                "hap1_accession": hap1_record.accession,
-                "hap1_assembly_name": hap1_record.assembly_name,
-            }
-        if hap2_record is not None:
-            hap2_dict = {
-                "hap2_accession": hap2_record.accession,
-                "hap2_assembly_name": hap2_record.assembly_name,
-            }
-        return hap1_dict, hap2_dict
-
-    @staticmethod
-    def extract_multiple_assemblies(assembly_dicts: list[AssemblyCandidateInput], tax_id: str) -> dict[str, Any]:
-        del assembly_dicts
-        del tax_id
-        return {"multiple_assemblies_info": "Placeholder for multiple assemblies extraction."}
-
     def _pair_selector(self) -> AssemblyPairSelector:
         if self.contiguity_fetcher is not None:
             self.pair_selector.contiguity_fetcher = self.contiguity_fetcher
@@ -217,6 +159,5 @@ class AssemblySelectionResolver:
             if candidate.accession == normalized:
                 return candidate
         raise ValueError(f"Requested assembly {normalized} was not found among the relevant assemblies")
-
 
 __all__ = ["AssemblySelectionResolver"]

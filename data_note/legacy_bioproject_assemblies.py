@@ -52,23 +52,44 @@ def extract_prim_alt_assemblies(
     tax_id: str,
     allowed_tax_ids: set[str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    return _selection_resolver().extract_prim_alt_assemblies(
+    selection = _selection_resolver().build_selection(
         assembly_dicts,
         tax_id,
         allowed_tax_ids=allowed_tax_ids,
     )
+    primary_assembly_dict: dict[str, Any] = {}
+    alternate_haplotype_dict: dict[str, Any] = {}
+    if selection.primary is not None:
+        primary_assembly_dict = {
+            "prim_accession": selection.primary.accession,
+            "prim_assembly_name": selection.primary.assembly_name,
+        }
+    if selection.alternate is not None:
+        alternate_haplotype_dict = {
+            "alt_accession": selection.alternate.accession,
+            "alt_assembly_name": selection.alternate.assembly_name,
+        }
+    return primary_assembly_dict, alternate_haplotype_dict
 
 
 def extract_haplotype_assemblies(
     assembly_dicts: list[dict[str, Any]],
     tax_id: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    return _selection_resolver().extract_haplotype_assemblies(assembly_dicts, tax_id)
-
-
-def extract_multiple_assemblies(assembly_dicts: list[dict[str, Any]], tax_id: str) -> dict[str, Any]:
-    return _selection_resolver().extract_multiple_assemblies(assembly_dicts, tax_id)
-
+    selection = _selection_resolver().build_selection(assembly_dicts, tax_id)
+    hap1_dict: dict[str, Any] = {}
+    hap2_dict: dict[str, Any] = {}
+    if selection.hap1 is not None:
+        hap1_dict = {
+            "hap1_accession": selection.hap1.accession,
+            "hap1_assembly_name": selection.hap1.assembly_name,
+        }
+    if selection.hap2 is not None:
+        hap2_dict = {
+            "hap2_accession": selection.hap2.accession,
+            "hap2_assembly_name": selection.hap2.assembly_name,
+        }
+    return hap1_dict, hap2_dict
 
 def get_parent_bioprojects(bioproject_id: str) -> dict[str, Any]:
     return _portal_client().fetch_parent_projects(bioproject_id)
@@ -77,7 +98,6 @@ def get_parent_bioprojects(bioproject_id: str) -> dict[str, Any]:
 __all__ = [
     "determine_assembly_type",
     "extract_haplotype_assemblies",
-    "extract_multiple_assemblies",
     "extract_prim_alt_assemblies",
     "fetch_and_update_assembly_details",
     "fetch_assembly_details",
