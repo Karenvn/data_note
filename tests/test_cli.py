@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
@@ -23,7 +25,7 @@ class CliTests(unittest.TestCase):
                     "GCA_123456789.1",
                     "--alt-assembly",
                     "GCA_123456790.1",
-                    "bioprojects.txt",
+                    "PRJEB12345",
                 ]
             )
 
@@ -32,6 +34,11 @@ class CliTests(unittest.TestCase):
         self.assertEqual(fake_config.alternate_assembly_accession, "GCA_123456790.1")
         self.assertIsNone(fake_config.hap1_assembly_accession)
         self.assertIsNone(fake_config.hap2_assembly_accession)
+        fake_pipeline.run.assert_called_once_with(
+            bioproject_input="PRJEB12345",
+            template_file="template.md",
+            error_file="error_log.txt",
+        )
 
     def test_main_rejects_mixed_primary_and_haplotype_flags(self) -> None:
         with self.assertRaises(SystemExit):
@@ -54,6 +61,22 @@ class CliTests(unittest.TestCase):
                     "bioprojects.txt",
                 ]
             )
+
+    def test_main_rejects_assembly_override_for_bioproject_list_input(self) -> None:
+        with tempfile.NamedTemporaryFile("w", delete=False) as handle:
+            handle.write("PRJEB12345\nPRJEB67890\n")
+            bioproject_file = handle.name
+        try:
+            with self.assertRaises(SystemExit):
+                main(
+                    [
+                        "--assembly",
+                        "GCA_123456789.1",
+                        bioproject_file,
+                    ]
+                )
+        finally:
+            Path(bioproject_file).unlink()
 
 
 if __name__ == "__main__":

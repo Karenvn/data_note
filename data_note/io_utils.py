@@ -1,8 +1,13 @@
 #!/usr/bin/env python
 
 import json
+from pathlib import Path
+import re
 
 import pandas as pd
+
+
+BIOPROJECT_ACCESSION_PATTERN = re.compile(r"^PRJ[A-Z]{2}\d+$")
 
 
 def dict_to_csv(data_dict, csv_filename):
@@ -33,3 +38,15 @@ def load_and_apply_corrections(context_dict, corrections_file):
 def read_bioprojects_from_file(file_path):
     with open(file_path, "r") as file:
         return [line.strip() for line in file.readlines()]
+
+
+def read_bioprojects_input(input_value: str) -> list[str]:
+    candidate = input_value.strip()
+    path = Path(candidate).expanduser()
+    if path.is_file():
+        return read_bioprojects_from_file(str(path))
+    if BIOPROJECT_ACCESSION_PATTERN.match(candidate):
+        return [candidate]
+    raise FileNotFoundError(
+        f"BioProject input {input_value!r} is neither an existing file nor a BioProject accession"
+    )

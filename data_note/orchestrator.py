@@ -33,7 +33,7 @@ from .services import (
 from . import taxonomy_mapper
 from .auto_intro import summarise_genomes
 from .bioproject_client import BioprojectClient
-from .io_utils import dict_to_csv, read_bioprojects_from_file
+from .io_utils import dict_to_csv, read_bioprojects_from_file, read_bioprojects_input
 from .profiles import ProgrammeProfile, get_profile
 
 
@@ -94,6 +94,10 @@ class DataNoteOrchestrator:
     @staticmethod
     def read_bioprojects_file(file_path: str) -> list[str]:
         return read_bioprojects_from_file(file_path)
+
+    @staticmethod
+    def read_bioproject_input(input_value: str) -> list[str]:
+        return read_bioprojects_input(input_value)
 
     @staticmethod
     def write_context_csv(context: dict[str, Any], csv_path: str) -> None:

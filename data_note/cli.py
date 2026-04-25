@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 
 from .config import load_config
+from .io_utils import read_bioprojects_input
 from .models import AssemblySelectionInput
 from .pipeline import DataNotePipeline
 
@@ -10,10 +11,10 @@ from .pipeline import DataNotePipeline
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Generate genome notes for a list of BioProject IDs.")
     parser.add_argument(
-        "bioproject_file",
+        "bioproject_input",
         nargs="?",
         default="bioprojects.txt",
-        help="Path to the file containing the list of BioProjects.",
+        help="Path to a file containing BioProjects, or a single BioProject accession.",
     )
     parser.add_argument("--template_file", default="template.md", help="Path to the Markdown template file.")
     parser.add_argument("--error-file", default="error_log.txt", help="Path to the error log file.")
@@ -23,19 +24,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--assembly",
-        help="Preferred primary or haplotype 1 assembly accession. The matching alternate or haplotype 2 is inferred when possible.",
+        help="Preferred primary or haplotype 1 assembly accession for a single BioProject input. The matching alternate or haplotype 2 is inferred when possible.",
     )
     parser.add_argument(
         "--alt-assembly",
-        help="Explicit alternate haplotype accession to pair with --assembly.",
+        help="Explicit alternate haplotype accession to pair with --assembly for a single BioProject input.",
     )
     parser.add_argument(
         "--hap1-assembly",
-        help="Explicit haplotype 1 accession. Use this to force haplotype assembly selection.",
+        help="Explicit haplotype 1 accession for a single BioProject input. Use this to force haplotype assembly selection.",
     )
     parser.add_argument(
         "--hap2-assembly",
-        help="Explicit haplotype 2 accession to pair with --hap1-assembly.",
+        help="Explicit haplotype 2 accession to pair with --hap1-assembly for a single BioProject input.",
     )
     return parser
 
@@ -55,7 +56,13 @@ def main(argv: list[str] | None = None) -> int:
     if selection_input.has_any():
         try:
             selection_input.validate()
+            if len(read_bioprojects_input(args.bioproject_input)) != 1:
+                raise ValueError(
+                    "Assembly selection overrides require exactly one BioProject input, not a list"
+                )
         except ValueError as exc:
+            parser.error(str(exc))
+        except FileNotFoundError as exc:
             parser.error(str(exc))
         config.assembly_accession = selection_input.assembly_accession
         config.alternate_assembly_accession = selection_input.alternate_accession
@@ -63,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
         config.hap2_assembly_accession = selection_input.hap2_accession
     pipeline = DataNotePipeline(config)
     return pipeline.run(
-        bioproject_file=args.bioproject_file,
+        bioproject_input=args.bioproject_input,
         template_file=args.template_file,
         error_file=args.error_file,
     )

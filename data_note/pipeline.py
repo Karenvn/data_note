@@ -14,9 +14,13 @@ class DataNotePipeline:
     def process_bioproject(self, bioproject: str):
         return self._orchestrator_instance().process_bioproject(bioproject)
 
-    def run(self, bioproject_file: str, template_file: str, error_file: str = "error_log.txt") -> int:
+    def run(self, bioproject_input: str, template_file: str, error_file: str = "error_log.txt") -> int:
         orchestrator = self._orchestrator_instance()
-        bioproject_list = orchestrator.read_bioprojects_file(bioproject_file)
+        bioproject_list = orchestrator.read_bioproject_input(bioproject_input)
+        if self.config.assembly_selection_input() is not None and len(bioproject_list) != 1:
+            raise ValueError(
+                "Assembly selection overrides require exactly one BioProject input, not a list"
+            )
 
         with open(error_file, "w") as error_log:
             for bioproject in bioproject_list:

@@ -56,42 +56,49 @@ All profiles can now include an Iso-Seq column in the specimen/sequencing table 
 
 ## Assembly Selection Overrides
 
-By default, `data_note` selects the primary assembly or haplotype 1 assembly automatically after tax-id filtering, then chooses the matching alternate or haplotype 2 assembly.
+By default, `data_note` expects the positional input to be a file containing BioProject accessions and selects the primary assembly or haplotype 1 assembly automatically after tax-id filtering, then chooses the matching alternate or haplotype 2 assembly.
 
-For cases where the automatic choice is not the one you want, the CLI now supports explicit assembly-selection inputs:
+For cases where the automatic choice is not the one you want, the CLI also supports explicit assembly-selection inputs for a single BioProject run:
 
 - `--assembly GCA_...`
 - `--alt-assembly GCA_...`
 - `--hap1-assembly GCA_...`
 - `--hap2-assembly GCA_...`
 
-The same run-wide override path is also available through environment variables:
+The same single-BioProject override path is also available through environment variables:
 
 - `DATA_NOTE_ASSEMBLY`
 - `DATA_NOTE_ALT_ASSEMBLY`
 - `DATA_NOTE_HAP1_ASSEMBLY`
 - `DATA_NOTE_HAP2_ASSEMBLY`
 
-Typical usage is:
+Typical batch usage is:
 
 ```bash
-python -m data_note --template_file ~/genome_note_templates/dtol_template.md --assembly GCA_123456789.1 bioprojects.txt
+python -m data_note --template_file ~/genome_note_templates/dtol_template.md bioprojects.txt
 ```
 
-That tells the workflow to use the supplied primary assembly or haplotype 1 assembly accession and then infer the matching alternate or haplotype 2 when possible.
+To force an explicit assembly choice for one BioProject:
+
+```bash
+python -m data_note --template_file ~/genome_note_templates/dtol_template.md \
+--assembly GCA_123456789.1 PRJEB12345
+```
+
+That tells the workflow to use the supplied primary assembly or haplotype 1 assembly accession for `PRJEB12345` and then infer the matching alternate or haplotype 2 when possible.
 
 To force an explicit primary/alternate pair:
 
 ```bash
 python -m data_note --template_file ~/genome_note_templates/dtol_template.md \
---assembly GCA_123456789.1 --alt-assembly GCA_123456790.1 bioprojects.txt
+--assembly GCA_123456789.1 --alt-assembly GCA_123456790.1 PRJEB12345
 ```
 
 To force an explicit haplotype pair:
 
 ```bash
 python -m data_note --template_file ~/genome_note_templates/dtol_template.md \
---hap1-assembly GCA_123456789.1 --hap2-assembly GCA_123456790.1 bioprojects.txt
+--hap1-assembly GCA_123456789.1 --hap2-assembly GCA_123456790.1 PRJEB12345
 ```
 
 Rules:
@@ -100,8 +107,7 @@ Rules:
 - `--alt-assembly` requires `--assembly`
 - `--hap2-assembly` requires `--hap1-assembly`
 - the supplied accession must still survive the normal tax-id and excluded-name filtering
-
-These flags apply to the current run as a whole. They are therefore most useful when `bioprojects.txt` contains a single BioProject, or when every BioProject in the input file should use the same explicit assembly choice.
+- assembly override flags and their environment-variable equivalents only work when the input resolves to exactly one BioProject, not a batch list
 
 ## Architecture
 
@@ -170,7 +176,7 @@ Important variables include:
 - `DATA_NOTE_LR_SAMPLE_PREP_TSV`
 - `DATA_NOTE_AUTHOR_DB`
 
-The assembly override variables mirror the CLI flags and apply to the whole run. Use either the primary/alternate pair or the haplotype 1/2 pair, not both.
+The assembly override variables mirror the CLI flags. Use either the primary/alternate pair or the haplotype 1/2 pair, not both. Like the CLI flags, they are only valid when the input resolves to exactly one BioProject.
 
 Optional internal variables include:
 
