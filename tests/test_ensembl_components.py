@@ -4,22 +4,18 @@ import os
 import unittest
 from unittest.mock import Mock, patch
 
-from data_note.fetch_ensembl_info import (
-    _beta_graphql_url,
-    _organisms_base,
-    _select_matching_genome,
-    fetch_beta_metadata,
-)
+from data_note.ensembl_endpoint_config import EnsemblEndpointConfig
+from data_note.ensembl_graphql_client import EnsemblGraphqlClient
 
 
-class FetchEnsemblInfoTests(unittest.TestCase):
+class EnsemblComponentTests(unittest.TestCase):
     def test_select_matching_genome_prefers_exact_accession(self) -> None:
         genomes = [
             {"assembly_accession": "GCA_000001405.14", "genome_id": "old"},
             {"assembly_accession": "GCA_000001405.29", "genome_id": "target"},
         ]
 
-        selected = _select_matching_genome(genomes, "GCA_000001405.29")
+        selected = EnsemblGraphqlClient.select_matching_genome(genomes, "GCA_000001405.29")
 
         self.assertEqual(selected, genomes[1])
 
@@ -29,11 +25,11 @@ class FetchEnsemblInfoTests(unittest.TestCase):
             {"assembly_accession": "GCA_999999999.1", "genome_id": "other"},
         ]
 
-        selected = _select_matching_genome(genomes, "GCA_000001405.29")
+        selected = EnsemblGraphqlClient.select_matching_genome(genomes, "GCA_000001405.29")
 
         self.assertEqual(selected, genomes[0])
 
-    @patch("data_note.fetch_ensembl_info.requests.post")
+    @patch("data_note.ensembl_graphql_client.requests.post")
     def test_fetch_beta_metadata_prefers_exact_accession_match(self, mock_post: Mock) -> None:
         mock_post.return_value = Mock(
             status_code=200,
@@ -49,12 +45,13 @@ class FetchEnsemblInfoTests(unittest.TestCase):
             ),
         )
 
-        result = fetch_beta_metadata("9606", "GCA_000001405.29")
+        client = EnsemblGraphqlClient(request_post=mock_post)
+        result = client.fetch_beta_metadata("9606", "GCA_000001405.29")
 
         self.assertEqual(result["annot_accession"], "GCA_000001405.29")
         self.assertEqual(result["annot_url"], "https://beta.ensembl.org/species/target")
 
-    def test_ensembl_endpoint_overrides_respect_environment(self) -> None:
+    def test_endpoint_config_from_env_respects_environment(self) -> None:
         with patch.dict(
             os.environ,
             {
@@ -63,8 +60,10 @@ class FetchEnsemblInfoTests(unittest.TestCase):
             },
             clear=False,
         ):
-            self.assertEqual(_beta_graphql_url(), "https://example.org/graphql")
-            self.assertEqual(_organisms_base(), "https://example.org/organisms/")
+            config = EnsemblEndpointConfig.from_env()
+
+        self.assertEqual(config.beta_graphql_url, "https://example.org/graphql")
+        self.assertEqual(config.organisms_base, "https://example.org/organisms/")
 
 
 if __name__ == "__main__":

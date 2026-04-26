@@ -22,7 +22,7 @@ class MetadataModelTests(unittest.TestCase):
                 "tax_auth": "(Linnaeus, 1758)",
                 "common_name": "example beetle",
                 "gbif_url": "https://gbif.example/species/12345",
-                "verification_status": "CORRECT_WITH_BRACKETS",
+                "gbif_match_strategy": "GBIF_MATCH_EXACT",
                 "gbif_extra": "also keep me",
             },
         )

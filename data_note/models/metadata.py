@@ -18,9 +18,6 @@ class TaxonomyInfo:
     common_name: str | None = None
     gbif_url: str | None = None
     gbif_usage_key: Any = None
-    original_combination: str | None = None
-    current_combination: str | None = None
-    verification_status: str | None = None
     extras: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -45,9 +42,6 @@ class TaxonomyInfo:
             "common_name",
             "gbif_url",
             "gbif_usage_key",
-            "original_combination",
-            "current_combination",
-            "verification_status",
         }
         extras = {
             key: value
@@ -68,9 +62,6 @@ class TaxonomyInfo:
             common_name=gbif_data.get("common_name"),
             gbif_url=gbif_data.get("gbif_url"),
             gbif_usage_key=gbif_data.get("gbif_usage_key"),
-            original_combination=gbif_data.get("original_combination"),
-            current_combination=gbif_data.get("current_combination"),
-            verification_status=gbif_data.get("verification_status"),
             extras=extras,
         )
 
@@ -90,9 +81,6 @@ class TaxonomyInfo:
             "common_name": self.common_name,
             "gbif_url": self.gbif_url,
             "gbif_usage_key": self.gbif_usage_key,
-            "original_combination": self.original_combination,
-            "current_combination": self.current_combination,
-            "verification_status": self.verification_status,
         }
         for key, value in mappings.items():
             if value is not None:

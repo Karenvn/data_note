@@ -30,8 +30,8 @@ from .services import (
     ServerDataService,
     TaxonomyService,
 )
+from .species_summary_service import SpeciesSummaryService
 from . import taxonomy_mapper
-from .auto_intro import summarise_genomes
 from .bioproject_client import BioprojectClient
 from .io_utils import dict_to_csv, read_bioprojects_from_file, read_bioprojects_input
 from .profiles import ProgrammeProfile, get_profile
@@ -48,11 +48,13 @@ class DataNoteOrchestrator:
     def __init__(
         self,
         profile: ProgrammeProfile | str | None = None,
+        include_gbif_distribution: bool = False,
         assembly_selection_input: AssemblySelectionInput | None = None,
     ) -> None:
         Entrez.email = os.getenv("ENTREZ_EMAIL", "default_email")
         Entrez.api_key = os.getenv("ENTREZ_API_KEY", "default_api_key")
         self.profile = profile if isinstance(profile, ProgrammeProfile) else get_profile(profile)
+        self.include_gbif_distribution = include_gbif_distribution
         self.assembly_selection_input = assembly_selection_input
 
         self.bioproject_client = BioprojectClient()
@@ -84,6 +86,7 @@ class DataNoteOrchestrator:
             render_context_builder=self.render_context_builder,
         )
         self.server_data_service = ServerDataService()
+        self.species_summary_service = SpeciesSummaryService()
         self.annotation_quality_workflow_service = AnnotationQualityWorkflowService(
             annotation_service=self.annotation_service,
             server_data_service=self.server_data_service,
@@ -154,11 +157,19 @@ class DataNoteOrchestrator:
 
         tolid = context.tolid
         try:
-            note_data.base.auto_text = summarise_genomes(tax_id, assembly_selection, tolid, show_tables=False)
+            species_summary = self.species_summary_service.build_summary(
+                tax_id,
+                assembly_selection,
+                tolid=tolid,
+                include_distribution=self.include_gbif_distribution,
+            )
+            note_data.base.auto_text = species_summary.intro_text
+            note_data.base.distribution_text = species_summary.distribution_text or None
         except Exception as exc:
             logger.warning("Auto intro failed for %s: %s", bioproject, exc)
             note_data.base.extras["auto_text_error"] = str(exc)
             note_data.base.auto_text = ""
+            note_data.base.distribution_text = ""
 
         context = self.sequencing_workflow_service.build_sections(
             note_data,

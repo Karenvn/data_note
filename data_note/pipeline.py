@@ -52,6 +52,7 @@ class DataNotePipeline:
             self.config.apply_environment()
             self._orchestrator = DataNoteOrchestrator(
                 profile=self.config.profile_name,
+                include_gbif_distribution=self.config.include_gbif_distribution,
                 assembly_selection_input=self.config.assembly_selection_input(),
             )
         return self._orchestrator

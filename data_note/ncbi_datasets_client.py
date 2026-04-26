@@ -77,6 +77,18 @@ class NcbiDatasetsClient:
             return None
         return reports[0]
 
+    def fetch_taxon_reports(self, taxid: int | str, *, page_size: int = 1000) -> list[dict[str, Any]]:
+        api_url = f"https://api.ncbi.nlm.nih.gov/datasets/v2/genome/taxon/{taxid}/dataset_report"
+        response = safe_ncbi_request(
+            api_url,
+            self._headers(),
+            request_get=self.request_get,
+            params={"page_size": page_size, **self.get_datasets_params()},
+            timeout=max(self.timeout, 60),
+        )
+        data = response.json() or {}
+        return data.get("reports", [])
+
     @staticmethod
     def parse_assembly_report(report: dict[str, Any]) -> dict[str, Any]:
         parsed_assembly_data: dict[str, Any] = {}

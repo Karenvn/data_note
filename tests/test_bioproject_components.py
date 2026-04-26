@@ -1,20 +1,14 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import patch
 
 from data_note.assembly_candidate_filter import AssemblyCandidateFilter
 from data_note.assembly_mode_detector import AssemblyModeDetector
 from data_note.assembly_pair_selector import AssemblyPairSelector
 from data_note.assembly_selection_resolver import AssemblySelectionResolver
 from data_note.bioproject_client import EnaPortalClient
-from data_note.legacy_bioproject_assemblies import (
-    extract_haplotype_assemblies as legacy_extract_haplotype_assemblies,
-    extract_prim_alt_assemblies as legacy_extract_prim_alt_assemblies,
-    fetch_and_update_assembly_details,
-)
 from data_note.models import AssemblyCandidate, AssemblySelectionInput
-from data_note.fetch_ncbi_data import extract_linked_assemblies
+from data_note.ncbi_datasets_client import NcbiDatasetsClient
 
 
 class _Response:
@@ -119,90 +113,6 @@ class EnaPortalClientTests(unittest.TestCase):
         self.assertIsInstance(assemblies[0], AssemblyCandidate)
         self.assertEqual(assemblies[0].accession, "GCA_000010.3")
         self.assertEqual(assemblies[0].assembly_name, "ixExample2.1")
-
-    def test_legacy_wrapper_returns_dicts_from_typed_client_results(self) -> None:
-        candidate = AssemblyCandidate(
-            accession="GCA_000001.2",
-            assembly_name="ixExample1.2",
-            tax_id="1234",
-        )
-        with patch("data_note.legacy_bioproject_assemblies._portal_client") as portal_client_factory:
-            portal_client_factory.return_value.fetch_and_update_assembly_details.return_value = [candidate]
-
-            assemblies = fetch_and_update_assembly_details("PRJEB12345")
-
-        self.assertEqual(
-            assemblies,
-            [
-                {
-                    "assembly_set_accession": "GCA_000001.2",
-                    "assembly_name": "ixExample1.2",
-                    "tax_id": "1234",
-                }
-            ],
-        )
-
-    def test_legacy_extract_prim_alt_wrapper_returns_dicts_from_typed_selection(self) -> None:
-        resolver = AssemblySelectionResolver(
-            taxonomy_mapper_module=_MapperStub(),
-            contiguity_fetcher=lambda accession: {
-                "GCA_PRIM_NEW.1": {
-                    "assembly_level": "chromosome",
-                    "scaffold_N50": 100.0,
-                    "contig_N50": 8.0,
-                },
-                "GCA_ALT_NEW.1": {
-                    "assembly_level": "chromosome",
-                    "scaffold_N50": 90.0,
-                    "contig_N50": 7.0,
-                },
-            }.get(accession, {}),
-        )
-        assembly_dicts = [
-            {
-                "assembly_name": "ixExample2.1 alternate haplotype",
-                "assembly_set_accession": "GCA_ALT_NEW.1",
-                "tax_id": "1234",
-            },
-            {
-                "assembly_name": "ixExample2.1",
-                "assembly_set_accession": "GCA_PRIM_NEW.1",
-                "tax_id": "1234",
-            },
-        ]
-
-        with patch("data_note.legacy_bioproject_assemblies._selection_resolver", return_value=resolver):
-            primary, alternate = legacy_extract_prim_alt_assemblies(assembly_dicts, "1234")
-
-        self.assertEqual(primary["prim_accession"], "GCA_PRIM_NEW.1")
-        self.assertEqual(alternate["alt_accession"], "GCA_ALT_NEW.1")
-
-    def test_legacy_extract_haplotype_wrapper_returns_dicts_from_typed_selection(self) -> None:
-        resolver = AssemblySelectionResolver(
-            taxonomy_mapper_module=_MapperStub(),
-            contiguity_fetcher=lambda accession: {
-                "GCA_H1_NEW.1": {
-                    "assembly_level": "chromosome",
-                    "scaffold_N50": 120.0,
-                    "contig_N50": 9.0,
-                },
-                "GCA_H2_NEW.1": {
-                    "assembly_level": "chromosome",
-                    "scaffold_N50": 110.0,
-                    "contig_N50": 8.0,
-                },
-            }.get(accession, {}),
-        )
-        assembly_dicts = [
-            {"assembly_name": "ixExample2.hap1.1", "assembly_set_accession": "GCA_H1_NEW.1", "tax_id": "1234"},
-            {"assembly_name": "ixExample2.hap2.1", "assembly_set_accession": "GCA_H2_NEW.1", "tax_id": "1234"},
-        ]
-
-        with patch("data_note.legacy_bioproject_assemblies._selection_resolver", return_value=resolver):
-            hap1, hap2 = legacy_extract_haplotype_assemblies(assembly_dicts, "1234")
-
-        self.assertEqual(hap1["hap1_accession"], "GCA_H1_NEW.1")
-        self.assertEqual(hap2["hap2_accession"], "GCA_H2_NEW.1")
 
 
 class AssemblySelectionResolverTests(unittest.TestCase):
@@ -511,7 +421,7 @@ class NcbiAssemblyParsingTests(unittest.TestCase):
         }
 
         self.assertEqual(
-            extract_linked_assemblies(report),
+            NcbiDatasetsClient.extract_linked_assemblies(report),
             ["GCA_111111111.1", "GCA_222222222.1"],
         )
 

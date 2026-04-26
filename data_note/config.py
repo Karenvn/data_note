@@ -45,6 +45,7 @@ class AppConfig:
     yaml_ssh_user: str | None
     yaml_ssh_host: str | None
     yaml_ssh_identity_file: Path
+    include_gbif_distribution: bool = False
     assembly_accession: str | None = None
     alternate_assembly_accession: str | None = None
     hap1_assembly_accession: str | None = None
@@ -100,6 +101,10 @@ class AppConfig:
             yaml_ssh_identity_file=_expand_path(
                 env.get("YAML_SSH_IDENTITY_FILE", str(home / ".ssh" / "newkey"))
             ),
+            include_gbif_distribution=_env_bool(
+                env.get("DATA_NOTE_INCLUDE_GBIF_DISTRIBUTION"),
+                default=False,
+            ),
             assembly_accession=env.get("DATA_NOTE_ASSEMBLY"),
             alternate_assembly_accession=env.get("DATA_NOTE_ALT_ASSEMBLY"),
             hap1_assembly_accession=env.get("DATA_NOTE_HAP1_ASSEMBLY"),
@@ -120,6 +125,10 @@ class AppConfig:
         self._set("PORTAL_API_PATH", self.portal_api_path)
         self._set("YAML_CACHE_DIR", self.yaml_cache_dir)
         self._set("YAML_SSH_IDENTITY_FILE", self.yaml_ssh_identity_file)
+        self._set(
+            "DATA_NOTE_INCLUDE_GBIF_DISTRIBUTION",
+            "1" if self.include_gbif_distribution else "0",
+        )
         self._set_optional("PORTAL_URL", self.portal_url)
         self._set_optional("DATA_NOTE_TOLA_TSV_URL", self.tola_tsv_url)
         self._set_optional("JIRA_BASE_URL", self.jira_base_url)

@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 
 from data_note.models import AssemblyBundle, AssemblyRecord, AssemblySelection, FlowCytometryInfo, NoteContext, TaxonomyInfo
 from data_note.orchestrator import DataNoteOrchestrator
+from data_note.species_summary_models import SpeciesSummary
 
 
 class OrchestratorProfileTests(unittest.TestCase):
@@ -67,13 +68,20 @@ class OrchestratorProfileTests(unittest.TestCase):
         }
         orchestrator.bioproject_client.fetch_child_accessions.return_value = ["PRJEB1"]
         orchestrator.bioproject_client.fetch_parent_projects.return_value = {}
+        orchestrator.species_summary_service = Mock()
+        orchestrator.species_summary_service.build_summary.return_value = SpeciesSummary(
+            species_taxid="9606",
+            species="Example species",
+            genus="Examplegenus",
+            family="Exampleidae",
+            intro_text="Example automatic summary.",
+        )
 
         return orchestrator, flow_cytometry_service
 
     def _process_bioproject(self, profile_name: str) -> tuple[dict[str, object], Mock]:
         orchestrator, flow_cytometry_service = self._build_orchestrator(profile_name)
         with (
-            patch("data_note.orchestrator.summarise_genomes", return_value="Example automatic summary."),
             patch("data_note.orchestrator.taxonomy_mapper.has_tax_id_override", return_value=False),
         ):
             result = orchestrator.process_bioproject("PRJEB1")

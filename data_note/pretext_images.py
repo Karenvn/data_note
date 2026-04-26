@@ -3,8 +3,17 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+from .chromosome_analyzer import ChromosomeAnalyzer
 from .image_utils import GN_ASSETS_ROOT, convert_png_to_tif_and_gif, resolve_open_sans_font
-from .process_chromosome_data import extract_chromosomes_only
+from .ncbi_sequence_report_client import NcbiSequenceReportClient
+
+_DEFAULT_SEQUENCE_REPORT_CLIENT = NcbiSequenceReportClient()
+_DEFAULT_CHROMOSOME_ANALYZER = ChromosomeAnalyzer()
+
+
+def _extract_chromosomes_only(accession: str) -> list[dict]:
+    reports = _DEFAULT_SEQUENCE_REPORT_CLIENT.fetch_reports(accession)
+    return _DEFAULT_CHROMOSOME_ANALYZER.extract_chromosomes_only(reports)
 
 
 def add_mbp_scale(draw, font, left, top, w, h, total_length, font_size, text_colour):
@@ -163,9 +172,9 @@ def label_pretext_map(
     logging.info("[Pretext] Found source PNG: %s", src_png)
 
     if "prim_accession" in context:
-        chroms = extract_chromosomes_only(context["prim_accession"])
+        chroms = _extract_chromosomes_only(context["prim_accession"])
     elif "hap1_accession" in context:
-        chroms = extract_chromosomes_only(context["hap1_accession"])
+        chroms = _extract_chromosomes_only(context["hap1_accession"])
     else:
         logging.error("[Pretext] No accession in context for %s", tolid)
         return None

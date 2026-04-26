@@ -38,6 +38,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--hap2-assembly",
         help="Explicit haplotype 2 accession to pair with --hap1-assembly for a single BioProject input.",
     )
+    parser.add_argument(
+        "--include-gbif-distribution",
+        action="store_true",
+        help="Fetch and render an additional GBIF distribution summary. Disabled by default because it adds extra API calls.",
+    )
     return parser
 
 
@@ -47,6 +52,8 @@ def main(argv: list[str] | None = None) -> int:
     config = load_config()
     if args.profile:
         config.profile_name = args.profile.strip().lower()
+    if args.include_gbif_distribution:
+        config.include_gbif_distribution = True
     selection_input = AssemblySelectionInput(
         assembly_accession=args.assembly,
         alternate_accession=args.alt_assembly,

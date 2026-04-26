@@ -19,6 +19,7 @@ class NoteContext(MutableMapping[str, Any]):
     assembly_name: str | None = None
     jira: str | None = None
     auto_text: str | None = None
+    distribution_text: str | None = None
     formatted_parent_projects: str | None = None
     child_bioprojects: list[str] | None = None
     parent_projects: list[dict[str, Any]] | None = None
@@ -34,6 +35,7 @@ class NoteContext(MutableMapping[str, Any]):
         "assembly_name",
         "jira",
         "auto_text",
+        "distribution_text",
         "formatted_parent_projects",
         "child_bioprojects",
         "parent_projects",

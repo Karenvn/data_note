@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from data_note.chromosome_analyzer import ChromosomeAnalyzer
 from data_note.models import (
     AssemblyDatasetsInfo,
     AssemblyRecord,
@@ -9,7 +10,6 @@ from data_note.models import (
     BtkSummary,
     ChromosomeSummary,
 )
-from data_note.process_chromosome_data import identify_sex_chromosomes, identify_supernumerary_chromosomes
 from data_note.services.btk_service import BtkService
 from data_note.services.chromosome_service import ChromosomeService
 from data_note.services.ncbi_datasets_service import NcbiDatasetsService
@@ -63,8 +63,8 @@ class NcbiDatasetsServiceTests(unittest.TestCase):
 class ChromosomeServiceTests(unittest.TestCase):
     def test_identify_sex_chromosomes_excludes_supernumerary_b_chromosomes(self) -> None:
         rows = [{"molecule": "X"}, {"molecule": "B"}, {"molecule": "B2"}, {"molecule": "Z"}]
-        self.assertEqual(identify_sex_chromosomes(rows), ["X", "Z"])
-        self.assertEqual(identify_supernumerary_chromosomes(rows), ["B", "B2"])
+        self.assertEqual(ChromosomeAnalyzer.identify_sex_chromosomes(rows), ["X", "Z"])
+        self.assertEqual(ChromosomeAnalyzer.identify_supernumerary_chromosomes(rows), ["B", "B2"])
 
     def test_build_context_uses_primary_record_from_selection(self) -> None:
         service = ChromosomeService(
