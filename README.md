@@ -1,8 +1,8 @@
 # Genome notes Markdown creation
 
-`data_note` is a Python workflow for generating genome note Markdown from BioProject accession numbers. It collects assembly, sequencing, taxonomy, annotation, curation, sampling, and quality metadata from public sources, with optional addition of metadata from local systems. It then renders a Pandoc Markdown note with associated figures and references in the required formats.
+`data_note` is a Python workflow for generating genome note Markdown documents for a list of BioProject accession numbers. It collects assembly, sequencing, taxonomy, annotation, curation, sampling, and quality metadata from public sources, with optional addition of metadata from local systems. It then renders a species directory containing a Pandoc Markdown note with associated figures and references in the required formats.
 
-The repository is designed for preparation of genome notes in Markdown. It treats metadata integration, text generation and figure preparation as a distinct workflow, separate from upstream pipelines that produce genome assembly and quality assessment outputs.
+The repository is designed for preparation of genome notes in Markdown. It treats metadata integration, text generation and figure preparation as a distinct workflow, separate from upstream pipelines that analyse genome assembly quality.
 
 ## Scope
 
@@ -21,11 +21,11 @@ This repository does not handle:
 - BibTeX cleanup and publication-specific bibliography management
 - final publication packaging
 
-These publishing steps require a separate Pandoc/typesetting workflow, such as [Inara](https://github.com/openjournals/inara/tree/main/test), [Seismica-sce-v2](https://github.com/WeAreSeismica/seismica-sce-v2) or the package used for Tree of Life genome notes: https://github.com/Karenvn/pandoc-data-note.
+These publishing steps require a separate Pandoc/typesetting workflow, such as [Inara](https://github.com/openjournals/inara/tree/main/test), [Seismica-sce-v2](https://github.com/WeAreSeismica/seismica-sce-v2), or the [pandoc-data-note](https://github.com/Karenvn/pandoc-data-note) package used for Tree of Life genome notes.
 
 ## Quick start
 
-To run the package from a list of BioProject accessions:
+To run `data_note` from a list of BioProject accessions:
 
 
 ```bash
@@ -51,15 +51,17 @@ python -m data_note --profile plant --template_file ~/genome_note_templates/dtol
 `psyche` is also available as a profile name for Project Psyche genome notes. It has its own table module, with the first extracted differences from DToL:
 - Table 3 adds assigned Merian elements and, for dual chromosome-level haplotypes, reports haplotype 1 only.
 - Table 5 includes the extra Psyche software rows.
+- Figures include a merian plot of chromosomes, generated via the [merian-busco-painter](https://github.com/Karenvn/merian-busco-painter) scripts.
 
-`asg` is another profile name for Aquatic Symbiosis Genomics genome notes. It currently provides:
+`asg` is the profile name for Aquatic Symbiosis Genomics genome notes. It currently provides:
 - ASG figure numbering, including metagenome figure slots.
 - ASG table numbering, with software versions moved to `table6`.
-- an optional metagenome `table5` hook driven by `metagenome_table_headers` and `metagenome_table_rows` when metagenome output is available.
+- An optional metagenome `table5` hook driven by `metagenome_table_headers` and `metagenome_table_rows` when metagenome output is available.
+- If there are enough metagenome bins, a tree of the bins is generated via [metagenome report](https://github.com/Karenvn/metagenome-report).
 
 ## Assembly selection overrides
 
-By default, `data_note` expects the positional input to be a file containing BioProject accessions and selects the primary assembly or haplotype 1 assembly automatically after tax-id filtering, then chooses the matching alternate or haplotype 2 assembly.
+By default, `data_note` takes an input file containing BioProject accessions and selects the primary assembly or haplotype 1 assembly automatically after taxon-id filtering, then chooses the matching alternate or haplotype 2 assembly.
 
 For cases where the automatic choice is not the genome of interest, the assembly accession number can be given for a single BioProject run:
 
@@ -75,7 +77,7 @@ This override path is also available through environment variables:
 - `DATA_NOTE_HAP1_ASSEMBLY`
 - `DATA_NOTE_HAP2_ASSEMBLY`
 
-To run on a batch of bioprojects, with automatic selection of assemblies:
+To run on a batch of BioProjects, with automatic selection of assemblies:
 
 ```bash
 python -m data_note --template_file ~/genome_note_templates/dtol_template.md bioprojects.txt
