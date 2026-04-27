@@ -64,19 +64,18 @@ By default, `data_note` takes an input file containing BioProject accessions and
 
 For cases where the automatic choice is not the genome of interest, the assembly accession number can be given for a single BioProject run:
 
-- `--assembly GCA_...`
-- `--alt-assembly GCA_...`
-- `--hap1-assembly GCA_...`
-- `--hap2-assembly GCA_...`
+- `--assembly GCA_...` and  `--alt-assembly GCA_...`
+- `--hap1-assembly GCA_...` and `--hap2-assembly GCA_...`
 
-This override path is also available through environment variables:
+The same override values can be supplied by setting environment variables:
 
-- `DATA_NOTE_ASSEMBLY`
-- `DATA_NOTE_ALT_ASSEMBLY`
-- `DATA_NOTE_HAP1_ASSEMBLY`
-- `DATA_NOTE_HAP2_ASSEMBLY`
+- `DATA_NOTE_ASSEMBLY` and  `DATA_NOTE_ALT_ASSEMBLY`
+- `DATA_NOTE_HAP1_ASSEMBLY` and `DATA_NOTE_HAP2_ASSEMBLY`
 
-To run on a batch of BioProjects, with automatic selection of assemblies:
+This is useful for cases where the assembly cannot be identified reliably from the BioProject metadata, for example because the BioProject structure is unusual, the taxon metadata have changed after a taxon merger, or the assembly of interest is not selected by the automatic filtering.
+
+
+To run `data_note` on a batch of BioProjects, with automatic selection of assemblies:
 
 ```bash
 python -m data_note --template_file ~/genome_note_templates/dtol_template.md bioprojects.txt
@@ -117,7 +116,7 @@ Rules:
 - use either `--assembly` with optional `--alt-assembly`, or `--hap1-assembly` with optional `--hap2-assembly`
 - `--alt-assembly` requires `--assembly`
 - `--hap2-assembly` requires `--hap1-assembly`
-- the supplied accession must survive the normal tax-id and excluded-name filtering
+- the supplied accession must survive the normal taxon id and excluded-name filtering
 - assembly override flags and their environment-variable equivalents only work when the input resolves to exactly one BioProject, not a batch list
 
 ## Structure
@@ -145,7 +144,7 @@ For a small test run using the example files included in this repository, use:
 python -m data_note --template_file tests/fixtures/template.md tests/fixtures/bioprojects.txt
 ```
 
-This performs metadata searches, so it is not a completely offline module. Generated species folders are written into the current working directory.
+This performs metadata searches, so it is not a completely offline example. Generated species folders are written into the current working directory.
 
 ## Requirements
 
@@ -222,7 +221,7 @@ Optional Ensembl transition variables include:
 - Templates are expected to be Markdown templates with Jinja2 placeholders and syntax.
 
 
-## Repository Layout
+## Repository layout
 
 - [data_note](data_note/): the package code
 - [data_note/services](data_note/services/): workflow components for assembly, taxonomy, annotation, sequencing, sampling, curation, quality, rendering, and context assembly
@@ -253,7 +252,7 @@ The repository also includes:
 - The orchestrator now coordinates dedicated workflow services rather than containing most of the workflow in one large script.
 - `psyche` is a separate profile with its own table module and figure plan; it still shares much of the Darwin workflow where behaviour is the same.
 - `asg` is now a separate profile with its own table/figure numbering, but metagenome-specific data collection and figure generation are not yet implemented in the core workflow.
-- Collection of internal metadata depends on the availability of the resources.
+- Collection of internal metadata depends on the availability of the required resources.
 
 
 ## Standards
