@@ -42,6 +42,8 @@ class NcbiTaxonomyClient:
         for rank in ("domain", "kingdom", "phylum", "class", "order", "family", "genus", "species"):
             name = classification.get(rank, {}).get("name")
             if name:
+                if rank in {"genus", "species"}:
+                    name = f"*{name}*"
                 lineage_parts.append(name)
 
         current_name = taxonomy.get("current_scientific_name", {})

@@ -1,6 +1,6 @@
 # Genome notes Markdown creation
 
-`data_note` is a Python workflow for generating genome note documents in [Pandoc](https://pandoc.org/) Markdown from a list of BioProject accession numbers. It collects assembly, sequencing, taxonomy, annotation, curation, sampling, and quality metadata from public sources, with optional addition of metadata from local systems. It then renders, for each BioProject, a species directory containing the note with associated figures and references in the required formats.
+`data_note` is a Python workflow for generating genome note documents in [Pandoc](https://pandoc.org/) Markdown from a list of BioProject accession numbers. It collects sampling, sequencing, taxonomy, assembly, annotation and quality metadata from public sources, with optional addition of metadata for methods and analyses from local systems. It then renders, for each BioProject, a species directory containing the note with associated figures and references in the required formats.
 
 The repository is designed for preparation of genome notes in Markdown. It treats metadata integration, text generation and figure preparation as a distinct workflow, separate from upstream pipelines that analyse genome assembly quality.
 
@@ -10,7 +10,7 @@ This repository covers:
 
 - collection of metadata for input BioProject accession numbers
 - assembly and sequencing summaries
-- fetching local sample and sequencing metadata from the ToL Portal
+- fetching local sample and sequencing metadata from the Tree of Life Portal
 - fetching local quality analysis stats and figures
 - creating Markdown genome notes
 - preparing figures and tables needed by the Markdown note
@@ -58,7 +58,7 @@ python -m data_note --profile plant --template_file ~/genome_note_templates/dtol
 - An optional metagenome `table5` hook driven by `metagenome_table_headers` and `metagenome_table_rows` when metagenome output is available.
 - If there are enough metagenome bins, a tree of the bins is generated via [metagenome report](https://github.com/Karenvn/metagenome-report).
 
-## Assembly selection overrides
+### Assembly selection overrides
 
 By default, `data_note` takes an input file containing BioProject accessions and selects the primary assembly or haplotype 1 assembly automatically after taxon-id filtering, then chooses the matching alternate or haplotype 2 assembly.
 

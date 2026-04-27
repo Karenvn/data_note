@@ -70,7 +70,7 @@ class NcbiTaxonomyClientTests(unittest.TestCase):
         self.assertEqual(taxonomy["family"], "Hominidae")
         self.assertEqual(
             taxonomy["lineage"],
-            "Eukaryota; Metazoa; Chordata; Mammalia; Primates; Hominidae; Homo; Homo sapiens",
+            "Eukaryota; Metazoa; Chordata; Mammalia; Primates; Hominidae; *Homo*; *Homo sapiens*",
         )
         self.assertEqual(taxonomy["tax_auth_ncbi"], "Linnaeus, 1758")
         self.assertEqual(taxonomy["common_name_ncbi"], "human")
