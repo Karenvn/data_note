@@ -5,7 +5,14 @@ from pathlib import Path
 
 import pandas as pd
 
-from .common import build_native_table, flatten_cell, safe_str
+from .common import (
+    build_native_table,
+    filter_primary_chromosome_rows,
+    flatten_cell,
+    parse_sex_chromosome_labels,
+    resolve_single_assembly_phrase,
+    safe_str,
+)
 from .darwin import make_table2_rows as _make_table2_rows, make_table4_rows as _make_table4_rows
 
 
@@ -148,6 +155,10 @@ def make_table3_rows(context: dict) -> dict:
                     for row in context.get("chromosome_data", [])
                     if row.get("hap1_INSDC")
                 ]
+            hap1_data = filter_primary_chromosome_rows(
+                hap1_data or [],
+                parse_sex_chromosome_labels(context.get("hap1_sex_chromosomes")),
+            )
 
             if hap1_data:
                 if hap2_chrom:
@@ -185,8 +196,11 @@ def make_table3_rows(context: dict) -> dict:
             native_headers = ["**Note**"]
             native_rows = [["No chromosome data available."]]
     elif assemblies_type == "prim_alt":
-        chrom_data = context.get("chromosome_data", [])
-        caption = f"Chromosomal pseudomolecules in the primary genome assembly of *{species}* {tolid}"
+        chrom_data = filter_primary_chromosome_rows(
+            context.get("chromosome_data", []),
+            parse_sex_chromosome_labels(context.get("sex_chromosomes")),
+        )
+        caption = f"Chromosomal pseudomolecules in the {resolve_single_assembly_phrase(context)} of *{species}* {tolid}"
         alignment = "CCCCC"
         native_headers = [
             "**INSDC accession**",

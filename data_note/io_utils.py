@@ -15,6 +15,27 @@ def dict_to_csv(data_dict, csv_filename):
     df.to_csv(csv_filename, index=False, encoding="utf-8-sig")
 
 
+def _apply_context_overrides(context_dict, corrections):
+    overrides = corrections.get("context_overrides", {})
+    if not isinstance(overrides, dict):
+        return
+
+    global_overrides = overrides.get("all")
+    if isinstance(global_overrides, dict):
+        context_dict.update(global_overrides)
+
+    for scope in ("bioproject", "tolid", "species"):
+        scoped_overrides = overrides.get(scope, {})
+        if not isinstance(scoped_overrides, dict):
+            continue
+        scope_value = context_dict.get(scope)
+        if scope_value in (None, ""):
+            continue
+        matched_override = scoped_overrides.get(scope_value)
+        if isinstance(matched_override, dict):
+            context_dict.update(matched_override)
+
+
 def load_and_apply_corrections(context_dict, corrections_file):
     with open(corrections_file, "r") as file:
         corrections = json.load(file)
@@ -31,6 +52,8 @@ def load_and_apply_corrections(context_dict, corrections_file):
                 if wrong in value:
                     value = value.replace(wrong, right)
             context_dict[key] = value
+
+    _apply_context_overrides(context_dict, corrections)
 
     return context_dict
 

@@ -1,6 +1,92 @@
 from __future__ import annotations
 
-from .common import build_native_table, flatten_cell, na, safe_str
+from .common import (
+    build_native_table,
+    filter_combined_haplotype_rows,
+    filter_primary_chromosome_rows,
+    flatten_cell,
+    has_alternate_assembly,
+    na,
+    parse_sex_chromosome_labels,
+    resolve_single_assembly_label,
+    resolve_single_assembly_metric_label,
+    resolve_single_assembly_metric_prefix,
+    resolve_single_assembly_phrase,
+    safe_str,
+)
+
+
+def _coerce_organelle_lengths(raw_value, structured_rows) -> list:
+    if structured_rows:
+        lengths = [
+            row.get("length_kb")
+            for row in structured_rows
+            if row.get("length_kb") not in (None, "")
+        ]
+        if lengths:
+            return lengths
+
+    if raw_value in (None, "", []):
+        return []
+    if isinstance(raw_value, list):
+        return [value for value in raw_value if value not in (None, "")]
+    return [raw_value]
+
+
+def _format_length_values(lengths: list) -> str:
+    values = [flatten_cell(value) for value in lengths]
+    if not values:
+        return ""
+    if len(values) == 1:
+        return values[0]
+    if len(values) == 2:
+        return f"{values[0]} and {values[1]}"
+    return "; ".join(values)
+
+
+def _format_organelle_component(singular_label: str, plural_label: str, lengths: list) -> str | None:
+    if not lengths:
+        return None
+    label = singular_label if len(lengths) == 1 else plural_label
+    return f"{label}: {_format_length_values(lengths)} kb"
+
+
+def _format_organelles_cell(context: dict) -> str:
+    mito_lengths = _coerce_organelle_lengths(
+        context.get("length_mito_kb"),
+        context.get("mitochondria"),
+    )
+    plastid_lengths = _coerce_organelle_lengths(
+        context.get("length_plastid_kb"),
+        context.get("plastids"),
+    )
+
+    parts = []
+    mito_part = _format_organelle_component(
+        "Mitochondrial genome",
+        "Mitochondrial genomes",
+        mito_lengths,
+    )
+    if mito_part:
+        parts.append(mito_part)
+
+    plastid_part = _format_organelle_component(
+        "Plastid genome",
+        "Plastid genomes",
+        plastid_lengths,
+    )
+    if plastid_part:
+        parts.append(plastid_part)
+
+    return "; ".join(parts)
+
+
+def _format_haplotype_busco(context: dict) -> str:
+    hap1_busco = flatten_cell(context.get("hap1_BUSCO_string"))
+    hap2_busco = flatten_cell(context.get("hap2_BUSCO_string"))
+    if hap1_busco and hap2_busco:
+        return f"Haplotype 1: {hap1_busco}; Haplotype 2: {hap2_busco}"
+    return hap1_busco or hap2_busco
 
 
 def make_table1_rows(context):
@@ -66,13 +152,7 @@ def make_table1_rows(context):
 def make_table2_rows(context):
     rows = []
     asm_type = context.get("assemblies_type")
-
-    mito_raw = context.get("length_mito_kb") or ""
-    mito_str = safe_str(mito_raw)
-    mito_items = mito_str.replace(" and ", ", ").split(", ")
-    mito_label = "Mitochondrion sequences" if len(mito_items) > 1 else "Mitochondrion"
-
-    organelles_cell = f"{mito_label}: {mito_str} kb"
+    organelles_cell = _format_organelles_cell(context)
 
     if asm_type == "hap_asm":
         headers = ["**Genome assembly**", "**Haplotype 1**", "**Haplotype 2**"]
@@ -87,9 +167,17 @@ def make_table2_rows(context):
             ["**Number of scaffolds**", safe_str(context.get("hap1_num_scaffolds")), safe_str(context.get("hap2_num_scaffolds"))],
             ["**Scaffold N50**", f"{safe_str(context.get('hap1_scaffold_N50'))} Mb", f"{safe_str(context.get('hap2_scaffold_N50'))} Mb"],
             ["**Longest scaffold length (Mb)**", safe_str(context.get("hap1_longest_scaffold_length")), safe_str(context.get("hap2_longest_scaffold_length"))],
-            ["**Sex chromosomes**", safe_str(context.get("hap1_sex_chromosomes")), safe_str(context.get("hap2_sex_chromosomes"))],
             ["**Organelles**", organelles_cell, r"\-"],
         ]
+        if context.get("hap1_sex_chromosomes") or context.get("hap2_sex_chromosomes"):
+            rows.insert(
+                -1,
+                [
+                    "**Sex chromosomes**",
+                    safe_str(context.get("hap1_sex_chromosomes")),
+                    safe_str(context.get("hap2_sex_chromosomes")),
+                ],
+            )
         if context.get("hap1_supernumerary_chromosomes") or context.get("hap2_supernumerary_chromosomes"):
             rows.insert(
                 -1,
@@ -103,11 +191,10 @@ def make_table2_rows(context):
         label = "tbl:table2"
         alignment = "LLL"
     elif asm_type == "prim_alt":
-        headers = ["**Genome assembly**", "**Primary assembly**"]
+        headers = ["**Genome assembly**", f"**{resolve_single_assembly_label(context)}**"]
         rows = [
             ["**Assembly name**", safe_str(context.get("assembly_name"))],
             ["**Assembly accession**", safe_str(context.get("prim_accession"))],
-            ["**Alternate haplotype accession**", safe_str(context.get("alt_accession"))],
             ["**Assembly level**", safe_str(context.get("assembly_level"))],
             ["**Span (Mb)**", safe_str(context.get("total_length"))],
             ["**Number of chromosomes**", safe_str(context.get("chromosome_count"))],
@@ -115,9 +202,18 @@ def make_table2_rows(context):
             ["**Contig N50**", f"{safe_str(context.get('contig_N50'))} Mb"],
             ["**Number of scaffolds**", safe_str(context.get("num_scaffolds"))],
             ["**Scaffold N50**", f"{safe_str(context.get('scaffold_N50'))} Mb"],
-            ["**Sex chromosomes**", safe_str(context.get("sex_chromosomes"))],
             ["**Organelles**", organelles_cell],
         ]
+        if has_alternate_assembly(context):
+            rows.insert(
+                2,
+                ["**Alternate haplotype accession**", safe_str(context.get("alt_accession"))],
+            )
+        if context.get("sex_chromosomes"):
+            rows.insert(
+                -1,
+                ["**Sex chromosomes**", safe_str(context.get("sex_chromosomes"))],
+            )
         if context.get("supernumerary_chromosomes"):
             rows.insert(
                 -1,
@@ -161,7 +257,11 @@ def make_table3_rows(context: dict) -> dict:
 
         if hap1_chrom and hap2_chrom:
             dual_haplotype_chromosomes = True
-            chromosome_data = context.get("chromosome_data", [])
+            chromosome_data = filter_combined_haplotype_rows(
+                context.get("chromosome_data", []),
+                parse_sex_chromosome_labels(context.get("hap1_sex_chromosomes")),
+                parse_sex_chromosome_labels(context.get("hap2_sex_chromosomes")),
+            )
             caption = f"Chromosomal pseudomolecules in both haplotypes of the genome assembly of *{species}*, {tolid}"
             alignment = "LLLL|LLLL"
             native_headers = [
@@ -189,7 +289,10 @@ def make_table3_rows(context: dict) -> dict:
                 row2 = [flatten_cell(row.get(f"hap2_{k}")) for k in ["INSDC", "molecule", "length", "GC"]]
                 native_rows.append(row1 + row2)
         elif hap1_chrom:
-            hap1_data = context.get("hap1_chromosome_data", [])
+            hap1_data = filter_primary_chromosome_rows(
+                context.get("hap1_chromosome_data", []),
+                parse_sex_chromosome_labels(context.get("hap1_sex_chromosomes")),
+            )
             caption = f"Chromosomal pseudomolecules in the haplotype 1 genome assembly of *{species}* {tolid}"
             alignment = "CCCC"
             rows.append("**INSDC accession**,**Molecule**,**Length (Mb)**,**GC%**")
@@ -205,8 +308,11 @@ def make_table3_rows(context: dict) -> dict:
             native_headers = ["**Note**"]
             native_rows = [["No chromosome data available."]]
     elif assemblies_type == "prim_alt":
-        chrom_data = context.get("chromosome_data", [])
-        caption = f"Chromosomal pseudomolecules in the primary genome assembly of *{species}* {tolid}"
+        chrom_data = filter_primary_chromosome_rows(
+            context.get("chromosome_data", []),
+            parse_sex_chromosome_labels(context.get("sex_chromosomes")),
+        )
+        caption = f"Chromosomal pseudomolecules in the {resolve_single_assembly_phrase(context)} of *{species}* {tolid}"
         alignment = "CCCC"
         rows.append("**INSDC accession**,**Molecule**,**Length (Mb)**,**GC%**")
         native_headers = ["**INSDC accession**", "**Molecule**", "**Length (Mb)**", "**GC%**"]
@@ -284,26 +390,40 @@ def make_table4_rows(context: dict) -> dict:
             f"Haplotype 1: {flatten_cell(context.get('hap1_kmer_completeness'))}%; Haplotype 2: {flatten_cell(context.get('hap2_kmer_completeness'))}%; combined: {flatten_cell(context.get('combined_kmer_completeness'))}%",
             "≥ 95%",
         )
-        add_row("BUSCO", flatten_cell(context.get("hap1_BUSCO_string")), "S > 90%; D < 5%")
+        add_row("BUSCO", _format_haplotype_busco(context), "S > 90%; D < 5%")
         add_row(
             "Percentage of assembly assigned to chromosomes",
             f"{flatten_cell(context.get('hap1_perc_assembled'))}%",
             "≥ 90%",
         )
     elif assemblies_type == "prim_alt":
-        add_row("EBP summary (primary)", flatten_cell(context.get("ebp_metric")), "6.C.Q40")
+        metric_label = resolve_single_assembly_metric_label(context)
+        metric_prefix = resolve_single_assembly_metric_prefix(context)
+        add_row(f"EBP summary ({metric_label})", flatten_cell(context.get("ebp_metric")), "6.C.Q40")
         add_row("Contig N50 length", f"{flatten_cell(context.get('contig_N50'))} Mb", "≥ 1 Mb")
         add_row("Scaffold N50 length", f"{flatten_cell(context.get('scaffold_N50'))} Mb", "= chromosome N50")
-        add_row(
-            "Consensus quality (QV)",
-            f"Primary: {flatten_cell(context.get('prim_QV'))}; alternate: {flatten_cell(context.get('alt_QV'))}; combined: {flatten_cell(context.get('combined_QV'))}",
-            "≥ 40",
-        )
-        add_row(
-            "*k*-mer completeness",
-            f"Primary: {flatten_cell(context.get('prim_kmer_completeness'))}%; alternate: {flatten_cell(context.get('alt_kmer_completeness'))}%; combined: {flatten_cell(context.get('combined_kmer_completeness'))}%",
-            "≥ 95%",
-        )
+        if has_alternate_assembly(context):
+            add_row(
+                "Consensus quality (QV)",
+                f"{metric_prefix}: {flatten_cell(context.get('prim_QV'))}; alternate: {flatten_cell(context.get('alt_QV'))}; combined: {flatten_cell(context.get('combined_QV'))}",
+                "≥ 40",
+            )
+            add_row(
+                "*k*-mer completeness",
+                f"{metric_prefix}: {flatten_cell(context.get('prim_kmer_completeness'))}%; alternate: {flatten_cell(context.get('alt_kmer_completeness'))}%; combined: {flatten_cell(context.get('combined_kmer_completeness'))}%",
+                "≥ 95%",
+            )
+        else:
+            add_row(
+                "Consensus quality (QV)",
+                f"{metric_prefix}: {flatten_cell(context.get('prim_QV'))}",
+                "≥ 40",
+            )
+            add_row(
+                "*k*-mer completeness",
+                f"{metric_prefix}: {flatten_cell(context.get('prim_kmer_completeness'))}%",
+                "≥ 95%",
+            )
         add_row("BUSCO", flatten_cell(context.get("BUSCO_string")), "S > 90%; D < 5%")
         add_row(
             "Percentage of assembly assigned to chromosomes",

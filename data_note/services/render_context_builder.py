@@ -8,6 +8,14 @@ from ..calculate_metrics import calc_ebp_metric
 from ..io_utils import load_and_apply_corrections
 from ..models import NoteContext, NoteData
 from ..sampling_template_fields import populate_sampling_template_fields
+from ..tables.common import (
+    has_alternate_assembly,
+    is_haploid_note,
+    resolve_single_assembly_label,
+    resolve_single_assembly_metric_label,
+    resolve_single_assembly_metric_prefix,
+    resolve_single_assembly_phrase,
+)
 from ..profiles.base import ProgrammeProfile
 from .context_assembler import ContextAssembler
 
@@ -59,9 +67,40 @@ class RenderContextBuilder:
         )
         if corrections_file:
             self.correction_loader(note_context, corrections_file)
+        self._apply_assembly_rendering_context(note_context)
         populate_sampling_template_fields(note_context)
         note_context["ebp_metric"] = self.ebp_metric_calculator(note_context)
         rendered_context = profile.build_tables(note_context)
         if isinstance(rendered_context, NoteContext):
             return rendered_context
         return NoteContext.from_mapping(rendered_context)
+
+    @staticmethod
+    def _apply_assembly_rendering_context(note_context: NoteContext) -> None:
+        if note_context.get("assemblies_type") != "prim_alt":
+            return
+
+        is_haploid = is_haploid_note(note_context)
+        note_context["is_haploid"] = is_haploid
+        note_context["has_alternate_assembly"] = has_alternate_assembly(note_context)
+        note_context["single_assembly_label"] = resolve_single_assembly_label(note_context)
+        note_context["single_assembly_phrase"] = resolve_single_assembly_phrase(note_context)
+        note_context["single_assembly_metric_label"] = resolve_single_assembly_metric_label(note_context)
+        note_context["single_assembly_metric_prefix"] = resolve_single_assembly_metric_prefix(note_context)
+
+        if "hifiasm_primary_mode" not in note_context:
+            note_context["hifiasm_primary_mode"] = is_haploid
+        if "hifiasm_internal_purging_disabled" not in note_context:
+            note_context["hifiasm_internal_purging_disabled"] = is_haploid
+        if is_haploid:
+            if "hifiasm_options" not in note_context:
+                note_context["hifiasm_options"] = "--primary -l0"
+            if "hifiasm_options_sentence" not in note_context:
+                note_context["hifiasm_options_sentence"] = (
+                    "For this haploid genome, Hifiasm was run with `--primary` and `-l0`; "
+                    "`-l0` switches off internal Hifiasm purging."
+                )
+
+        if not note_context["has_alternate_assembly"]:
+            for key in ("alt_accession", "alt_assembly_name", "alt_QV", "alt_kmer_completeness"):
+                note_context.pop(key, None)

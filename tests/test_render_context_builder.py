@@ -127,6 +127,82 @@ class RenderContextBuilderTests(unittest.TestCase):
             self.assertEqual(context["ebp_metric"], "6.C.Q47")
             self.assertEqual(tuple(context["tables"].keys()), ("table1", "table2", "table3", "table4", "table5"))
 
+    def test_build_applies_haploid_context_override_and_suppresses_alt_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            corrections_path = Path(tmpdir) / "corrections.json"
+            corrections_path.write_text(
+                json.dumps(
+                    {
+                        "context_overrides": {
+                            "bioproject": {
+                                "PRJEB70980": {
+                                    "is_haploid": True,
+                                }
+                            }
+                        }
+                    }
+                )
+            )
+
+            builder = RenderContextBuilder(correction_loader=load_and_apply_corrections)
+            note_data = NoteData(
+                base=BaseNoteInfo.from_mapping(
+                    {
+                        "bioproject": "PRJEB70980",
+                        "tolid": "cbBryCale10",
+                        "assemblies_type": "prim_alt",
+                    }
+                ),
+                taxonomy=TaxonomyInfo(
+                    tax_id="1988022",
+                    species="Bryoerythrophyllum caledonicum",
+                    lineage="Eukaryota; Viridiplantae",
+                ),
+                assembly=AssemblyBundle(
+                    selection=AssemblySelection(
+                        assemblies_type="prim_alt",
+                        primary=AssemblyRecord(
+                            accession="GCA_963971425.1",
+                            assembly_name="cbBryCale10.1",
+                            role="primary",
+                        ),
+                    ),
+                    datasets=_DatasetsStub(),
+                ),
+            )
+            note_data.quality = type(
+                "_QualityStub",
+                (),
+                {
+                    "to_context_dict": staticmethod(
+                        lambda: {
+                            "prim_QV": "47.0",
+                            "alt_QV": "46.5",
+                            "prim_kmer_completeness": "98.2",
+                            "alt_kmer_completeness": "97.9",
+                        }
+                    )
+                },
+            )()
+
+            context = builder.build(
+                note_data,
+                DarwinProfile(),
+                corrections_file=str(corrections_path),
+            )
+
+            self.assertTrue(context["is_haploid"])
+            self.assertFalse(context["has_alternate_assembly"])
+            self.assertEqual(context["single_assembly_label"], "Haploid assembly")
+            self.assertEqual(context["single_assembly_phrase"], "haploid genome assembly")
+            self.assertTrue(context["hifiasm_primary_mode"])
+            self.assertTrue(context["hifiasm_internal_purging_disabled"])
+            self.assertEqual(context["hifiasm_options"], "--primary -l0")
+            self.assertIn("switches off internal Hifiasm purging", context["hifiasm_options_sentence"])
+            self.assertNotIn("alt_QV", context)
+            self.assertNotIn("alt_kmer_completeness", context)
+            self.assertEqual(context["tables"]["table2"]["native_headers"][1], "**Haploid assembly**")
+
 
 if __name__ == "__main__":
     unittest.main()

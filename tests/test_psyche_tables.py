@@ -77,6 +77,24 @@ class PsycheTableTests(unittest.TestCase):
         self.assertEqual(table["native_rows"][0][0], "OZ220647.2")
         self.assertEqual(table["native_rows"][0][-1], "M1;M19")
 
+    def test_make_table3_rows_excludes_primary_sex_chromosome_when_not_reported(self) -> None:
+        context = {
+            "assemblies_type": "prim_alt",
+            "species": "Example species",
+            "tolid": "ixExample1",
+            "sex_chromosomes": None,
+            "chromosome_data": [
+                {"INSDC": "OX000001.1", "molecule": "1", "length": "45.1", "GC": "39.8"},
+                {"INSDC": "OX000099.1", "molecule": "X", "length": "12.3", "GC": "40.1"},
+            ],
+        }
+
+        with patch("data_note.tables.psyche.merian_dict", return_value={}):
+            table = make_table3_rows(context)
+
+        self.assertEqual(len(table["native_rows"]), 1)
+        self.assertEqual(table["native_rows"][0][1], "1")
+
     def test_make_table5_rows_includes_psyche_specific_software(self) -> None:
         table = make_table5_rows({"species": "Example species"})
 

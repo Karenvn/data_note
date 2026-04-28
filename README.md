@@ -100,14 +100,17 @@ Rules for assembly overrides:
 - the supplied accession must survive the normal taxon id and excluded-name filtering
 - assembly override flags and their environment-variable equivalents only work when the input resolves to exactly one BioProject, not a batch list
 
-In other words, the CLI flags and environment variables do not bypass the normal candidate filter. They let you choose explicitly from the assemblies that still count as relevant for that BioProject after taxon-id and excluded-name filtering.
+Taxonomy overrides:
 
-If the assembly of interest is excluded by the taxon-id check, that is a different class of problem. In those cases, the code currently needs a manual code-level override in `data_note/taxonomy_mapper.py`, either by:
+The assembly overrides do not bypass the normal candidate taxon id filter. They only let you choose explicitly from assemblies that still count as relevant for that BioProject after taxon id and excluded-name filtering.
 
-- extending `TAX_ID_MAPPINGS` so the relevant merged or replacement taxon ids are treated as allowed for that BioProject or species
-- adding an `ASSEMBLY_OVERRIDES` entry for a specific BioProject when the desired assembly pair is mislabelled and should be forced explicitly
+`data_note` is not intended to produce genome notes from genuinely misassigned organism records. If an assembly is under the wrong organism taxon id, the preferred approach is to wait for the public ENA and NCBI records to be corrected.
 
-Those code-level overrides are intended for exceptional cases such as taxon mergers, outdated umbrella-project taxon ids, or assemblies submitted under the wrong organism taxon id.
+The taxonomy override layer in `data_note/taxonomy_mapper.py` is for a narrower problem: accepted taxonomy changes where some public metadata are stale, superseded, or inconsistent between sources.
+
+- use `TAX_ID_MAPPINGS` when merged or replacement taxon ids should still be treated as allowed for that species or BioProject
+- use `BIOPROJECT_TAX_ID_OVERRIDES` when the umbrella BioProject taxon id itself is outdated and should be replaced before assembly selection
+- these overrides are for cases such as taxon mergers, reclassifications, or outdated XML-layer metadata after a taxonomy update
 
 
 ### Automatic intro text
@@ -125,23 +128,10 @@ Optional additions (separate from `auto_text`):
 - the flag `--include-gbif-distribution` adds a `distribution_text` paragraph based on GBIF occurrence data when a matching GBIF usage key can be resolved (slow)
 - the flag `--include-bold-barcode` adds a `barcode_text` paragraph from the external BOLD barcode workflow for a single BioProject run (very slow)
 
-To add the optional GBIF distribution summary text via API calls:
-
-```bash
-python -m data_note --template_file ~/genome_note_templates/dtol_template.md \
---include-gbif-distribution bioprojects.txt
-```
-
-To add an optional BOLD barcode result paragraph for a single run:
-
-```bash
-python -m data_note --template_file ~/genome_note_templates/dtol_template.md \
---include-bold-barcode PRJEB12345
-```
 
 ## Structure
 
-`data_note` works in a simple sequence. For each BioProject, it collects assembly, taxonomy, sequencing, sampling and quality metadata, adds optional local information where it is available, prepares the required tables and figures, and then fills a Jinja2 Markdown template.
+For each BioProject, `data_note` collects assembly, taxonomy, sequencing, sampling and quality metadata, adds optional local information where it is available, prepares the required tables and figures, and then fills a Jinja2 Markdown template.
 
 The main coordination happens in `data_note/orchestrator.py`. Most of the fetching, lookup and text-building work is done in small modules under `data_note/services/`. The data collected along the way is kept in classes under `data_note/models/` until it is turned into the final template context for rendering.
 
