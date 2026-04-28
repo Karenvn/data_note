@@ -31,6 +31,8 @@ To run `data_note` from a list of BioProject accessions:
 python -m data_note --template_file ~/genome_note_templates/dtol_template.md bioprojects.txt
 ```
 
+## Common workflows
+
 ### Profiles
 
 Different profiles have been created to generate different genome note features. The default profile is `darwin` for Darwin Tree of Life (DToL) genome notes.
@@ -62,6 +64,12 @@ python -m data_note --profile plant --template_file ~/genome_note_templates/dtol
 
 By default, `data_note` takes an input file containing BioProject accessions and selects the primary assembly or haplotype 1 assembly automatically after taxon-id filtering, then chooses the matching alternate or haplotype 2 assembly.
 
+To run `data_note` on a batch of BioProjects, with automatic selection of assemblies:
+
+```bash
+python -m data_note --template_file ~/genome_note_templates/dtol_template.md bioprojects.txt
+```
+
 For cases where the automatic choice is not the genome of interest, the assembly accession number can be given for a single BioProject run:
 
 - `--assembly GCA_...` and  `--alt-assembly GCA_...`
@@ -75,13 +83,40 @@ The same override values can be supplied by setting environment variables:
 This is useful for cases where the assembly cannot be identified reliably from the BioProject metadata, for example because the BioProject structure is unusual, the taxon metadata have changed after a taxon merger, or the assembly of interest is not selected by the automatic filtering.
 
 
-To run `data_note` on a batch of BioProjects, with automatic selection of assemblies:
+To force an explicit assembly choice within one BioProject:
 
 ```bash
-python -m data_note --template_file ~/genome_note_templates/dtol_template.md bioprojects.txt
+python -m data_note --template_file ~/genome_note_templates/dtol_template.md \
+--assembly GCA_123456789.1 PRJEB12345
 ```
 
-To add the optional GBIF distribution summary text (slow):
+That tells the workflow to use the supplied primary assembly or haplotype 1 assembly accession for `PRJEB12345` and then infer the matching alternate or haplotype 2 when possible.
+
+Rules for assembly overrides:
+
+- use either `--assembly` with optional `--alt-assembly`, or `--hap1-assembly` with optional `--hap2-assembly`
+- `--alt-assembly` requires `--assembly`
+- `--hap2-assembly` requires `--hap1-assembly`
+- the supplied accession must survive the normal taxon id and excluded-name filtering
+- assembly override flags and their environment-variable equivalents only work when the input resolves to exactly one BioProject, not a batch list
+
+
+### Automatic intro text
+
+By default, the workflow generates `auto_text`, an introductory summary paragraph built by `SpeciesSummaryService` from NCBI taxonomy and NCBI Datasets assembly reports.
+
+Depending on the taxon and the assemblies currently available at NCBI, this paragraph can:
+
+- describe how many assemblies are available for the genus and family
+- note whether other assemblies already exist for the same species
+- mention RefSeq reference or representative status when NCBI reports it
+
+Optional additions (separate from `auto_text`):
+
+- the flag `--include-gbif-distribution` adds a `distribution_text` paragraph based on GBIF occurrence data when a matching GBIF usage key can be resolved
+- the flag `--include-bold-barcode` adds a `barcode_text` paragraph from the external BOLD barcode workflow for a single BioProject run
+
+To add the optional GBIF distribution summary text via API calls (slow):
 
 ```bash
 python -m data_note --template_file ~/genome_note_templates/dtol_template.md \
@@ -95,63 +130,19 @@ python -m data_note --template_file ~/genome_note_templates/dtol_template.md \
 --include-bold-barcode PRJEB12345
 ```
 
-To force an explicit assembly choice within one BioProject:
-
-```bash
-python -m data_note --template_file ~/genome_note_templates/dtol_template.md \
---assembly GCA_123456789.1 PRJEB12345
-```
-
-That tells the workflow to use the supplied primary assembly or haplotype 1 assembly accession for `PRJEB12345` and then infer the matching alternate or haplotype 2 when possible.
-
-To force an explicit primary/alternate pair:
-
-```bash
-python -m data_note --template_file ~/genome_note_templates/dtol_template.md \
---assembly GCA_123456789.1 --alt-assembly GCA_123456790.1 PRJEB12345
-```
-
-To force an explicit haplotype pair:
-
-```bash
-python -m data_note --template_file ~/genome_note_templates/dtol_template.md \
---hap1-assembly GCA_123456789.1 --hap2-assembly GCA_123456790.1 PRJEB12345
-```
-
-Rules for assembly overrides:
-
-- use either `--assembly` with optional `--alt-assembly`, or `--hap1-assembly` with optional `--hap2-assembly`
-- `--alt-assembly` requires `--assembly`
-- `--hap2-assembly` requires `--hap1-assembly`
-- the supplied accession must survive the normal taxon id and excluded-name filtering
-- assembly override flags and their environment-variable equivalents only work when the input resolves to exactly one BioProject, not a batch list
-
 ## Structure
 
-The refactor of the genome note writing scripts is centred on a typed internal model, which is converted into a context dictionary just before filling the Markdown template.
+`data_note` works in a simple sequence. For each BioProject, it collects assembly, taxonomy, sequencing, sampling and quality metadata, adds optional local information where it is available, prepares the required tables and figures, and then fills a Jinja2 Markdown template.
 
-- `data_note/orchestrator.py` coordinates the workflow for each BioProject.
-- `data_note/models/` contains typed data sections for base note information, assembly, sequencing, sampling, curation, taxonomy, annotation, quality, and author metadata.
-- `data_note/models/note_data.py` combines these typed data sections into a single `NoteData` object during orchestration.
-- `data_note/services/assembly_workflow_service.py`, `sequencing_workflow_service.py`, and `annotation_quality_workflow_service.py` contain the main workflow logic.
-- `data_note/services/render_context_builder.py` converts the typed data sections into the final `NoteContext`, which is used to fill the template.
-- `data_note/profiles/` defines project-specific behaviour for Darwin, Psyche, and ASG projects.
-- `data_note/tables/` contains profile-specific table builders for the different projects.
-- `data_note/services/figure_service.py` and the image helper modules handle profile-driven figure collection and naming separately from Markdown rendering.
+The main coordination happens in `data_note/orchestrator.py`. Most of the fetching, lookup and text-building work is done in small modules under `data_note/services/`. The data collected along the way is kept in classes under `data_note/models/` until it is turned into the final template context for rendering.
 
-The intended flow is:
+Project-specific differences are kept in `data_note/profiles/` and `data_note/tables/`. Most of the package code lives in `data_note/`.
+
+The overall flow is:
 
 ```text
 fetch/service layers -> typed models -> NoteData -> workflow services -> RenderContextBuilder -> NoteContext/dict -> Jinja2 template
 ```
-
-For a small test run using the example files included in this repository, use:
-
-```bash
-python -m data_note --template_file tests/fixtures/template.md tests/fixtures/bioprojects.txt
-```
-
-This performs metadata searches, so it is not a completely offline example. Generated species folders are written into the current working directory.
 
 ## Requirements
 
@@ -173,54 +164,25 @@ Optional local integration would also require:
 - local access to internal YAML and results files
 - access to a local author SQLite database.
 
+## Configuration
+
+`data_note` can be controlled in three places: the command line, environment variables, and the Markdown template given with `--template_file`. For most runs, the main choices are the profile, the template file, and whether to include optional text such as the GBIF distribution summary or the BOLD barcode paragraph.
+
+Assembly overrides can be set either on the command line or through environment variables. The environment variables mirror the CLI flags: `DATA_NOTE_ASSEMBLY`, `DATA_NOTE_ALT_ASSEMBLY`, `DATA_NOTE_HAP1_ASSEMBLY`, and `DATA_NOTE_HAP2_ASSEMBLY`. Use either the primary/alternate pair or the haplotype 1/2 pair, not both. As with the CLI flags, these overrides only work when the input resolves to exactly one BioProject.
+
+Text corrections, local asset files, and the author database also come from configuration rather than from fixed paths in the code. The current set of variables is shown in [.env.example](.env.example).
+
 ## Environment
 
-The main runtime configuration is environment-variable based. See [.env.example](.env.example) for the current set.
+The minimum public-core setup usually needs `ENTREZ_EMAIL` and `ENTREZ_API_KEY`. The default profile is `darwin`, but you can change it with `DATA_NOTE_PROFILE`.
 
-Important variables include:
+Local file paths are usually taken from `DATA_NOTE_GN_ASSETS`, with `DATA_NOTE_SERVER_DATA` kept as a legacy alias. From that base location, `data_note` can also read a corrections file, a flow-cytometry table, a long-read sample preparation table, and an author database through `DATA_NOTE_CORRECTIONS_FILE`, `DATA_NOTE_CYTO_INFO_TSV`, `DATA_NOTE_LR_SAMPLE_PREP_TSV`, and `DATA_NOTE_AUTHOR_DB`.
 
-- `ENTREZ_EMAIL`
-- `ENTREZ_API_KEY`
-- `DATA_NOTE_GN_ASSETS` (preferred)
-- `DATA_NOTE_SERVER_DATA` (legacy alias)
-- `DATA_NOTE_PROFILE` (`darwin` by default)
-- `DATA_NOTE_ASSEMBLY` (explicit primary assembly override)
-- `DATA_NOTE_ALT_ASSEMBLY` (explicit alternate assembly override)
-- `DATA_NOTE_HAP1_ASSEMBLY` (explicit haplotype 1 override)
-- `DATA_NOTE_HAP2_ASSEMBLY` (explicit haplotype 2 override)
-- `DATA_NOTE_INCLUDE_GBIF_DISTRIBUTION` (`1` to enable optional GBIF distribution enrichment)
-- `DATA_NOTE_INCLUDE_BOLD_BARCODE` (`1` to enable optional external BOLD barcode enrichment)
-- `DATA_NOTE_CORRECTIONS_FILE`
-- `DATA_NOTE_CYTO_INFO_TSV`
-- `DATA_NOTE_LR_SAMPLE_PREP_TSV`
-- `DATA_NOTE_AUTHOR_DB`
+Optional text additions are controlled by `DATA_NOTE_INCLUDE_GBIF_DISTRIBUTION` and `DATA_NOTE_INCLUDE_BOLD_BARCODE`. If the BOLD workflow is not installed as a module, `DATA_NOTE_BOLD_REPO` can point to a checkout containing `bold_coi_pipeline.py`.
 
-The assembly override variables mirror the CLI flags. Use either the primary/alternate pair or the haplotype 1/2 pair, not both. Like the CLI flags, they are only valid when the input resolves to exactly one BioProject.
+Internal or machine-local integrations use `PORTAL_URL`, `PORTAL_API_PATH`, `DATA_NOTE_TOLA_TSV_URL`, `JIRA_BASE_URL`, `JIRA_DOMAIN`, `YAML_CACHE_DIR`, `YAML_SSH_USER`, `YAML_SSH_HOST`, and `YAML_SSH_IDENTITY_FILE`. YAML files are refreshed into `YAML_CACHE_DIR` for inspection, but the remote path recorded in Jira remains the source of truth and the YAML is not copied into the output note folders.
 
-Optional internal variables include:
-
-- `PORTAL_URL`
-- `PORTAL_API_PATH`
-- `DATA_NOTE_TOLA_TSV_URL`
-- `JIRA_BASE_URL`
-- `JIRA_DOMAIN`
-- `YAML_CACHE_DIR`
-- `YAML_SSH_USER` (optional; defaults to the current OS username for local server fetches)
-- `YAML_SSH_HOST` (optional; defaults to `tol22` for local server fetches)
-- `YAML_SSH_IDENTITY_FILE`
-
-Internal YAML handling now always treats the remote path recorded in Jira as the authoritative source. The file is refreshed into `YAML_CACHE_DIR` for manual inspection and is not copied into generated genome note output folders.
-
-Optional Ensembl transition variables include:
-
-- `GN_ENSEMBL_GRAPHQL_URL`
-- `GN_ENSEMBL_ORGANISMS_BASE`
-- `GN_ENSEMBL_MAIN_GFF3_BASE`
-- `GN_ENSEMBL_MAIN_GTF_BASE`
-
-Optional BOLD workflow integration:
-
-- `DATA_NOTE_BOLD_REPO` (path to a checkout containing `bold_coi_pipeline.py` if it is not installed as a module)
+If you are using the Ensembl transition code, the related variables are `GN_DEBUG_ENSEMBL`, `GN_ENSEMBL_GRAPHQL_URL`, `GN_ENSEMBL_ORGANISMS_BASE`, `GN_ENSEMBL_MAIN_GFF3_BASE`, and `GN_ENSEMBL_MAIN_GTF_BASE`.
 
 ## Assumptions and limitations
 
@@ -232,16 +194,6 @@ Optional BOLD workflow integration:
 - Optional LR extraction spreadsheet data is expected at `DATA_NOTE_LR_SAMPLE_PREP_TSV`, defaulting to `~/gn_assets/LR_sample_prep.tsv` with a legacy fallback to `~/genome_note_templates/LR_sample_prep.tsv`.
 - Templates are expected to be Markdown templates with Jinja2 placeholders and syntax.
 
-
-## Repository layout
-
-- [data_note](data_note/): the package code
-- [data_note/services](data_note/services/): workflow components for assembly, taxonomy, annotation, sequencing, sampling, curation, quality, rendering, and context assembly
-- [data_note/models](data_note/models/): typed models such as `AssemblyBundle`, `SequencingSummary`, `SamplingInfo`, `CurationBundle`, `TaxonomyInfo`, `AnnotationInfo`, `QualityMetrics`, `NoteData`, and `NoteContext`
-- [data_note/profiles](data_note/profiles/): programme-specific profile definitions for Darwin, Psyche, and ASG
-- [data_note/tables](data_note/tables/): profile-specific table builders and shared table utilities
-- [tests](tests/): minimal unit tests, fixtures and representative output folders
-- [.env.example](.env.example): example environment configuration
 
 ## Tests and example data
 
@@ -256,15 +208,13 @@ The repository also includes:
 - [tests/fixtures](tests/fixtures/): a small template and BioProject list for test runs
 - [tests/output](tests/output/): lightweight representative output folders kept for structure and discussion, not as strict golden-master outputs
 
-## Current status
+For a small run using the example files included in this repository, use:
 
-- The package is run using `python -m data_note ...`.
-- `darwin` is the default profile.
-- The core workflow uses typed data sections for base note info, assembly, sequencing, sampling, curation, taxonomy, annotation, quality, and author metadata. These data sections are converted into the final template context by `RenderContextBuilder`.
-- The orchestrator now coordinates dedicated workflow services rather than containing most of the workflow in one large script.
-- `psyche` is a separate profile with its own table module and figure plan; it still shares much of the Darwin workflow where behaviour is the same.
-- `asg` is now a separate profile with its own table/figure numbering, but metagenome-specific data collection and figure generation are not yet implemented in the core workflow.
-- Collection of internal metadata depends on the availability of the required resources.
+```bash
+python -m data_note --template_file tests/fixtures/template.md tests/fixtures/bioprojects.txt
+```
+
+This performs metadata searches, so it is not a completely offline example. Generated species folders are written into the current working directory.
 
 
 ## Standards
