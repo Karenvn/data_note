@@ -43,7 +43,7 @@ For profile selection, use:
 python -m data_note --profile darwin --template_file ~/genome_note_templates/dtol_template.md bioprojects.txt
 ```
 
-`plant` is the profile name for a subset of DToL notes. It currently inherits the Darwin table and figure plan, but gives plant notes a dedicated profile name so they can diverge later without affecting DToL notes. It is also the profile that adds plant flow cytometry metadata. It works with plant-specific templates such as:
+`plant` is the profile name for a subset of DToL notes. It uses the Darwin table and figure plan, but gives plant notes a dedicated profile name so they can diverge later without affecting other DToL notes. It is also the profile that adds plant flow cytometry metadata. It works with plant-specific templates, e.g.:
 
 ```bash
 python -m data_note --profile plant --template_file ~/genome_note_templates/dtol_plant_template.md bioprojects.txt
@@ -80,7 +80,7 @@ The same override values can be supplied by setting environment variables:
 - `DATA_NOTE_ASSEMBLY` and  `DATA_NOTE_ALT_ASSEMBLY`
 - `DATA_NOTE_HAP1_ASSEMBLY` and `DATA_NOTE_HAP2_ASSEMBLY`
 
-This is useful for cases where the assembly cannot be identified reliably from the BioProject metadata, for example because the BioProject structure is unusual, the taxon metadata have changed after a taxon merger, or the assembly of interest is not selected by the automatic filtering.
+These runtime overrides are useful when the assembly cannot be identified reliably from the BioProject metadata, for example because the BioProject structure is unusual or there are several valid candidate assemblies after filtering.
 
 
 To force an explicit assembly choice within one BioProject:
@@ -100,6 +100,15 @@ Rules for assembly overrides:
 - the supplied accession must survive the normal taxon id and excluded-name filtering
 - assembly override flags and their environment-variable equivalents only work when the input resolves to exactly one BioProject, not a batch list
 
+In other words, the CLI flags and environment variables do not bypass the normal candidate filter. They let you choose explicitly from the assemblies that still count as relevant for that BioProject after taxon-id and excluded-name filtering.
+
+If the assembly of interest is excluded by the taxon-id check, that is a different class of problem. In those cases, the code currently needs a manual code-level override in `data_note/taxonomy_mapper.py`, either by:
+
+- extending `TAX_ID_MAPPINGS` so the relevant merged or replacement taxon ids are treated as allowed for that BioProject or species
+- adding an `ASSEMBLY_OVERRIDES` entry for a specific BioProject when the desired assembly pair is mislabelled and should be forced explicitly
+
+Those code-level overrides are intended for exceptional cases such as taxon mergers, outdated umbrella-project taxon ids, or assemblies submitted under the wrong organism taxon id.
+
 
 ### Automatic intro text
 
@@ -113,17 +122,17 @@ Depending on the taxon and the assemblies currently available at NCBI, this para
 
 Optional additions (separate from `auto_text`):
 
-- the flag `--include-gbif-distribution` adds a `distribution_text` paragraph based on GBIF occurrence data when a matching GBIF usage key can be resolved
-- the flag `--include-bold-barcode` adds a `barcode_text` paragraph from the external BOLD barcode workflow for a single BioProject run
+- the flag `--include-gbif-distribution` adds a `distribution_text` paragraph based on GBIF occurrence data when a matching GBIF usage key can be resolved (slow)
+- the flag `--include-bold-barcode` adds a `barcode_text` paragraph from the external BOLD barcode workflow for a single BioProject run (very slow)
 
-To add the optional GBIF distribution summary text via API calls (slow):
+To add the optional GBIF distribution summary text via API calls:
 
 ```bash
 python -m data_note --template_file ~/genome_note_templates/dtol_template.md \
 --include-gbif-distribution bioprojects.txt
 ```
 
-To add an optional BOLD barcode result paragraph for a single run (very slow):
+To add an optional BOLD barcode result paragraph for a single run:
 
 ```bash
 python -m data_note --template_file ~/genome_note_templates/dtol_template.md \
