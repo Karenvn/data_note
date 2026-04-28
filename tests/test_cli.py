@@ -12,6 +12,8 @@ class CliTests(unittest.TestCase):
     def test_main_passes_primary_and_alternate_assembly_flags_into_config(self) -> None:
         fake_config = Mock()
         fake_config.profile_name = "darwin"
+        fake_config.include_bold_barcode = False
+        fake_config.include_gbif_distribution = False
         fake_pipeline = Mock()
         fake_pipeline.run.return_value = 0
 
@@ -39,6 +41,23 @@ class CliTests(unittest.TestCase):
             template_file="template.md",
             error_file="error_log.txt",
         )
+
+    def test_main_passes_bold_barcode_flag_into_config(self) -> None:
+        fake_config = Mock()
+        fake_config.profile_name = "darwin"
+        fake_config.include_bold_barcode = False
+        fake_config.include_gbif_distribution = False
+        fake_pipeline = Mock()
+        fake_pipeline.run.return_value = 0
+
+        with (
+            patch("data_note.cli.load_config", return_value=fake_config),
+            patch("data_note.cli.DataNotePipeline", return_value=fake_pipeline),
+        ):
+            result = main(["--include-bold-barcode", "PRJEB12345"])
+
+        self.assertEqual(result, 0)
+        self.assertTrue(fake_config.include_bold_barcode)
 
     def test_main_rejects_mixed_primary_and_haplotype_flags(self) -> None:
         with self.assertRaises(SystemExit):

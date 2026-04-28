@@ -81,11 +81,18 @@ To run `data_note` on a batch of BioProjects, with automatic selection of assemb
 python -m data_note --template_file ~/genome_note_templates/dtol_template.md bioprojects.txt
 ```
 
-To add the optional GBIF distribution summary text:
+To add the optional GBIF distribution summary text (slow):
 
 ```bash
 python -m data_note --template_file ~/genome_note_templates/dtol_template.md \
 --include-gbif-distribution bioprojects.txt
+```
+
+To add an optional BOLD barcode result paragraph for a single run (very slow):
+
+```bash
+python -m data_note --template_file ~/genome_note_templates/dtol_template.md \
+--include-bold-barcode PRJEB12345
 ```
 
 To force an explicit assembly choice within one BioProject:
@@ -111,7 +118,7 @@ python -m data_note --template_file ~/genome_note_templates/dtol_template.md \
 --hap1-assembly GCA_123456789.1 --hap2-assembly GCA_123456790.1 PRJEB12345
 ```
 
-Rules:
+Rules for assembly overrides:
 
 - use either `--assembly` with optional `--alt-assembly`, or `--hap1-assembly` with optional `--hap2-assembly`
 - `--alt-assembly` requires `--assembly`
@@ -182,6 +189,7 @@ Important variables include:
 - `DATA_NOTE_HAP1_ASSEMBLY` (explicit haplotype 1 override)
 - `DATA_NOTE_HAP2_ASSEMBLY` (explicit haplotype 2 override)
 - `DATA_NOTE_INCLUDE_GBIF_DISTRIBUTION` (`1` to enable optional GBIF distribution enrichment)
+- `DATA_NOTE_INCLUDE_BOLD_BARCODE` (`1` to enable optional external BOLD barcode enrichment)
 - `DATA_NOTE_CORRECTIONS_FILE`
 - `DATA_NOTE_CYTO_INFO_TSV`
 - `DATA_NOTE_LR_SAMPLE_PREP_TSV`
@@ -209,6 +217,10 @@ Optional Ensembl transition variables include:
 - `GN_ENSEMBL_ORGANISMS_BASE`
 - `GN_ENSEMBL_MAIN_GFF3_BASE`
 - `GN_ENSEMBL_MAIN_GTF_BASE`
+
+Optional BOLD workflow integration:
+
+- `DATA_NOTE_BOLD_REPO` (path to a checkout containing `bold_coi_pipeline.py` if it is not installed as a module)
 
 ## Assumptions and limitations
 

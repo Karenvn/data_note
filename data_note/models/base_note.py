@@ -15,6 +15,7 @@ class BaseNoteInfo:
     assembly_name: str | None = None
     auto_text: str | None = None
     distribution_text: str | None = None
+    barcode_text: str | None = None
     formatted_parent_projects: str | None = None
     child_bioprojects: list[str] | None = None
     parent_projects: list[dict[str, Any]] | None = None
@@ -30,6 +31,7 @@ class BaseNoteInfo:
         "assembly_name",
         "auto_text",
         "distribution_text",
+        "barcode_text",
         "formatted_parent_projects",
         "child_bioprojects",
         "parent_projects",

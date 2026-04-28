@@ -43,6 +43,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Fetch and render an additional GBIF distribution summary. Disabled by default because it adds extra API calls.",
     )
+    parser.add_argument(
+        "--include-bold-barcode",
+        action="store_true",
+        help="Run the heavier external BOLD barcode workflow and render a barcode result paragraph. Disabled by default.",
+    )
     return parser
 
 
@@ -54,6 +59,8 @@ def main(argv: list[str] | None = None) -> int:
         config.profile_name = args.profile.strip().lower()
     if args.include_gbif_distribution:
         config.include_gbif_distribution = True
+    if args.include_bold_barcode:
+        config.include_bold_barcode = True
     selection_input = AssemblySelectionInput(
         assembly_accession=args.assembly,
         alternate_accession=args.alt_assembly,

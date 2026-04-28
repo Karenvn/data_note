@@ -51,6 +51,10 @@ class ConfigTests(unittest.TestCase):
         config = load_config({"DATA_NOTE_PROFILE": "psyche"})
         self.assertEqual(config.profile_name, "psyche")
 
+    def test_bold_barcode_env_flag(self) -> None:
+        config = load_config({"DATA_NOTE_INCLUDE_BOLD_BARCODE": "1"})
+        self.assertTrue(config.include_bold_barcode)
+
     def test_primary_assembly_selection_input_from_env(self) -> None:
         config = load_config(
             {

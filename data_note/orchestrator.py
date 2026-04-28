@@ -23,6 +23,7 @@ from .services import (
     CurationService,
     FlowCytometryService,
     NcbiDatasetsService,
+    BoldResultService,
     RenderContextBuilder,
     RenderingService,
     SequencingService,
@@ -49,17 +50,20 @@ class DataNoteOrchestrator:
         self,
         profile: ProgrammeProfile | str | None = None,
         include_gbif_distribution: bool = False,
+        include_bold_barcode: bool = False,
         assembly_selection_input: AssemblySelectionInput | None = None,
     ) -> None:
         Entrez.email = os.getenv("ENTREZ_EMAIL", "default_email")
         Entrez.api_key = os.getenv("ENTREZ_API_KEY", "default_api_key")
         self.profile = profile if isinstance(profile, ProgrammeProfile) else get_profile(profile)
         self.include_gbif_distribution = include_gbif_distribution
+        self.include_bold_barcode = include_bold_barcode
         self.assembly_selection_input = assembly_selection_input
 
         self.bioproject_client = BioprojectClient()
         self.annotation_service = AnnotationService()
         self.author_service = AuthorService()
+        self.bold_result_service = BoldResultService()
         self.assembly_service = AssemblyService(
             bioproject_client=self.bioproject_client,
             selection_input=self.assembly_selection_input,
@@ -170,6 +174,17 @@ class DataNoteOrchestrator:
             note_data.base.extras["auto_text_error"] = str(exc)
             note_data.base.auto_text = ""
             note_data.base.distribution_text = ""
+
+        if self.include_bold_barcode:
+            try:
+                note_data.base.barcode_text = self.bold_result_service.build_text(
+                    assembly_selection.preferred_accession(),
+                    species,
+                )
+            except Exception as exc:
+                logger.warning("Automated BOLD result generation failed for %s: %s", bioproject, exc)
+                note_data.base.extras["barcode_text_error"] = str(exc)
+                note_data.base.barcode_text = ""
 
         context = self.sequencing_workflow_service.build_sections(
             note_data,

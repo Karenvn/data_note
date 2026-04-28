@@ -17,6 +17,35 @@ _PLACEHOLDER_COLLECTION_DATETIME_RE = re.compile(
 )
 
 
+def normalize_pipe_delimited_values(value):
+    """
+    Collapse duplicated pipe-delimited values while preserving order.
+
+    BioSamples sometimes stores repeated person or affiliation strings like
+    ``DAVID LEES | DAVID LEES``. Keep distinct multi-value strings intact, but
+    drop exact duplicates case-insensitively so downstream equality checks work.
+    """
+    if value in (None, ""):
+        return ""
+
+    stripped = str(value).strip()
+    if "|" not in stripped:
+        return stripped
+
+    deduped = []
+    seen = set()
+    for part in stripped.split("|"):
+        cleaned = part.strip()
+        if not cleaned:
+            continue
+        key = cleaned.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(cleaned)
+    return " | ".join(deduped)
+
+
 def normalize_collection_date(value):
     """
     Collapse placeholder BioSamples datetimes back to a date-only string.
@@ -116,8 +145,8 @@ def process_biosamples_sample_dict(row, tech_prefix):
             row.get('geographic_location_(country_and/or_sea)', '')).title(),
         f'{tech_prefix}_coll_lat': round(safe_convert(row.get('geographic_location_(latitude)', 0), float, 0.0), 4),
         f'{tech_prefix}_coll_long': round(safe_convert(row.get('geographic_location_(longitude)', 0), float, 0.0), 4),
-        f'{tech_prefix}_identifier': row.get('identified_by', '').title(),
-        f'{tech_prefix}_identifier_affiliation': row.get('identifier_affiliation', '').title(),
+        f'{tech_prefix}_identifier': normalize_pipe_delimited_values(row.get('identified_by', '')).title(),
+        f'{tech_prefix}_identifier_affiliation': normalize_pipe_delimited_values(row.get('identifier_affiliation', '')).title(),
         f'{tech_prefix}_identified_how': row.get('identified_how', '').lower(),
         f'{tech_prefix}_sample_derived_from': source_sample,
         f'{tech_prefix}_sex': row.get('sex', '').lower(),

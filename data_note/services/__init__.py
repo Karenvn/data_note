@@ -2,6 +2,7 @@ __all__ = [
     "AnnotationService",
     "AnnotationQualityWorkflowService",
     "AuthorService",
+    "BoldResultService",
     "AssemblyService",
     "AssemblyWorkflowService",
     "BtkService",
@@ -35,6 +36,10 @@ def __getattr__(name: str):
         from .author_service import AuthorService
 
         return AuthorService
+    if name == "BoldResultService":
+        from .bold_result_service import BoldResultService
+
+        return BoldResultService
     if name == "AssemblyService":
         from .assembly_service import AssemblyService
 

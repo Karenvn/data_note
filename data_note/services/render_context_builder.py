@@ -7,6 +7,7 @@ from typing import Any, Callable
 from ..calculate_metrics import calc_ebp_metric
 from ..io_utils import load_and_apply_corrections
 from ..models import NoteContext, NoteData
+from ..sampling_template_fields import populate_sampling_template_fields
 from ..profiles.base import ProgrammeProfile
 from .context_assembler import ContextAssembler
 
@@ -58,6 +59,7 @@ class RenderContextBuilder:
         )
         if corrections_file:
             self.correction_loader(note_context, corrections_file)
+        populate_sampling_template_fields(note_context)
         note_context["ebp_metric"] = self.ebp_metric_calculator(note_context)
         rendered_context = profile.build_tables(note_context)
         if isinstance(rendered_context, NoteContext):

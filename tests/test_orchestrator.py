@@ -76,6 +76,8 @@ class OrchestratorProfileTests(unittest.TestCase):
             family="Exampleidae",
             intro_text="Example automatic summary.",
         )
+        orchestrator.bold_result_service = Mock()
+        orchestrator.bold_result_service.build_text.return_value = "Example barcode paragraph."
 
         return orchestrator, flow_cytometry_service
 
@@ -98,6 +100,18 @@ class OrchestratorProfileTests(unittest.TestCase):
 
         self.assertEqual(result["species"], "Example species")
         flow_cytometry_service.build_context.assert_not_called()
+
+    def test_bold_barcode_enrichment_is_called_when_enabled(self) -> None:
+        orchestrator, _ = self._build_orchestrator("darwin")
+        orchestrator.include_bold_barcode = True
+
+        with patch("data_note.orchestrator.taxonomy_mapper.has_tax_id_override", return_value=False):
+            orchestrator.process_bioproject("PRJEB1")
+
+        orchestrator.bold_result_service.build_text.assert_called_once_with(
+            "GCA_123456789.1",
+            "Example species",
+        )
 
 
 if __name__ == "__main__":
