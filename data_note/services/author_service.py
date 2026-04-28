@@ -398,7 +398,7 @@ class AuthorService:
         ]
         staged_person_ids = list(dict.fromkeys(staged_person_ids))
         if len(staged_person_ids) != 1:
-            return None
+            return self._lookup_person_by_short_name(connection, raw_name)
 
         person_query = """
             SELECT
@@ -424,8 +424,65 @@ class AuthorService:
         """
         row = connection.execute(person_query, (staged_person_ids[0],)).fetchone()
         if row is None:
-            return None
+            return self._lookup_person_by_short_name(connection, raw_name)
         return self._author_from_person_row(row, raw_name)
+
+    def _lookup_person_by_short_name(
+        self,
+        connection: sqlite3.Connection,
+        raw_name: str,
+    ) -> dict[str, Any] | None:
+        given_names, family_name = self._split_person_name(None, None, raw_name)
+        normalized_family = self._normalize_name(family_name)
+        expected_given_tokens = self._normalized_tokens(given_names)
+        if not normalized_family or not expected_given_tokens:
+            return None
+
+        candidate_query = """
+            SELECT
+                p.person_id,
+                p.canonical_name,
+                p.given_names,
+                p.family_name,
+                p.orcid,
+                c.value AS email,
+                a.name AS affiliation
+            FROM person p
+            LEFT JOIN contact c
+                ON c.person_id = p.person_id
+               AND c.type = 'email'
+               AND c.is_primary = 1
+            LEFT JOIN person_affiliation pa
+                ON pa.person_id = p.person_id
+               AND pa.is_current = 1
+            LEFT JOIN affiliation a
+                ON a.affiliation_id = pa.affiliation_id
+            WHERE p.is_active = 1
+              AND replace(replace(lower(p.family_name), '.', ''), ',', '') = ?
+            ORDER BY p.person_id
+        """
+        candidates = list(connection.execute(candidate_query, (normalized_family,)).fetchall())
+
+        matching_rows: list[sqlite3.Row] = []
+        matched_person_ids: set[int] = set()
+        for row in candidates:
+            person_id = int(row["person_id"])
+            if person_id in matched_person_ids:
+                continue
+
+            candidate_given_names = row["given_names"] or self._split_person_name(
+                None,
+                None,
+                row["canonical_name"],
+            )[0]
+            candidate_given_tokens = self._normalized_tokens(candidate_given_names)
+            if self._given_tokens_match_prefix(expected_given_tokens, candidate_given_tokens):
+                matching_rows.append(row)
+                matched_person_ids.add(person_id)
+
+        if len(matching_rows) != 1:
+            return None
+        return self._author_from_person_row(matching_rows[0], raw_name)
 
     def _author_from_person_row(self, row: sqlite3.Row, raw_name: str) -> dict[str, Any]:
         given_names, family_name = self._split_person_name(
@@ -501,6 +558,17 @@ class AuthorService:
         lowered = value.lower().strip()
         lowered = lowered.replace(".", "").replace(",", "")
         return " ".join(lowered.split())
+
+    @classmethod
+    def _normalized_tokens(cls, value: str) -> list[str]:
+        normalized = cls._normalize_name(value)
+        return normalized.split() if normalized else []
+
+    @staticmethod
+    def _given_tokens_match_prefix(expected: list[str], actual: list[str]) -> bool:
+        if not expected or len(actual) < len(expected):
+            return False
+        return actual[: len(expected)] == expected
 
     def _build_affiliations(self, authors: list[dict[str, Any]]) -> list[dict[str, Any]]:
         affiliations: list[dict[str, Any]] = []

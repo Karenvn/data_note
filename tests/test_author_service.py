@@ -151,6 +151,7 @@ def _build_test_db(db_path: Path) -> None:
                 (6, "Fran Frost", "Fran", "Frost", ""),
                 (7, "Liam M. Crowley", "Liam M.", "Crowley", "0000-0001-6380-0329"),
                 (8, "Susan C. Taylor", "Susan C.", "Taylor", ""),
+                (9, "David Geoffrey Long", "David Geoffrey", "Long", "0000-0003-0816-0124"),
             ],
         )
 
@@ -165,6 +166,7 @@ def _build_test_db(db_path: Path) -> None:
                 (6, 6, "email", "fran@example.org", 1),
                 (7, 7, "email", "liam@example.org", 1),
                 (8, 8, "email", "susan@example.org", 1),
+                (9, 9, "email", "david.long@example.org", 1),
             ],
         )
 
@@ -189,6 +191,7 @@ def _build_test_db(db_path: Path) -> None:
                 (6, 6, 2, 1),
                 (7, 7, 3, 1),
                 (8, 8, 4, 1),
+                (9, 9, 2, 1),
             ],
         )
 
@@ -351,6 +354,29 @@ class AuthorServiceTests(unittest.TestCase):
                     "given-names": "Susan C.",
                     "surname": "Taylor",
                     "email": "susan@example.org",
+                    "affiliation": "1",
+                    "roles": [{"credit": "Resources"}, {"credit": "Investigation"}],
+                }
+            ],
+        )
+
+    def test_matches_shortened_given_names_to_unique_person(self) -> None:
+        context = {
+            "technology_data": {
+                "pacbio": {"pacbio_sample_accession": "missing-accession"},
+            },
+            "pacbio_collector": "David Long",
+        }
+
+        result = self.service.build_context(context)
+        self.assertEqual(
+            [person.to_mapping() for person in result.people],
+            [
+                {
+                    "given-names": "David Geoffrey",
+                    "surname": "Long",
+                    "email": "david.long@example.org",
+                    "orcid": "0000-0003-0816-0124",
                     "affiliation": "1",
                     "roles": [{"credit": "Resources"}, {"credit": "Investigation"}],
                 }
