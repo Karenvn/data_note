@@ -10,6 +10,8 @@
 !/pyproject.toml
 !/tests/
 !/tests/**
+!/assets/
+!/assets/**
 
 .DS_Store
 __pycache__/

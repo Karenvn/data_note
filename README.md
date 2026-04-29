@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/notes-icon.png" alt="data_note icon" width="180">
+</p>
+
 # Genome notes Markdown creation
 
 `data_note` is a Python workflow for generating genome note documents in [Pandoc](https://pandoc.org/) Markdown from a list of BioProject accession numbers. It collects sampling, sequencing, taxonomy, assembly, annotation and quality metadata from public sources, with optional addition of metadata for methods and analyses from local systems. It then renders, for each BioProject, a species directory containing the note with associated figures and references in the required formats.
