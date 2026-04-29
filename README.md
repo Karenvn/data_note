@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/notes-icon.png" alt="data_note icon" width="190">
+  <img src="assets/notes-icon.png" alt="data_note icon" width="200">
 </p>
 
 # Genome notes Markdown creation
