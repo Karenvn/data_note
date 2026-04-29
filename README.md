@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/notes-icon.png" alt="data_note icon" width="180">
+  <img src="assets/notes-icon.png" alt="data_note icon" width="190">
 </p>
 
 # Genome notes Markdown creation
@@ -177,7 +177,7 @@ Text corrections, local asset files, and the author database also come from conf
 
 ## Environment
 
-The setup will need `ENTREZ_EMAIL` and `ENTREZ_API_KEY` to be set. The default profile is `darwin`, but it can be changed with DATA_NOTE_PROFILE`.
+The setup will need `ENTREZ_EMAIL` and `ENTREZ_API_KEY` to be set. The default profile is `darwin`, but it can be changed with `DATA_NOTE_PROFILE`.
 
 Local file paths are usually taken from `DATA_NOTE_GN_ASSETS`, with `DATA_NOTE_SERVER_DATA` kept as a legacy alias. From that base location, `data_note` can also read a corrections file, a flow-cytometry table, a long-read sample preparation table, and an author database through `DATA_NOTE_CORRECTIONS_FILE`, `DATA_NOTE_CYTO_INFO_TSV`, `DATA_NOTE_LR_SAMPLE_PREP_TSV`, and `DATA_NOTE_AUTHOR_DB`.
 
