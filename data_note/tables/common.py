@@ -130,10 +130,30 @@ def coerce_bool(value, default: bool = False) -> bool:
     return bool(value)
 
 
+def infer_haploid_note(context) -> bool:
+    if str(context.get("assemblies_type") or "").strip() != "prim_alt":
+        return False
+    if "has_alternate_assembly" in context:
+        no_alternate_assembly = not coerce_bool(context.get("has_alternate_assembly"))
+    else:
+        no_alternate_assembly = not bool(context.get("alt_accession") or context.get("alt_assembly_name"))
+    if not no_alternate_assembly:
+        return False
+
+    if str(context.get("group_name_ncbi") or "").strip().lower() == "mosses":
+        return True
+
+    order_name = str(context.get("order") or "").strip().lower()
+    observed_sex = str(context.get("observed_sex") or "").strip().lower()
+    return order_name == "hymenoptera" and observed_sex in {"male", "m"}
+
+
 def is_haploid_note(context) -> bool:
     if "is_haploid" in context:
         return coerce_bool(context.get("is_haploid"))
-    return coerce_bool(context.get("render_as_haploid"))
+    if "render_as_haploid" in context:
+        return coerce_bool(context.get("render_as_haploid"))
+    return infer_haploid_note(context)
 
 
 def has_alternate_assembly(context) -> bool:

@@ -203,6 +203,111 @@ class RenderContextBuilderTests(unittest.TestCase):
             self.assertNotIn("alt_kmer_completeness", context)
             self.assertEqual(context["tables"]["table2"]["native_headers"][1], "**Haploid assembly**")
 
+    def test_build_infers_haploid_context_for_single_assembly_moss(self) -> None:
+        builder = RenderContextBuilder()
+        note_data = NoteData(
+            base=BaseNoteInfo.from_mapping(
+                {
+                    "bioproject": "PRJEB65217",
+                    "tolid": "cbNecPumi1",
+                    "assemblies_type": "prim_alt",
+                }
+            ),
+            taxonomy=TaxonomyInfo(
+                tax_id="3214",
+                species="Neckera pumila",
+                lineage="Eukaryota; Viridiplantae",
+                extras={"group_name_ncbi": "mosses"},
+            ),
+            assembly=AssemblyBundle(
+                selection=AssemblySelection(
+                    assemblies_type="prim_alt",
+                    primary=AssemblyRecord(
+                        accession="GCA_963969595.1",
+                        assembly_name="cbNecPumi1.1",
+                        role="primary",
+                    ),
+                ),
+                datasets=_DatasetsStub(),
+            ),
+        )
+        note_data.quality = type(
+            "_QualityStub",
+            (),
+            {
+                "to_context_dict": staticmethod(
+                    lambda: {
+                        "prim_QV": "66.9",
+                        "alt_QV": "65.1",
+                        "prim_kmer_completeness": "91.13",
+                        "alt_kmer_completeness": "90.42",
+                    }
+                )
+            },
+        )()
+
+        context = builder.build(note_data, DarwinProfile())
+
+        self.assertTrue(context["is_haploid"])
+        self.assertFalse(context["has_alternate_assembly"])
+        self.assertEqual(context["single_assembly_label"], "Haploid assembly")
+        self.assertEqual(context["hifiasm_options"], "--primary -l0")
+        self.assertNotIn("alt_QV", context)
+        self.assertNotIn("alt_kmer_completeness", context)
+        self.assertEqual(context["tables"]["table2"]["native_headers"][1], "**Haploid assembly**")
+
+    def test_build_infers_haploid_context_for_single_assembly_male_hymenopteran(self) -> None:
+        builder = RenderContextBuilder()
+        note_data = NoteData(
+            base=BaseNoteInfo.from_mapping(
+                {
+                    "bioproject": "PRJEB00001",
+                    "tolid": "ihExample1",
+                    "assemblies_type": "prim_alt",
+                    "observed_sex": "male",
+                }
+            ),
+            taxonomy=TaxonomyInfo(
+                tax_id="7399",
+                species="Example hymenopteran",
+                lineage="Eukaryota; Arthropoda",
+                order="Hymenoptera",
+            ),
+            assembly=AssemblyBundle(
+                selection=AssemblySelection(
+                    assemblies_type="prim_alt",
+                    primary=AssemblyRecord(
+                        accession="GCA_000000001.1",
+                        assembly_name="ihExample1.1",
+                        role="primary",
+                    ),
+                ),
+                datasets=_DatasetsStub(),
+            ),
+        )
+        note_data.quality = type(
+            "_QualityStub",
+            (),
+            {
+                "to_context_dict": staticmethod(
+                    lambda: {
+                        "prim_QV": "52.0",
+                        "alt_QV": "50.8",
+                        "prim_kmer_completeness": "97.4",
+                        "alt_kmer_completeness": "96.9",
+                    }
+                )
+            },
+        )()
+
+        context = builder.build(note_data, DarwinProfile())
+
+        self.assertTrue(context["is_haploid"])
+        self.assertFalse(context["has_alternate_assembly"])
+        self.assertEqual(context["hifiasm_options"], "--primary -l0")
+        self.assertNotIn("alt_QV", context)
+        self.assertEqual(context["tables"]["table2"]["native_headers"][1], "**Haploid assembly**")
+
 
 if __name__ == "__main__":
     unittest.main()

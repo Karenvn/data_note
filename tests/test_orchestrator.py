@@ -18,6 +18,7 @@ class OrchestratorProfileTests(unittest.TestCase):
             species="Example species",
             tolid="ixExamSpec1",
             assemblies_type="prim_alt",
+            extras={"pacbio_specimen_id": "SPEC-001"},
         )
         final_context = NoteContext(
             bioproject="PRJEB1",
@@ -93,7 +94,10 @@ class OrchestratorProfileTests(unittest.TestCase):
         result, flow_cytometry_service = self._process_bioproject("plant")
 
         self.assertEqual(result["species"], "Example species")
-        flow_cytometry_service.build_context.assert_called_once_with("Example species")
+        flow_cytometry_service.build_context.assert_called_once_with(
+            "Example species",
+            identifier_candidates=["SPEC-001", "ixExamSpec1"],
+        )
 
     def test_darwin_profile_skips_flow_cytometry_enrichment(self) -> None:
         result, flow_cytometry_service = self._process_bioproject("darwin")

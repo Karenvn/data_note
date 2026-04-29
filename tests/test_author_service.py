@@ -290,6 +290,38 @@ class AuthorServiceTests(unittest.TestCase):
             [{"credit": "Resources"}, {"credit": "Investigation"}],
         )
 
+    def test_preserves_multiple_affiliations_for_single_author(self) -> None:
+        with closing(sqlite3.connect(self.db_path)) as connection, connection:
+            connection.execute(
+                """
+                INSERT INTO person_affiliation(person_affiliation_id, person_id, affiliation_id, is_current)
+                VALUES (?, ?, ?, ?)
+                """,
+                (10, 1, 4, 0),
+            )
+
+        context = {
+            "technology_data": {
+                "pacbio": {"pacbio_sample_accession": "BS-P"},
+            }
+        }
+
+        result = self.service.build_context(context)
+        self.assertEqual(result.people[0].affiliation, ["1", "2"])
+
+        parsed_yaml = yaml.safe_load(result.yaml_block)
+        self.assertEqual(parsed_yaml["author"][0]["affiliation"], ["1", "2"])
+        self.assertEqual(
+            parsed_yaml["affiliation"][1],
+            {
+                "id": "2",
+                "organization": "Independent researcher",
+                "city": "Berkhamsted, Hertfordshire",
+                "state": "England",
+                "country": "GB",
+            },
+        )
+
     def test_uses_raw_name_fallback_and_placeholder_for_unmatched_people(self) -> None:
         context = {
             "technology_data": {

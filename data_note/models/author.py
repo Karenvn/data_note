@@ -10,17 +10,24 @@ class AuthorPerson:
     surname: str
     email: str | None = None
     orcid: str | None = None
-    affiliation: str | None = None
+    affiliation: str | list[str] | None = None
     roles: list[dict[str, str]] = field(default_factory=list)
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> "AuthorPerson":
+        raw_affiliation = data.get("affiliation")
+        if isinstance(raw_affiliation, list):
+            affiliation: str | list[str] | None = [str(item) for item in raw_affiliation]
+        elif raw_affiliation is None:
+            affiliation = None
+        else:
+            affiliation = str(raw_affiliation)
         return cls(
             given_names=str(data.get("given-names", "")),
             surname=str(data.get("surname", "")),
             email=data.get("email"),
             orcid=data.get("orcid"),
-            affiliation=data.get("affiliation"),
+            affiliation=affiliation,
             roles=[dict(item) for item in data.get("roles", [])],
         )
 

@@ -52,6 +52,47 @@ class FlowCytometryServiceTests(unittest.TestCase):
         self.assertEqual(result.flow_pg, 2.01)
         self.assertEqual(result.flow_project, "UK Flora")
 
+    def test_build_context_prefers_identifier_match_over_species_only_match(self) -> None:
+        tsv_content = (
+            "Project\tGenus\tSpecies \tStandard\tBuffer\tGS pg (1C)\t1C/Gbp\tDToL Specimen ID\n"
+            "DTOL\tCardamine\tflexuosa\t<Oryza\tOXPRO\t0.25\t0.25\tKDTOL10137\n"
+            "DTOL\tCardamine\tflexuosa\t<Pisum\tGPB3%PVP\t0.31\t0.30\tKDTOL99999\n"
+        )
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "cyto_info.tsv"
+            path.write_text(tsv_content)
+            service = FlowCytometryService(tsv_path=path)
+
+            result = service.build_context(
+                "Cardamine flexuosa",
+                identifier_candidates=["ddCarFlex1", "KDTOL99999"],
+            )
+
+        self.assertIsInstance(result, FlowCytometryInfo)
+        assert result is not None
+        self.assertEqual(result.flow_pg, 0.31)
+        self.assertEqual(result.flow_dtol_specimen_id, "KDTOL99999")
+
+    def test_build_context_can_lookup_by_identifier_without_species_name(self) -> None:
+        tsv_content = (
+            "Project\tGenus\tSpecies \tStandard\tBuffer\tGS pg (1C)\t1C/Gbp\tDToL Specimen ID\n"
+            "DTOL\tCardamine\tflexuosa\t<Oryza\tOXPRO\t0.25\t0.25\tKDTOL10137\n"
+        )
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "cyto_info.tsv"
+            path.write_text(tsv_content)
+            service = FlowCytometryService(tsv_path=path)
+
+            result = service.build_context(
+                None,
+                identifier_candidates=["KDTOL10137"],
+            )
+
+        self.assertIsInstance(result, FlowCytometryInfo)
+        assert result is not None
+        self.assertEqual(result.flow_pg, 0.25)
+        self.assertEqual(result.flow_dtol_specimen_id, "KDTOL10137")
+
 
 if __name__ == "__main__":
     unittest.main()

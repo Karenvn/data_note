@@ -64,6 +64,43 @@ class RenderingServiceTests(unittest.TestCase):
             self.assertFalse((tmp_path / "Fig_5_Snail.gif").exists())
             self.assertFalse((tmp_path / "Fig_6_Blob.gif").exists())
 
+    def test_populate_images_keeps_merqury_for_single_assembly_prim_alt_notes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            calls = {"merqury": 0}
+
+            def make_triple(stem: str) -> tuple[Path, Path, Path]:
+                png = tmp_path / f"{stem}.png"
+                tif = tmp_path / f"{stem}.tif"
+                gif = tmp_path / f"{stem}.gif"
+                png.write_text("png")
+                tif.write_text("tif")
+                gif.write_text("gif")
+                return png, tif, gif
+
+            def merqury_copier(tolid, output_dir, output_stem=None):
+                calls["merqury"] += 1
+                return make_triple(output_stem or "Fig_4_Merqury")
+
+            service = RenderingService(
+                gscope_image_copier=lambda tolid, output_dir, output_stem=None: make_triple(output_stem or "Fig_2_Gscope"),
+                pretext_labeler=lambda tolid, context, output_dir, output_stem=None: make_triple(output_stem or "Fig_3_Pretext"),
+                merian_image_copier=lambda tolid, output_dir, output_stem=None: None,
+                merqury_image_copier=merqury_copier,
+                btk_image_processor=lambda accession, output_dir, output_names=None: [],
+            )
+
+            context = {
+                "assemblies_type": "prim_alt",
+                "is_haploid": True,
+                "prim_accession": "GCA_963920785.2",
+            }
+            service._populate_images(AsgProfile(), "csSphCont2", tmpdir, context)
+
+            self.assertEqual(calls["merqury"], 1)
+            self.assertIn("Fig_4_Merqury", context)
+            self.assertTrue((tmp_path / "Fig_4_Merqury.gif").exists())
+
     def test_ensure_tables_preserves_profile_specific_table_keys(self) -> None:
         context = {
             "tables": {

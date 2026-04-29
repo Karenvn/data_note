@@ -55,7 +55,7 @@ python -m data_note --profile plant --template_file ~/genome_note_templates/dtol
 - Figures include a merian plot of chromosomes, generated via the [merian-busco-painter](https://github.com/Karenvn/merian-busco-painter) scripts.
 
 `asg` is the profile name for Aquatic Symbiosis Genomics genome notes. It currently provides:
-- ASG figure numbering, including metagenome figure slots.
+- ASG figure numbering, including dedicated numbers for metagenome figures.
 - ASG table numbering, with software versions moved to `table6`.
 - An optional metagenome `table5` hook driven by `metagenome_table_headers` and `metagenome_table_rows` when metagenome output is available.
 - If there are enough metagenome bins, a tree of the bins is generated via [metagenome report](https://github.com/Karenvn/metagenome-report).
@@ -106,7 +106,7 @@ The assembly overrides do not bypass the normal candidate taxon id filter. They 
 
 `data_note` is not intended to produce genome notes from genuinely misassigned organism records. If an assembly is under the wrong organism taxon id, the preferred approach is to wait for the public ENA and NCBI records to be corrected.
 
-The taxonomy override layer in `data_note/taxonomy_mapper.py` is for a narrower problem: accepted taxonomy changes where some public metadata are stale, superseded, or inconsistent between sources.
+The taxonomy override layer in `data_note/taxonomy_mapper.py` is for a narrower problem: accepted taxonomy changes where some public metadata are stale (often following a taxon merger) or inconsistent between sources.
 
 - use `TAX_ID_MAPPINGS` when merged or replacement taxon ids should still be treated as allowed for that species or BioProject
 - use `BIOPROJECT_TAX_ID_OVERRIDES` when the umbrella BioProject taxon id itself is outdated and should be replaced before assembly selection
@@ -173,7 +173,7 @@ Text corrections, local asset files, and the author database also come from conf
 
 ## Environment
 
-The minimum public-core setup usually needs `ENTREZ_EMAIL` and `ENTREZ_API_KEY`. The default profile is `darwin`, but you can change it with `DATA_NOTE_PROFILE`.
+The setup will need `ENTREZ_EMAIL` and `ENTREZ_API_KEY` to be set. The default profile is `darwin`, but it can be changed with DATA_NOTE_PROFILE`.
 
 Local file paths are usually taken from `DATA_NOTE_GN_ASSETS`, with `DATA_NOTE_SERVER_DATA` kept as a legacy alias. From that base location, `data_note` can also read a corrections file, a flow-cytometry table, a long-read sample preparation table, and an author database through `DATA_NOTE_CORRECTIONS_FILE`, `DATA_NOTE_CYTO_INFO_TSV`, `DATA_NOTE_LR_SAMPLE_PREP_TSV`, and `DATA_NOTE_AUTHOR_DB`.
 

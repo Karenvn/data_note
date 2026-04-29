@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 import logging
 import os
@@ -32,17 +33,27 @@ class FlowCytometryService:
     csv_reader: Callable[..., pd.DataFrame] = pd.read_csv
     _dataframe_cache: pd.DataFrame | None = field(default=None, init=False, repr=False)
 
-    def build_context(self, species_name: str | None) -> FlowCytometryInfo | None:
-        if not species_name:
+    def build_context(
+        self,
+        species_name: str | None,
+        *,
+        identifier_candidates: Sequence[str] | None = None,
+    ) -> FlowCytometryInfo | None:
+        normalized_identifiers = self._normalize_identifier_candidates(identifier_candidates)
+        if not species_name and not normalized_identifiers:
             return None
 
         dataframe = self._load_dataframe()
         if dataframe.empty:
             return None
 
-        matches = dataframe[dataframe["species_name"].str.lower() == species_name.lower()]
+        matches = self._match_identifier_candidates(dataframe, normalized_identifiers)
         if matches.empty:
-            return None
+            if not species_name:
+                return None
+            matches = dataframe[dataframe["species_name"].str.lower() == species_name.lower()]
+            if matches.empty:
+                return None
 
         row = self._select_preferred_match(matches).iloc[0]
         buffer_code = self._string_value(row.get("Buffer"))
@@ -90,6 +101,35 @@ class FlowCytometryService:
         dataframe["species_name"] = dataframe["Genus"] + " " + dataframe["Species"]
         self._dataframe_cache = dataframe
         return self._dataframe_cache
+
+    @staticmethod
+    def _normalize_identifier_candidates(identifier_candidates: Sequence[str] | None) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for identifier in identifier_candidates or ():
+            cleaned = str(identifier).strip()
+            if not cleaned:
+                continue
+            folded = cleaned.casefold()
+            if folded in seen:
+                continue
+            seen.add(folded)
+            normalized.append(folded)
+        return normalized
+
+    @staticmethod
+    def _match_identifier_candidates(dataframe: pd.DataFrame, identifier_candidates: Sequence[str]) -> pd.DataFrame:
+        if not identifier_candidates:
+            return dataframe.iloc[0:0]
+
+        normalized_specimen_ids = (
+            dataframe["DToL Specimen ID"].fillna("").astype(str).str.strip().str.casefold()
+        )
+        for identifier in identifier_candidates:
+            matches = dataframe[normalized_specimen_ids.eq(identifier)]
+            if not matches.empty:
+                return matches
+        return dataframe.iloc[0:0]
 
     @staticmethod
     def _select_preferred_match(matches: pd.DataFrame) -> pd.DataFrame:

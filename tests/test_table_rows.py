@@ -205,6 +205,49 @@ class TableRowsTests(unittest.TestCase):
         self.assertEqual(table["native_headers"][1], "**Haploid assembly**")
         self.assertFalse(any(row[0] == "**Alternate haplotype accession**" for row in table["native_rows"]))
 
+    def test_make_table2_rows_infers_haploid_header_for_single_assembly_moss(self) -> None:
+        context = {
+            "assemblies_type": "prim_alt",
+            "group_name_ncbi": "mosses",
+            "species": "Neckera pumila",
+            "assembly_name": "cbNecPumi1.1",
+            "prim_accession": "GCA_963969595.1",
+            "assembly_level": "chromosome",
+            "total_length": "339.34",
+            "chromosome_count": "11",
+            "num_contigs": "165",
+            "contig_N50": "3.72",
+            "num_scaffolds": "44",
+            "scaffold_N50": "31.05",
+        }
+
+        table = make_table2_rows(context)
+
+        self.assertEqual(table["native_headers"][1], "**Haploid assembly**")
+        self.assertFalse(any(row[0] == "**Alternate haplotype accession**" for row in table["native_rows"]))
+
+    def test_make_table2_rows_infers_haploid_header_for_single_assembly_male_hymenopteran(self) -> None:
+        context = {
+            "assemblies_type": "prim_alt",
+            "order": "Hymenoptera",
+            "observed_sex": "male",
+            "species": "Example hymenopteran",
+            "assembly_name": "ihExample1.1",
+            "prim_accession": "GCA_000000001.1",
+            "assembly_level": "chromosome",
+            "total_length": "210.4",
+            "chromosome_count": "16",
+            "num_contigs": "92",
+            "contig_N50": "6.1",
+            "num_scaffolds": "16",
+            "scaffold_N50": "14.8",
+        }
+
+        table = make_table2_rows(context)
+
+        self.assertEqual(table["native_headers"][1], "**Haploid assembly**")
+        self.assertFalse(any(row[0] == "**Alternate haplotype accession**" for row in table["native_rows"]))
+
     def test_make_table3_rows_uses_grouped_header_for_dual_chromosome_haplotypes(self) -> None:
         context = {
             "assemblies_type": "hap_asm",

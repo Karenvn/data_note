@@ -46,6 +46,18 @@ logger = logging.getLogger(__name__)
 
 
 class DataNoteOrchestrator:
+    FLOW_IDENTIFIER_FIELDS = (
+        "pacbio_specimen_id",
+        "hic_specimen_id",
+        "rna_specimen_id",
+        "isoseq_specimen_id",
+        "tolid",
+        "pacbio_tolid",
+        "hic_tolid",
+        "rna_tolid",
+        "isoseq_tolid",
+    )
+
     def __init__(
         self,
         profile: ProgrammeProfile | str | None = None,
@@ -138,13 +150,6 @@ class DataNoteOrchestrator:
         context = self.render_context_builder.snapshot(note_data)
 
         species = context.species
-        if self.profile.uses_flow_cytometry():
-            try:
-                note_data.flow_cytometry = self.flow_cytometry_service.build_context(species)
-            except Exception as exc:
-                logger.warning("Failed to process flow cytometry data for %r: %s", species, exc)
-        context = self.render_context_builder.snapshot(note_data)
-
         child_accessions = self.bioproject_client.fetch_child_accessions(umbrella_data)
         note_data.base.child_bioprojects = child_accessions
         note_data.base.update(self.bioproject_client.fetch_parent_projects(bioproject))
@@ -195,6 +200,16 @@ class DataNoteOrchestrator:
             tolid=tolid,
         )
 
+        if self.profile.uses_flow_cytometry():
+            try:
+                note_data.flow_cytometry = self.flow_cytometry_service.build_context(
+                    species,
+                    identifier_candidates=self._flow_identifier_candidates(context),
+                )
+            except Exception as exc:
+                logger.warning("Failed to process flow cytometry data for %r: %s", species, exc)
+            context = self.render_context_builder.snapshot(note_data)
+
         context = self.annotation_quality_workflow_service.build_sections(
             note_data,
             bioproject=bioproject,
@@ -219,3 +234,19 @@ class DataNoteOrchestrator:
 
     def write_note(self, template_file: str, context: dict[str, Any]) -> str:
         return self.rendering_service.write_note(template_file, context, self.profile)
+
+    @classmethod
+    def _flow_identifier_candidates(cls, context: Any) -> list[str]:
+        candidates: list[str] = []
+        seen: set[str] = set()
+        for field in cls.FLOW_IDENTIFIER_FIELDS:
+            value = context.get(field)
+            cleaned = str(value).strip() if value is not None else ""
+            if not cleaned:
+                continue
+            folded = cleaned.casefold()
+            if folded in seen:
+                continue
+            seen.add(folded)
+            candidates.append(cleaned)
+        return candidates

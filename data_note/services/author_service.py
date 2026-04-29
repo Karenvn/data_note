@@ -124,7 +124,7 @@ class AuthorService:
             for slot_ref in slot_refs:
                 slot_rows = self._fetch_slot_rows(connection, slot_ref)
                 for row in slot_rows:
-                    author = self._matched_author_from_row(row)
+                    author = self._matched_author_from_row(connection, row)
                     self._merge_author(
                         author,
                         slot_ref,
@@ -197,10 +197,11 @@ class AuthorService:
         """
         return list(connection.execute(query, (lookup_value, role)).fetchall())
 
-    def _matched_author_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+    def _matched_author_from_row(self, connection: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
         given_names, family_name = self._split_person_name(
             row["given_names"], row["family_name"], row["canonical_name"]
         )
+        affiliation_names = self._load_affiliation_names(connection, int(row["person_id"]))
         return {
             "person_id": int(row["person_id"]),
             "canonical_name": row["canonical_name"],
@@ -208,7 +209,8 @@ class AuthorService:
             "family_name": family_name,
             "email": row["email"] or "",
             "orcid": row["orcid"] or "",
-            "affiliation_name": row["affiliation"] or "",
+            "affiliation_name": affiliation_names[0] if affiliation_names else "",
+            "affiliation_names": affiliation_names,
             "credit_roles": [],
             "sample_roles": [],
             "source_slots": [],
@@ -317,6 +319,7 @@ class AuthorService:
         target["email"] = source.get("email", target["email"])
         target["orcid"] = source.get("orcid", target["orcid"])
         target["affiliation_name"] = source.get("affiliation_name", target["affiliation_name"])
+        target["affiliation_names"] = list(source.get("affiliation_names", target.get("affiliation_names", [])))
         target["is_placeholder"] = False
 
     def _lookup_person_by_name(self, connection: sqlite3.Connection, raw_name: str) -> dict[str, Any] | None:
@@ -375,7 +378,7 @@ class AuthorService:
             exact_person_ids = {int(row["person_id"]) for row in rows}
             if len(exact_person_ids) > 1:
                 return None
-            return self._author_from_person_row(rows[0], raw_name)
+            return self._author_from_person_row(connection, rows[0], raw_name)
 
         staged_query = """
             SELECT DISTINCT srn.matched_person_id
@@ -425,7 +428,7 @@ class AuthorService:
         row = connection.execute(person_query, (staged_person_ids[0],)).fetchone()
         if row is None:
             return self._lookup_person_by_short_name(connection, raw_name)
-        return self._author_from_person_row(row, raw_name)
+        return self._author_from_person_row(connection, row, raw_name)
 
     def _lookup_person_by_short_name(
         self,
@@ -482,12 +485,18 @@ class AuthorService:
 
         if len(matching_rows) != 1:
             return None
-        return self._author_from_person_row(matching_rows[0], raw_name)
+        return self._author_from_person_row(connection, matching_rows[0], raw_name)
 
-    def _author_from_person_row(self, row: sqlite3.Row, raw_name: str) -> dict[str, Any]:
+    def _author_from_person_row(
+        self,
+        connection: sqlite3.Connection,
+        row: sqlite3.Row,
+        raw_name: str,
+    ) -> dict[str, Any]:
         given_names, family_name = self._split_person_name(
             row["given_names"], row["family_name"], row["canonical_name"]
         )
+        affiliation_names = self._load_affiliation_names(connection, int(row["person_id"]))
         return {
             "person_id": int(row["person_id"]),
             "canonical_name": row["canonical_name"],
@@ -495,7 +504,8 @@ class AuthorService:
             "family_name": family_name,
             "email": row["email"] or "",
             "orcid": row["orcid"] or "",
-            "affiliation_name": row["affiliation"] or "",
+            "affiliation_name": affiliation_names[0] if affiliation_names else "",
+            "affiliation_names": affiliation_names,
             "credit_roles": [],
             "sample_roles": [],
             "source_slots": [],
@@ -513,12 +523,35 @@ class AuthorService:
             "email": "",
             "orcid": "",
             "affiliation_name": "",
+            "affiliation_names": [],
             "credit_roles": [],
             "sample_roles": [],
             "source_slots": [],
             "is_placeholder": True,
             "raw_name": raw_name.strip(),
         }
+
+    def _load_affiliation_names(self, connection: sqlite3.Connection, person_id: int) -> list[str]:
+        rows = connection.execute(
+            """
+            SELECT a.name
+            FROM person_affiliation pa
+            JOIN affiliation a ON a.affiliation_id = pa.affiliation_id
+            WHERE pa.person_id = ?
+            ORDER BY pa.is_current DESC, pa.affiliation_id
+            """,
+            (person_id,),
+        ).fetchall()
+
+        names: list[str] = []
+        seen: set[str] = set()
+        for (name,) in rows:
+            cleaned = str(name or "").strip()
+            if not cleaned or cleaned in seen:
+                continue
+            seen.add(cleaned)
+            names.append(cleaned)
+        return names
 
     @staticmethod
     def _split_person_name(given_names: str | None, family_name: str | None, canonical_name: str | None) -> tuple[str, str]:
@@ -575,19 +608,20 @@ class AuthorService:
         by_name: dict[str, dict[str, Any]] = {}
 
         for author in authors:
-            affiliation_name = author["affiliation_name"].strip()
-            if not affiliation_name:
-                continue
-            if affiliation_name not in by_name:
-                affiliation_id = str(len(affiliations) + 1)
-                parsed_affiliation = self._parse_affiliation(affiliation_name)
-                record = {
-                    "name": affiliation_name,
-                    "id": affiliation_id,
-                    "yaml": {"id": affiliation_id, **parsed_affiliation},
-                }
-                by_name[affiliation_name] = record
-                affiliations.append(record)
+            for affiliation_name in author.get("affiliation_names", []):
+                cleaned_name = affiliation_name.strip()
+                if not cleaned_name:
+                    continue
+                if cleaned_name not in by_name:
+                    affiliation_id = str(len(affiliations) + 1)
+                    parsed_affiliation = self._parse_affiliation(cleaned_name)
+                    record = {
+                        "name": cleaned_name,
+                        "id": affiliation_id,
+                        "yaml": {"id": affiliation_id, **parsed_affiliation},
+                    }
+                    by_name[cleaned_name] = record
+                    affiliations.append(record)
 
         return affiliations
 
@@ -643,9 +677,15 @@ class AuthorService:
                 entry["email"] = author["email"]
             if author["orcid"]:
                 entry["orcid"] = author["orcid"]
-            affiliation_id = affiliation_map.get(author["affiliation_name"])
-            if affiliation_id:
-                entry["affiliation"] = affiliation_id
+            affiliation_ids = [
+                affiliation_map[name]
+                for name in author.get("affiliation_names", [])
+                if name in affiliation_map
+            ]
+            if len(affiliation_ids) == 1:
+                entry["affiliation"] = affiliation_ids[0]
+            elif affiliation_ids:
+                entry["affiliation"] = affiliation_ids
             entry["roles"] = [{"credit": credit} for credit in author["credit_roles"]]
             entries.append(entry)
 
