@@ -51,6 +51,25 @@ class FlowCytometryServiceTests(unittest.TestCase):
         assert result is not None
         self.assertEqual(result.flow_pg, 2.01)
         self.assertEqual(result.flow_project, "UK Flora")
+        self.assertIn("Stupické polní rané", result.standard_desc)
+
+    def test_describe_standard_matches_source_table_names(self) -> None:
+        expected_names = {
+            "Raphanus": "*Raphanus sativus* L. 'Saxa'",
+            "Glycine": "*Glycine max* Merr. 'Polanka'",
+            "Zea": "*Zea mays* L. 'CE-777'",
+            "Pisum": "*Pisum sativum* L. 'Ctirad'",
+            "Solanum": "*Solanum lycopersicum* L. 'Stupické polní rané'",
+            "Secale": "*Secale cereale* L. 'Daňkovské'",
+            "Vicia": "*Vicia faba* L. 'Inovec'",
+            "Allium": "*Allium cepa* L. 'Alice'",
+        }
+
+        for standard, expected_name in expected_names.items():
+            with self.subTest(standard=standard):
+                desc = FlowCytometryService.describe_standard(standard)
+                self.assertIn(expected_name, desc)
+                self.assertNotIn("@ddolezelFlowDNA2007", desc)
 
     def test_build_context_prefers_identifier_match_over_species_only_match(self) -> None:
         tsv_content = (

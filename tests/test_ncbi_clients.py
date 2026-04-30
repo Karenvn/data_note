@@ -209,7 +209,44 @@ class NcbiOrganelleClientTests(unittest.TestCase):
         self.assertTrue(template_data["has_mitochondria"])
         self.assertTrue(template_data["has_plastids"])
         self.assertEqual(template_data["mito_display"], "length 16.0 kb (CMITO1)")
+        self.assertEqual(template_data["mito_lengths_display"], "16.0")
         self.assertEqual(template_data["plastid_display"], "length 151.0 kb (CPLAST1)")
+        self.assertEqual(template_data["plastid_lengths_display"], "151.0")
+
+    def test_fetch_organelle_template_data_uses_and_for_multiple_display_strings(self) -> None:
+        class _StubClient(NcbiOrganelleClient):
+            def fetch_organelle_info(self, accession: str) -> dict[str, object]:
+                return {
+                    "mitochondria": [
+                        {"length_kb": 913.22, "accession": "CMITO1"},
+                        {"length_kb": 326.74, "accession": "CMITO2"},
+                        {"length_kb": 225.31, "accession": "CMITO3"},
+                    ],
+                    "plastids": [
+                        {"length_kb": 151.0, "accession": "CPLAST1"},
+                        {"length_kb": 149.5, "accession": "CPLAST2"},
+                    ],
+                }
+
+        client = _StubClient()
+        template_data = client.fetch_organelle_template_data("GCA_123456789.1")
+
+        self.assertEqual(
+            template_data["mito_display"],
+            "lengths 913.22 kb (CMITO1), 326.74 kb (CMITO2) and 225.31 kb (CMITO3)",
+        )
+        self.assertEqual(
+            template_data["mito_lengths_display"],
+            "913.22, 326.74 and 225.31",
+        )
+        self.assertEqual(
+            template_data["plastid_display"],
+            "lengths 151.0 kb (CPLAST1) and 149.5 kb (CPLAST2)",
+        )
+        self.assertEqual(
+            template_data["plastid_lengths_display"],
+            "151.0 and 149.5",
+        )
 
 
 if __name__ == "__main__":

@@ -161,18 +161,26 @@ class FlowCytometryService:
             return ""
 
         genus = name.strip("<> ").split()[0].capitalize() if name.strip() else ""
+        if genus == "Raphanus":
+            return "*Raphanus sativus* L. 'Saxa' with an assumed 1C-value of 543 Mb [@dolezelFlowDNA2007]"
         if genus == "Petro" or "Petroselinum" in genus:
             return "*Petroselinum crispum* 'Champion Moss Curled' with an assumed 1C-value of 2&nbsp;200 Mb [@obermayerCval2002]"
+        if genus == "Glycine":
+            return "*Glycine max* Merr. 'Polanka' with an assumed 1C-value of 1&nbsp;223 Mb [@dolezelFlowDNA2007]"
+        if genus == "Zea":
+            return "*Zea mays* L. 'CE-777' with an assumed 1C-value of 2&nbsp;654 Mb [@dolezelFlowDNA2007]"
         if genus == "Pisum":
-            return "*Pisum sativum* 'Ctirad' with an assumed 1C-value of 4&nbsp;445 Mb [@dolezelFlow1998]"
+            return "*Pisum sativum* L. 'Ctirad' with an assumed 1C-value of 4&nbsp;445 Mb [@dolezelFlow1998]"
         if genus == "Solanum":
-            return "*Solanum lycopersicum* 'Stupike polni rane' with an assumed 1C-value of 968 Mb [@dolezelFlowDNA2007]"
+            return "*Solanum lycopersicum* L. 'Stupické polní rané' with an assumed 1C-value of 968 Mb [@dolezelFlowDNA2007]"
+        if genus == "Vicia":
+            return "*Vicia faba* L. 'Inovec' with an assumed 1C-value of 13&nbsp;154 Mb [@dolezelFlowDNA2007]"
         if genus == "Allium":
             return "*Allium cepa* L. 'Alice' with an assumed 1C-value of 17&nbsp;059&nbsp;Mb [@dolezelFlowDNA2007]"
         if genus == "Oryza":
             return "*Oryza sativa* 'IR36' with an assumed 1C-value of 493.89 Mb [@obermayerCval2002]"
         if genus == "Secale":
-            return "*Secale cereale* 'Dankovske' with an assumed 1C-value of 8&nbsp;105&nbsp;Mb [@ddolezelFlowDNA2007]"
+            return "*Secale cereale* L. 'Daňkovské' with an assumed 1C-value of 8&nbsp;105&nbsp;Mb [@dolezelFlowDNA2007]"
         if "no result" in name.lower() or "messy" in name.lower():
             return ""
         return name.strip()

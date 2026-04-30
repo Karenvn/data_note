@@ -8,6 +8,7 @@ from Bio import Entrez
 import requests
 
 from .ncbi_datasets_client import safe_ncbi_request
+from .text_utils import oxford_comma_list
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,7 @@ class NcbiOrganelleClient:
         formatted: dict[str, str] = {}
         if "mitochondria" in organelle_info:
             mito_list = organelle_info["mitochondria"]
+            formatted["mito_lengths_text"] = oxford_comma_list([str(m["length_kb"]) for m in mito_list])
             if len(mito_list) == 1:
                 mitochondrion = mito_list[0]
                 formatted["mito_text"] = (
@@ -87,16 +89,17 @@ class NcbiOrganelleClient:
                 )
             else:
                 mito_parts = [f"{m['length_kb']} kb ({m['accession']})" for m in mito_list]
-                formatted["mito_text"] = "lengths " + ", ".join(mito_parts)
+                formatted["mito_text"] = "lengths " + oxford_comma_list(mito_parts)
 
         if "plastids" in organelle_info:
             plastid_list = organelle_info["plastids"]
+            formatted["plastid_lengths_text"] = oxford_comma_list([str(p["length_kb"]) for p in plastid_list])
             if len(plastid_list) == 1:
                 plastid = plastid_list[0]
                 formatted["plastid_text"] = f"length {plastid['length_kb']} kb ({plastid['accession']})"
             else:
                 plastid_parts = [f"{p['length_kb']} kb ({p['accession']})" for p in plastid_list]
-                formatted["plastid_text"] = "lengths " + ", ".join(plastid_parts)
+                formatted["plastid_text"] = "lengths " + oxford_comma_list(plastid_parts)
 
         return formatted
 
@@ -108,7 +111,9 @@ class NcbiOrganelleClient:
                 "has_mitochondria": "mitochondria" in organelle_info,
                 "has_plastids": "plastids" in organelle_info,
                 "mito_display": formatted.get("mito_text", ""),
+                "mito_lengths_display": formatted.get("mito_lengths_text", ""),
                 "plastid_display": formatted.get("plastid_text", ""),
+                "plastid_lengths_display": formatted.get("plastid_lengths_text", ""),
                 "raw_organelle_data": organelle_info,
             }
         except Exception as exc:
