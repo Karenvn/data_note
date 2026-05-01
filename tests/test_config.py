@@ -31,6 +31,11 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.yaml_ssh_user, getpass.getuser())
         self.assertEqual(config.yaml_ssh_host, "tol22")
 
+    def test_sequencing_source_defaults_to_public_with_portal(self) -> None:
+        config = load_config({})
+        self.assertEqual(config.sequencing_source, "public-with-portal")
+        self.assertEqual(config.illumina_count_unit, "read_pairs")
+
     def test_author_db_defaults_to_local_sqlite(self) -> None:
         config = load_config({})
         self.assertEqual(config.author_db_path, Path.home() / "gn_assets" / "author_db.sqlite3")

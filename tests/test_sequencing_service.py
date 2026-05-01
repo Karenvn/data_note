@@ -6,6 +6,7 @@ import pandas as pd
 
 from data_note.models import RunGroup, RunRecord, SequencingSummary, SequencingTotals, TechnologyRecord
 from data_note.services.sequencing_fetch_service import SequencingFetchResult, SequencingFetchService
+from data_note.services.sequencing_portal_service import PortalSequencingService
 from data_note.services.sequencing_service import SequencingService
 
 
@@ -16,6 +17,23 @@ class StubSequencingFetchService(SequencingFetchService):
 
     def fetch_for_bioprojects_with_sources(self, bioprojects: list[str]) -> SequencingFetchResult:
         return SequencingFetchResult(dataframe=self._dataframe, source_accessions=bioprojects)
+
+
+class _PortalObject:
+    def __init__(self, identifier: str, attributes: dict | None = None) -> None:
+        self.id = identifier
+        self.attributes = attributes or {}
+
+
+class _PortalDatasource:
+    def __init__(self, runs: list[_PortalObject]) -> None:
+        self.runs = runs
+
+    def get_by_id(self, object_type: str, identifiers: list[str]):
+        return [_PortalObject(identifiers[0])]
+
+    def get_to_many_relations(self, object_object, relation: str):
+        return self.runs
 
 
 class SequencingServiceTests(unittest.TestCase):
@@ -59,6 +77,7 @@ class SequencingServiceTests(unittest.TestCase):
         service = SequencingService(
             fetch_service=StubSequencingFetchService(runinfo_df),
             biosample_tolid_getter=lambda biosamples: {"SAMEA1": "ixFooBar1"},
+            sequencing_source="public",
         )
 
         summary = service.build_context(["PRJEB1"], "ixFooBar1")
@@ -137,6 +156,7 @@ class SequencingServiceTests(unittest.TestCase):
                 "SAMEA_OTHER": "ixOtherBar1",
                 "SAMEA_HIC": "ixOtherBar1",
             },
+            sequencing_source="public",
         )
 
         summary = service.build_context(["PRJEB1"], "ixFooBar1")
@@ -177,6 +197,7 @@ class SequencingServiceTests(unittest.TestCase):
         service = SequencingService(
             fetch_service=fetch_service,
             biosample_tolid_getter=lambda biosamples: {"SAMEA1": "ixFooBar1"},
+            sequencing_source="public",
         )
 
         with self.assertLogs("data_note.services.sequencing_service", level="INFO") as logs:
@@ -192,6 +213,121 @@ class SequencingServiceTests(unittest.TestCase):
             "Processing sequencing information for bioproject(s): PRJEB85043.",
             combined_logs,
         )
+
+    def test_build_context_repairs_zero_hic_count_from_portal_and_reports_pairs(self) -> None:
+        runinfo_df = pd.DataFrame(
+            [
+                {
+                    "study_accession": "PRJEB76517",
+                    "run_accession": "ERR13301066",
+                    "sample_accession": "SAMEA14449644",
+                    "fastq_bytes": 0,
+                    "submitted_bytes": 316_171_686_708,
+                    "read_count": 0,
+                    "instrument_model": "Illumina NovaSeq 6000",
+                    "base_count": 0,
+                    "instrument_platform": "ILLUMINA",
+                    "library_strategy": "Hi-C",
+                    "library_layout": "PAIRED",
+                    "library_name": "",
+                    "library_construction_protocol": "Hi-C - Arima v2",
+                    "metadata_source": "ncbi_runinfo",
+                    "read_count_basis": "spots",
+                }
+            ]
+        )
+        portal_runs = [
+            _PortalObject(
+                "45569_1#1",
+                {
+                    "tolqc_reporting_category": "hic",
+                    "tolqc_reads": 6_676_902_688,
+                    "tolqc_bases": 1_008_212_305_888,
+                    "tolqc_read_length_mean": 151.0,
+                    "tolqc_lims_qc": "pass",
+                    "tolqc_manual_qc": "pass",
+                    "mlwh_pipeline_id_lims": "Hi-C - Arima v2",
+                    "mlwh_library_id": "DN952587P:E1",
+                    "mlwh_biosample_accession": "SAMEA14449644",
+                    "mlwh_biospecimen_accession": "SAMEA14449591",
+                    "mlwh_irods_file": "45569_1#1.cram",
+                    "mlwh_tag_index": 1,
+                },
+            ),
+            _PortalObject(
+                "m84093_231209_122002_s3#2016",
+                {
+                    "tolqc_reporting_category": "pacbio",
+                    "tolqc_reads": 3_595_667,
+                    "tolqc_bases": 51_394_669_472,
+                    "mlwh_biosample_accession": "SAMEA10369855",
+                    "mlwh_biospecimen_accession": "SAMEA10369846",
+                },
+            ),
+        ]
+        portal_service = PortalSequencingService(datasource_factory=lambda: _PortalDatasource(portal_runs))
+        service = SequencingService(
+            fetch_service=StubSequencingFetchService(runinfo_df),
+            portal_service=portal_service,
+            biosample_tolid_getter=lambda biosamples: {
+                "SAMEA14449644": "lsIriFoet1",
+                "SAMEA14449591": "daPseLute1",
+                "SAMEA10369855": "daArtMari1",
+                "SAMEA10369846": "daArtMari1",
+            },
+            sequencing_source="public-with-portal",
+            illumina_count_unit="read_pairs",
+        )
+
+        summary = service.build_context(["PRJEB76517"], "lsIriFoet1")
+        context = summary.to_context_dict()
+
+        self.assertEqual(context["hic_reads_millions"], "3\u202f338.45")
+        self.assertEqual(context["hic_bases_gb"], "1\u202f008.21")
+        self.assertEqual(context["hic_read_count_unit"], "read pairs")
+        self.assertEqual(context["hic_read_count_source"], "portal_tolqc")
+        self.assertEqual(context["sequencing_portal_matched_runs"], "45569_1#1")
+        self.assertEqual(context["sequencing_portal_excluded_runs"], "m84093_231209_122002_s3#2016")
+        self.assertIn("SAMEA10369855", context["sequencing_portal_warnings"])
+        self.assertIn("SAMEA14449591", context["sequencing_portal_warnings"])
+        hic_run = context["seq_data"]["Hi-C"][0]
+        self.assertEqual(hic_run["portal_run_id"], "45569_1#1")
+        self.assertEqual(hic_run["portal_reads"], "6676902688")
+        self.assertEqual(hic_run["mlwh_library_id"], "DN952587P:E1")
+
+    def test_ena_paired_illumina_read_counts_are_normalised_to_pairs(self) -> None:
+        runinfo_df = pd.DataFrame(
+            [
+                {
+                    "study_accession": "PRJEB1",
+                    "run_accession": "ERR_RNA",
+                    "sample_accession": "SAMEA_RNA",
+                    "fastq_bytes": 0,
+                    "submitted_bytes": 0,
+                    "read_count": 80,
+                    "instrument_model": "Illumina NovaSeq X",
+                    "base_count": 12_000,
+                    "instrument_platform": "ILLUMINA",
+                    "library_strategy": "RNA-Seq",
+                    "library_layout": "PAIRED",
+                    "library_name": "",
+                    "library_construction_protocol": "RNA PolyA",
+                    "metadata_source": "ena",
+                    "read_count_basis": "reads",
+                }
+            ]
+        )
+        service = SequencingService(
+            fetch_service=StubSequencingFetchService(runinfo_df),
+            biosample_tolid_getter=lambda biosamples: {"SAMEA_RNA": "ixFooBar1"},
+            sequencing_source="public",
+            illumina_count_unit="read_pairs",
+        )
+
+        summary = service.build_context(["PRJEB1"], "ixFooBar1")
+
+        self.assertEqual(summary.totals.rna_total_reads, "40.00")
+        self.assertEqual(summary.totals.extras["rna_read_count_unit"], "read pairs")
 
 
 if __name__ == "__main__":

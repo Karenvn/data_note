@@ -16,8 +16,9 @@ logger = logging.getLogger(__name__)
 
 READ_RUN_FIELDS = (
     "run_accession,sample_accession,submitted_bytes,read_count,base_count,"
-    "library_strategy,library_name,library_construction_protocol,"
-    "instrument_platform,instrument_model,study_accession,secondary_study_accession"
+    "library_strategy,library_layout,library_name,library_construction_protocol,"
+    "instrument_platform,instrument_model,study_accession,secondary_study_accession,"
+    "submitted_ftp,fastq_ftp"
 )
 
 
@@ -90,7 +91,11 @@ class SequencingFetchService:
             lines = response.text.strip().splitlines()
             if len(lines) < 2:
                 return []
-            return list(csv.DictReader(io.StringIO(response.text), delimiter="\t"))
+            rows = list(csv.DictReader(io.StringIO(response.text), delimiter="\t"))
+            for row in rows:
+                row.setdefault("metadata_source", "ena")
+                row.setdefault("read_count_basis", "reads")
+            return rows
         except Exception as exc:
             logger.warning("ENA filereport request failed for %s: %s", bioproject, exc)
             return []
@@ -122,12 +127,17 @@ class SequencingFetchService:
                         "read_count": _safe_int(row.get("spots"), 0),
                         "base_count": _safe_int(row.get("bases"), 0),
                         "library_strategy": row.get("LibraryStrategy", ""),
+                        "library_layout": row.get("LibraryLayout", ""),
                         "library_name": row.get("LibraryName", ""),
                         "library_construction_protocol": library_protocol,
                         "instrument_platform": row.get("Platform", ""),
                         "instrument_model": row.get("Model", ""),
                         "study_accession": row.get("BioProject", "") or accession,
                         "secondary_study_accession": row.get("SRAStudy", ""),
+                        "submitted_ftp": "",
+                        "fastq_ftp": "",
+                        "metadata_source": "ncbi_runinfo",
+                        "read_count_basis": "spots",
                     }
                 )
             return rows
@@ -270,6 +280,7 @@ class SequencingFetchService:
         instrument_model = platform_element.get("instrument_model", "") if platform_element is not None else ""
 
         library_strategy_element = exp_root.find(".//LIBRARY_STRATEGY")
+        library_layout_element = exp_root.find(".//LIBRARY_LAYOUT")
         library_name_element = exp_root.find(".//LIBRARY_NAME")
         library_protocol_element = exp_root.find(".//LIBRARY_CONSTRUCTION_PROTOCOL")
         biosample_element = exp_root.find(".//Biosample")
@@ -300,6 +311,11 @@ class SequencingFetchService:
                         if library_strategy_element is not None and library_strategy_element.text
                         else ""
                     ),
+                    "library_layout": (
+                        library_layout_element.text.strip()
+                        if library_layout_element is not None and library_layout_element.text
+                        else ""
+                    ),
                     "library_name": (
                         library_name_element.text.strip()
                         if library_name_element is not None and library_name_element.text
@@ -318,6 +334,10 @@ class SequencingFetchService:
                         else ""
                     ),
                     "secondary_study_accession": study_element.get("acc", "") if study_element is not None else "",
+                    "submitted_ftp": "",
+                    "fastq_ftp": "",
+                    "metadata_source": "ncbi_sra_summary",
+                    "read_count_basis": "spots",
                 }
             )
 

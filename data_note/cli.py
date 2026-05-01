@@ -48,6 +48,20 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run the heavier external BOLD barcode workflow and render a barcode result paragraph. Disabled by default.",
     )
+    parser.add_argument(
+        "--sequencing-source",
+        choices=("public", "public-with-portal", "portal"),
+        help=(
+            "Sequencing count source policy. 'public' uses only ENA/NCBI; "
+            "'public-with-portal' repairs missing public counts from the ToL Portal when available; "
+            "'portal' prefers matched ToL Portal/TOLQC counts."
+        ),
+    )
+    parser.add_argument(
+        "--illumina-count-unit",
+        choices=("read_pairs", "reads"),
+        help="Report paired-end Illumina counts as read_pairs or individual reads.",
+    )
     return parser
 
 
@@ -61,6 +75,10 @@ def main(argv: list[str] | None = None) -> int:
         config.include_gbif_distribution = True
     if args.include_bold_barcode:
         config.include_bold_barcode = True
+    if args.sequencing_source:
+        config.sequencing_source = args.sequencing_source
+    if args.illumina_count_unit:
+        config.illumina_count_unit = args.illumina_count_unit
     selection_input = AssemblySelectionInput(
         assembly_accession=args.assembly,
         alternate_accession=args.alt_assembly,

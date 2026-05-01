@@ -89,6 +89,14 @@ def _format_haplotype_busco(context: dict) -> str:
     return hap1_busco or hap2_busco
 
 
+def _format_read_count_cell(context: dict, prefix: str) -> str:
+    value = flatten_cell(context.get(f"{prefix}_reads_millions"))
+    unit = flatten_cell(context.get(f"{prefix}_read_count_unit"))
+    if unit:
+        return f"{value} million {unit}"
+    return f"{value} million"
+
+
 def make_table1_rows(context):
     headers = ["**Platform**", "**PacBio HiFi**", "**Hi-C**"]
 
@@ -100,7 +108,7 @@ def make_table1_rows(context):
         ["**Tissue**", flatten_cell(context.get("pacbio_organism_part")), flatten_cell(context.get("hic_organism_part"))],
         ["**Instrument**", flatten_cell(context.get("pacbio_instrument")), flatten_cell(context.get("hic_instrument"))],
         ["**Run accessions**", flatten_cell(context.get("pacbio_run_accessions")), flatten_cell(context.get("hic_run_accessions"))],
-        ["**Read count total**", f"{flatten_cell(context.get('pacbio_reads_millions'))} million", f"{flatten_cell(context.get('hic_reads_millions'))} million"],
+        ["**Read count total**", _format_read_count_cell(context, "pacbio"), _format_read_count_cell(context, "hic")],
         ["**Base count total**", f"{flatten_cell(context.get('pacbio_bases_gb'))} Gb", f"{flatten_cell(context.get('hic_bases_gb'))} Gb"],
     ]
 
@@ -114,7 +122,7 @@ def make_table1_rows(context):
             flatten_cell(context.get("isoseq_organism_part")),
             flatten_cell(context.get("isoseq_instrument")),
             flatten_cell(context.get("isoseq_run_accessions")),
-            f"{flatten_cell(context.get('isoseq_reads_millions'))} million",
+            _format_read_count_cell(context, "isoseq"),
             f"{flatten_cell(context.get('isoseq_bases_gb'))} Gb",
         ]
         for i in range(len(rows)):
@@ -130,7 +138,7 @@ def make_table1_rows(context):
             flatten_cell(context.get("rna_organism_part")),
             flatten_cell(context.get("rna_instrument")),
             flatten_cell(context.get("rna_run_accessions")),
-            f"{flatten_cell(context.get('rna_reads_millions'))} million",
+            _format_read_count_cell(context, "rna"),
             f"{flatten_cell(context.get('rna_bases_gb'))} Gb",
         ]
         for i in range(len(rows)):

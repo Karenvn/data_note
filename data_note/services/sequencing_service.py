@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import logging
+from numbers import Real
+import os
 from typing import Any, Callable
 
 import pandas as pd
@@ -10,6 +12,7 @@ from ..fetch_biosample_info import get_biosample_tolid_map
 from ..formatting_utils import format_with_nbsp
 from ..formatting_utils import bytes_to_gb, format_scientific
 from ..models import RunGroup, RunRecord, SequencingSummary, SequencingTotals, TechnologyRecord
+from .sequencing_portal_service import PortalEnrichmentResult, PortalSequencingService
 from .sequencing_fetch_service import SequencingFetchService
 
 
@@ -34,9 +37,44 @@ TEXT_COLUMNS: tuple[str, ...] = (
     "sample_accession",
     "instrument_model",
     "library_strategy",
+    "library_layout",
     "library_name",
     "library_construction_protocol",
     "instrument_platform",
+    "submitted_ftp",
+    "fastq_ftp",
+    "metadata_source",
+    "read_count_basis",
+    "read_count_source",
+    "base_count_source",
+    "read_count_unit",
+    "public_read_count",
+    "public_base_count",
+    "portal_run_id",
+    "portal_reads",
+    "portal_bases",
+    "portal_reported_read_count_unit",
+    "portal_read_length_mean",
+    "portal_lims_qc",
+    "portal_manual_qc",
+    "mlwh_pipeline_id_lims",
+    "mlwh_instrument_model",
+    "mlwh_instrument_name",
+    "mlwh_study_id",
+    "mlwh_library_id",
+    "mlwh_sample_supplier_name",
+    "mlwh_biosample_accession",
+    "mlwh_biospecimen_accession",
+    "mlwh_irods_path",
+    "mlwh_irods_file",
+    "mlwh_run_id",
+    "mlwh_position",
+    "mlwh_tag_index",
+    "mlwh_tag1_id",
+    "mlwh_tag_sequence",
+    "mlwh_pac_bio_run_name",
+    "mlwh_pac_bio_library_tube_name",
+    "mlwh_run_complete",
 )
 SEQUENCING_COLUMNS: tuple[str, ...] = (
     "study_accession",
@@ -56,10 +94,21 @@ SEQUENCING_COLUMNS: tuple[str, ...] = (
 logger = logging.getLogger(__name__)
 
 
+def _sequencing_source_from_env() -> str:
+    return os.getenv("DATA_NOTE_SEQUENCING_SOURCE", "public-with-portal")
+
+
+def _illumina_count_unit_from_env() -> str:
+    return os.getenv("DATA_NOTE_ILLUMINA_COUNT_UNIT", "read_pairs")
+
+
 @dataclass(slots=True)
 class SequencingService:
     fetch_service: SequencingFetchService = field(default_factory=SequencingFetchService)
+    portal_service: PortalSequencingService = field(default_factory=PortalSequencingService)
     biosample_tolid_getter: Callable[[list[str]], dict[str, str | None]] = get_biosample_tolid_map
+    sequencing_source: str = field(default_factory=_sequencing_source_from_env)
+    illumina_count_unit: str = field(default_factory=_illumina_count_unit_from_env)
 
     def empty_context(self) -> SequencingSummary:
         empty_df = self._select_columns(self._empty_dataframe())
@@ -99,7 +148,14 @@ class SequencingService:
         biosample_ids = read_study_df["sample_accession"].dropna().unique().tolist()
         biosample_tolid_map = self.biosample_tolid_getter(biosample_ids)
         read_study_df = self._filter_pacbio_rows_by_tolid(read_study_df, tolid, biosample_tolid_map)
+        portal_result = self._enrich_from_portal(
+            read_study_df,
+            tolid=tolid,
+            biosample_tolid_map=biosample_tolid_map,
+        )
+        read_study_df = portal_result.dataframe
         technology_df = self._select_columns(read_study_df)
+        technology_df = self._normalise_read_count_units(technology_df)
         technology_records = self._build_technology_records(technology_df)
         run_groups = self._build_run_groups(technology_df)
 
@@ -109,7 +165,14 @@ class SequencingService:
         return SequencingSummary(
             technology_records=technology_records,
             run_groups=run_groups,
-            totals=self._build_totals(technology_df, technology_records),
+            totals=self._build_totals(
+                technology_df,
+                technology_records,
+                source_accessions=fetch_result.source_accessions,
+                portal_result=portal_result,
+                sequencing_source=self._normalise_sequencing_source(),
+                illumina_count_unit=self._normalise_illumina_count_unit(),
+            ),
             pacbio_protocols=pacbio_protocols,
             run_accessions=run_accessions,
         )
@@ -141,7 +204,70 @@ class SequencingService:
             else:
                 normalised[column] = normalised[column].fillna("").astype(str)
 
-        return normalised.loc[:, SEQUENCING_COLUMNS]
+        selected_columns = list(SEQUENCING_COLUMNS)
+        for column in TEXT_COLUMNS:
+            if column not in selected_columns:
+                selected_columns.append(column)
+
+        return normalised.loc[:, selected_columns]
+
+    def _enrich_from_portal(
+        self,
+        read_study_df: pd.DataFrame,
+        *,
+        tolid: str,
+        biosample_tolid_map: dict[str, str | None],
+    ) -> PortalEnrichmentResult:
+        sequencing_source = self._normalise_sequencing_source()
+        empty_result = PortalEnrichmentResult(dataframe=read_study_df.copy())
+        if sequencing_source == "public" or not tolid:
+            return empty_result
+
+        portal_rows = self.portal_service.fetch_run_data(tolid)
+        if not portal_rows:
+            return PortalEnrichmentResult(dataframe=read_study_df.copy(), portal_run_data=[])
+
+        extra_biosamples = [
+            accession
+            for accession in self.portal_service.biosample_accessions(portal_rows)
+            if accession not in biosample_tolid_map
+        ]
+        if extra_biosamples:
+            biosample_tolid_map.update(self.biosample_tolid_getter(extra_biosamples))
+
+        return self.portal_service.enrich_dataframe(
+            read_study_df,
+            tolid=tolid,
+            portal_rows=portal_rows,
+            biosample_tolid_map=biosample_tolid_map,
+            mode=sequencing_source,
+        )
+
+    def _normalise_read_count_units(self, df: pd.DataFrame) -> pd.DataFrame:
+        normalised = df.copy()
+        illumina_count_unit = self._normalise_illumina_count_unit()
+
+        for index, row in normalised.iterrows():
+            if not self._is_paired_illumina(row):
+                normalised.at[index, "read_count_unit"] = "reads"
+                continue
+
+            read_count = self._numeric_value(row.get("read_count"))
+            basis = self._string_value(row.get("read_count_basis")).lower()
+
+            if illumina_count_unit == "reads":
+                if basis in {"spots", "spot", "read_pairs", "pairs", "fragments"}:
+                    read_count *= 2
+                normalised.at[index, "read_count"] = int(round(read_count))
+                normalised.at[index, "read_count_unit"] = "reads"
+                continue
+
+            if basis in {"reads", "individual_reads", "ena_reads", "portal_reads"}:
+                read_count /= 2
+            normalised.at[index, "read_count"] = int(round(read_count))
+            normalised.at[index, "read_count_unit"] = "read pairs"
+
+        return normalised
 
     @staticmethod
     def _extract_pacbio_protocols(df: pd.DataFrame) -> list[str]:
@@ -195,6 +321,19 @@ class SequencingService:
             if match is None:
                 continue
             tech_name, _ = match
+            extras = {
+                f"{tech_name}_{key}": SequencingService._string_value(row.get(key))
+                for key in (
+                    "read_count_unit",
+                    "read_count_source",
+                    "base_count_source",
+                    "metadata_source",
+                    "portal_run_id",
+                    "mlwh_library_id",
+                    "mlwh_pipeline_id_lims",
+                )
+                if SequencingService._string_value(row.get(key))
+            }
             records[tech_name] = TechnologyRecord(
                 name=tech_name,
                 sample_accession=SequencingService._string_value(row.get("sample_accession")),
@@ -205,6 +344,7 @@ class SequencingService:
                 library_name=SequencingService._string_value(row.get("library_name")),
                 base_count_gb=SequencingService._formatted_base_count_gb(row.get("base_count")),
                 read_count_millions=SequencingService._formatted_read_count_millions(row.get("read_count")),
+                extras=extras,
             )
         return records
 
@@ -216,6 +356,22 @@ class SequencingService:
             if match is None:
                 continue
             _, group_name = match
+            extras = {
+                key: SequencingService._string_value(row.get(key))
+                for key in TEXT_COLUMNS
+                if key
+                not in {
+                    "study_accession",
+                    "run_accession",
+                    "sample_accession",
+                    "instrument_model",
+                    "library_strategy",
+                    "library_name",
+                    "library_construction_protocol",
+                    "instrument_platform",
+                }
+                and SequencingService._string_value(row.get(key))
+            }
             groups[group_name].runs.append(
                 RunRecord(
                     read_accession=SequencingService._string_value(row.get("run_accession")),
@@ -225,6 +381,7 @@ class SequencingService:
                     read_count=SequencingService._scientific_read_count(row.get("read_count")),
                     instrument_model=SequencingService._string_value(row.get("instrument_model")),
                     base_count_gb=SequencingService._run_base_count_gb(row.get("base_count")),
+                    extras=extras,
                 )
             )
         return groups
@@ -239,7 +396,15 @@ class SequencingService:
         return accessions
 
     @staticmethod
-    def _build_totals(df: pd.DataFrame, technology_records: dict[str, TechnologyRecord]) -> SequencingTotals:
+    def _build_totals(
+        df: pd.DataFrame,
+        technology_records: dict[str, TechnologyRecord],
+        *,
+        source_accessions: list[str] | None = None,
+        portal_result: PortalEnrichmentResult | None = None,
+        sequencing_source: str = "public-with-portal",
+        illumina_count_unit: str = "read_pairs",
+    ) -> SequencingTotals:
         totals = {
             "pacbio_total_reads": 0,
             "pacbio_total_bases": 0,
@@ -266,6 +431,32 @@ class SequencingService:
                 totals["rna_total_reads"] += read_count
                 totals["rna_total_bases"] += base_count
 
+        extras: dict[str, Any] = {
+            "sequencing_data_source": sequencing_source,
+            "illumina_read_count_unit": illumina_count_unit,
+            "sequencing_public_source_accessions": "; ".join(source_accessions or []),
+        }
+        for tech_name in ("pacbio", "hic", "rna"):
+            unit = SequencingService._first_technology_value(df, tech_name, "read_count_unit")
+            read_source = SequencingService._first_technology_value(df, tech_name, "read_count_source")
+            base_source = SequencingService._first_technology_value(df, tech_name, "base_count_source")
+            metadata_source = SequencingService._first_technology_value(df, tech_name, "metadata_source")
+            if unit:
+                extras[f"{tech_name}_read_count_unit"] = unit
+            if read_source:
+                extras[f"{tech_name}_read_count_source"] = read_source
+            if base_source:
+                extras[f"{tech_name}_base_count_source"] = base_source
+            if metadata_source:
+                extras[f"{tech_name}_metadata_source"] = metadata_source
+
+        if portal_result is not None:
+            extras["sequencing_portal_enrichment_applied"] = portal_result.applied
+            extras["sequencing_portal_matched_runs"] = "; ".join(portal_result.matched_run_ids)
+            extras["sequencing_portal_excluded_runs"] = "; ".join(portal_result.excluded_run_ids)
+            extras["sequencing_portal_unmatched_runs"] = "; ".join(portal_result.unmatched_run_ids)
+            extras["sequencing_portal_warnings"] = " | ".join(portal_result.warnings)
+
         pacbio = technology_records.get("pacbio", TechnologyRecord(name="pacbio"))
         hic = technology_records.get("hic", TechnologyRecord(name="hic"))
         rna = technology_records.get("rna", TechnologyRecord(name="rna"))
@@ -289,7 +480,21 @@ class SequencingService:
             rna_bases_gb=format_with_nbsp(totals["rna_total_bases"] / 1e9),
             rna_sample_accession=rna.sample_accession or "",
             rna_instrument=rna.instrument_model or "",
+            extras=extras,
         )
+
+    @staticmethod
+    def _first_technology_value(df: pd.DataFrame, tech_name: str, column: str) -> str:
+        if column not in df.columns:
+            return ""
+        for _, row in df.iterrows():
+            match = SequencingService._match_technology(row)
+            if match is None or match[0] != tech_name:
+                continue
+            value = SequencingService._string_value(row.get(column))
+            if value:
+                return value
+        return ""
 
     @staticmethod
     def _match_technology(row: pd.Series) -> tuple[str, str] | None:
@@ -300,10 +505,45 @@ class SequencingService:
                 return tech_name, group_name
         return None
 
+    def _normalise_sequencing_source(self) -> str:
+        source = (self.sequencing_source or "public-with-portal").strip().lower().replace("_", "-")
+        if source in {"public", "public-only"}:
+            return "public"
+        if source in {"portal", "portal-only", "portal-priority"}:
+            return "portal"
+        return "public-with-portal"
+
+    def _normalise_illumina_count_unit(self) -> str:
+        unit = (self.illumina_count_unit or "read_pairs").strip().lower().replace("-", "_")
+        if unit in {"reads", "read", "individual_reads"}:
+            return "reads"
+        return "read_pairs"
+
+    @classmethod
+    def _is_paired_illumina(cls, row: pd.Series) -> bool:
+        platform = cls._string_value(row.get("instrument_platform"))
+        if platform != "ILLUMINA":
+            return False
+        layout = cls._string_value(row.get("library_layout")).upper()
+        strategy = cls._string_value(row.get("library_strategy"))
+        basis = cls._string_value(row.get("read_count_basis")).lower()
+        return layout == "PAIRED" or strategy == "Hi-C" or (strategy == "RNA-Seq" and basis == "reads")
+
     @staticmethod
     def _string_value(value: Any) -> str:
         if pd.isna(value):
             return ""
+        if isinstance(value, str) and value.strip().lower() in {"nan", "none"}:
+            return ""
+        if isinstance(value, Real) and float(value).is_integer():
+            return str(int(value))
+        if isinstance(value, str) and value.endswith(".0"):
+            try:
+                numeric = float(value)
+            except ValueError:
+                return value
+            if numeric.is_integer():
+                return str(int(numeric))
         return str(value)
 
     @staticmethod

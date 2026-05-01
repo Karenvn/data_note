@@ -46,6 +46,8 @@ class AppConfig:
     yaml_ssh_identity_file: Path
     include_gbif_distribution: bool = False
     include_bold_barcode: bool = False
+    sequencing_source: str = "public-with-portal"
+    illumina_count_unit: str = "read_pairs"
     assembly_accession: str | None = None
     alternate_assembly_accession: str | None = None
     hap1_assembly_accession: str | None = None
@@ -108,6 +110,8 @@ class AppConfig:
                 env.get("DATA_NOTE_INCLUDE_BOLD_BARCODE"),
                 default=False,
             ),
+            sequencing_source=env.get("DATA_NOTE_SEQUENCING_SOURCE", "public-with-portal"),
+            illumina_count_unit=env.get("DATA_NOTE_ILLUMINA_COUNT_UNIT", "read_pairs"),
             assembly_accession=env.get("DATA_NOTE_ASSEMBLY"),
             alternate_assembly_accession=env.get("DATA_NOTE_ALT_ASSEMBLY"),
             hap1_assembly_accession=env.get("DATA_NOTE_HAP1_ASSEMBLY"),
@@ -136,6 +140,8 @@ class AppConfig:
             "DATA_NOTE_INCLUDE_BOLD_BARCODE",
             "1" if self.include_bold_barcode else "0",
         )
+        self._set("DATA_NOTE_SEQUENCING_SOURCE", self.sequencing_source)
+        self._set("DATA_NOTE_ILLUMINA_COUNT_UNIT", self.illumina_count_unit)
         self._set_optional("PORTAL_URL", self.portal_url)
         self._set_optional("JIRA_BASE_URL", self.jira_base_url)
         self._set_optional("JIRA_DOMAIN", self.jira_domain)

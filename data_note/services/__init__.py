@@ -16,6 +16,7 @@ __all__ = [
     "RenderContextBuilder",
     "RenderingService",
     "SequencingFetchService",
+    "PortalSequencingService",
     "SequencingService",
     "SequencingWorkflowService",
     "ServerDataService",
@@ -92,6 +93,10 @@ def __getattr__(name: str):
         from .sequencing_fetch_service import SequencingFetchService
 
         return SequencingFetchService
+    if name == "PortalSequencingService":
+        from .sequencing_portal_service import PortalSequencingService
+
+        return PortalSequencingService
     if name == "SequencingService":
         from .sequencing_service import SequencingService
 

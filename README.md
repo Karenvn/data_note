@@ -183,6 +183,16 @@ Local file paths are usually taken from `DATA_NOTE_GN_ASSETS`, with `DATA_NOTE_S
 
 Optional text additions are controlled by `DATA_NOTE_INCLUDE_GBIF_DISTRIBUTION` and `DATA_NOTE_INCLUDE_BOLD_BARCODE`. If the BOLD workflow is not installed as a module, `DATA_NOTE_BOLD_REPO` can point to a checkout containing `bold_coi_pipeline.py`.
 
+Sequencing summaries are based on public ENA/NCBI run metadata by default, with an optional internal portal enrichment layer. Set `DATA_NOTE_SEQUENCING_SOURCE` to choose the policy:
+
+- `public`: use only ENA/NCBI metadata
+- `public-with-portal`: keep public metadata, but repair missing or zero public counts from matched ToL Portal/TOLQC run data when available
+- `portal`: prefer matched ToL Portal/TOLQC counts where available
+
+Matched portal rows are filtered against the public run rows selected for the note. The workflow does not use ToLID-level portal aggregates directly, because portal relations can include multiplexed or misattributed run rows. Diagnostic fields such as `sequencing_portal_excluded_runs`, `sequencing_portal_unmatched_runs`, and `sequencing_portal_warnings` are written to the context CSV when portal data are inspected.
+
+`DATA_NOTE_ILLUMINA_COUNT_UNIT` controls paired-end Illumina count reporting. The default, `read_pairs`, keeps the existing genome-note convention of counting a paired-end fragment/pair as one unit. Set it to `reads` to report individual reads instead.
+
 Internal or machine-local integrations use `PORTAL_URL`, `PORTAL_API_PATH`, `JIRA_BASE_URL`, `JIRA_DOMAIN`, `YAML_CACHE_DIR`, `YAML_SSH_USER`, `YAML_SSH_HOST`, and `YAML_SSH_IDENTITY_FILE`. YAML files are refreshed into `YAML_CACHE_DIR` for inspection, but the remote path recorded in Jira remains the source of truth and the YAML is not copied into the output note folders.
 
 If you are using the Ensembl transition code, the related variables are `GN_DEBUG_ENSEMBL`, `GN_ENSEMBL_GRAPHQL_URL`, `GN_ENSEMBL_ORGANISMS_BASE`, `GN_ENSEMBL_MAIN_GFF3_BASE`, and `GN_ENSEMBL_MAIN_GTF_BASE`.

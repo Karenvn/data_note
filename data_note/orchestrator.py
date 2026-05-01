@@ -63,6 +63,8 @@ class DataNoteOrchestrator:
         profile: ProgrammeProfile | str | None = None,
         include_gbif_distribution: bool = False,
         include_bold_barcode: bool = False,
+        sequencing_source: str = "public-with-portal",
+        illumina_count_unit: str = "read_pairs",
         assembly_selection_input: AssemblySelectionInput | None = None,
     ) -> None:
         Entrez.email = os.getenv("ENTREZ_EMAIL", "default_email")
@@ -70,6 +72,8 @@ class DataNoteOrchestrator:
         self.profile = profile if isinstance(profile, ProgrammeProfile) else get_profile(profile)
         self.include_gbif_distribution = include_gbif_distribution
         self.include_bold_barcode = include_bold_barcode
+        self.sequencing_source = sequencing_source
+        self.illumina_count_unit = illumina_count_unit
         self.assembly_selection_input = assembly_selection_input
 
         self.bioproject_client = BioprojectClient()
@@ -94,7 +98,10 @@ class DataNoteOrchestrator:
             render_context_builder=self.render_context_builder,
         )
         self.rendering_service = RenderingService()
-        self.sequencing_service = SequencingService()
+        self.sequencing_service = SequencingService(
+            sequencing_source=self.sequencing_source,
+            illumina_count_unit=self.illumina_count_unit,
+        )
         self.sequencing_workflow_service = SequencingWorkflowService(
             sequencing_service=self.sequencing_service,
             curation_service=self.curation_service,

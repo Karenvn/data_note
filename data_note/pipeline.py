@@ -54,6 +54,8 @@ class DataNotePipeline:
                 profile=self.config.profile_name,
                 include_gbif_distribution=self.config.include_gbif_distribution,
                 include_bold_barcode=self.config.include_bold_barcode,
+                sequencing_source=self.config.sequencing_source,
+                illumina_count_unit=self.config.illumina_count_unit,
                 assembly_selection_input=self.config.assembly_selection_input(),
             )
         return self._orchestrator

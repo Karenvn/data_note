@@ -46,6 +46,26 @@ class TableRowsTests(unittest.TestCase):
         self.assertEqual(table["width"], [0.25, 0.25, 0.25, 0.25])
         self.assertEqual(table["native_headers"][-1], "**Iso-Seq**")
 
+    def test_make_table1_rows_flags_read_pair_units_when_present(self) -> None:
+        context = {
+            "species": "Example species",
+            "bioproject": "PRJEB1",
+            "tolid": "ixExample1",
+            "hic_tolid": "ixExample1",
+            "pacbio_reads_millions": "10",
+            "pacbio_read_count_unit": "reads",
+            "hic_reads_millions": "20",
+            "hic_read_count_unit": "read pairs",
+            "pacbio_bases_gb": "30",
+            "hic_bases_gb": "40",
+        }
+
+        table = make_table1_rows(context)
+
+        read_count_row = next(row for row in table["native_rows"] if row[0] == "**Read count total**")
+        self.assertEqual(read_count_row[1], "10 million reads")
+        self.assertEqual(read_count_row[2], "20 million read pairs")
+
     def test_make_table2_rows_includes_supernumerary_row_only_when_present(self) -> None:
         context = {
             "assemblies_type": "prim_alt",
