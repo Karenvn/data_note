@@ -382,6 +382,43 @@ class TableRowsTests(unittest.TestCase):
             )
         )
 
+    def test_make_table4_rows_uses_selected_ebp_reference_standard(self) -> None:
+        context = {
+            "assemblies_type": "hap_asm",
+            "species": "Example species",
+            "ebp_metric": "5.C.Q61",
+            "ebp_reference_standard": "5.C.Q40",
+            "ebp_contig_n50_benchmark_label": "≥ 0.1 Mb",
+            "hap1_contig_N50": "0.71",
+            "hap1_scaffold_N50": "38.88",
+            "hap1_QV": "61.0",
+            "hap2_QV": "60.5",
+            "combined_QV": "60.9",
+            "hap1_kmer_completeness": "98.2",
+            "hap2_kmer_completeness": "97.9",
+            "combined_kmer_completeness": "98.5",
+            "hap1_BUSCO_string": "C:95.0% [S:94.2%, D:0.8%], F:1.5%, M:3.5%, n:425",
+            "hap2_BUSCO_string": "C:95.1% [S:94.3%, D:0.8%], F:1.4%, M:3.5%, n:425",
+            "hap1_perc_assembled": "99.48",
+        }
+
+        table = make_table4_rows(context)
+
+        self.assertTrue(
+            any(
+                row["measure"] == "EBP summary (haplotype 1)"
+                and row["benchmark"] == "5.C.Q40"
+                for row in table["native_rows"]
+            )
+        )
+        self.assertTrue(
+            any(
+                row["measure"] == "Contig N50 length"
+                and row["benchmark"] == "≥ 0.1 Mb"
+                for row in table["native_rows"]
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -125,6 +125,8 @@ class RenderContextBuilderTests(unittest.TestCase):
             self.assertEqual(context["species"], "Corrected species")
             self.assertEqual(context["auto_text"], "Example automated summary.")
             self.assertEqual(context["ebp_metric"], "6.C.Q47")
+            self.assertEqual(context["ebp_reference_standard"], "6.C.Q40")
+            self.assertTrue(context["ebp_reference_standard_met"])
             self.assertEqual(tuple(context["tables"].keys()), ("table1", "table2", "table3", "table4", "table5"))
 
     def test_build_applies_haploid_context_override_and_suppresses_alt_fields(self) -> None:

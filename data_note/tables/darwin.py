@@ -353,6 +353,10 @@ def make_table4_rows(context: dict) -> dict:
     width = [0.3, 0.5, 0.2]
     species = context.get("species", "")
     assemblies_type = context.get("assemblies_type", "")
+    reference_standard = flatten_cell(context.get("ebp_reference_standard") or "6.C.Q40")
+    contig_n50_benchmark = flatten_cell(context.get("ebp_contig_n50_benchmark_label") or "≥ 1 Mb")
+    qv_benchmark = f"≥ {flatten_cell(context.get('ebp_qv_benchmark') or 40)}"
+    perc_assembled_benchmark = f"≥ {flatten_cell(context.get('ebp_perc_assembled_benchmark') or 90)}%"
 
     rows.append("**Measure**,**Value**,**Benchmark**")
 
@@ -377,13 +381,13 @@ def make_table4_rows(context: dict) -> dict:
         )
 
     if assemblies_type == "hap_asm":
-        add_row("EBP summary (haplotype 1)", flatten_cell(context.get("ebp_metric")), "6.C.Q40")
-        add_row("Contig N50 length", f"{flatten_cell(context.get('hap1_contig_N50'))} Mb", "≥ 1 Mb")
+        add_row("EBP summary (haplotype 1)", flatten_cell(context.get("ebp_metric")), reference_standard)
+        add_row("Contig N50 length", f"{flatten_cell(context.get('hap1_contig_N50'))} Mb", contig_n50_benchmark)
         add_row("Scaffold N50 length", f"{flatten_cell(context.get('hap1_scaffold_N50'))} Mb", "= chromosome N50")
         add_row(
             "Consensus quality (QV)",
             f"Haplotype 1: {flatten_cell(context.get('hap1_QV'))}; haplotype 2: {flatten_cell(context.get('hap2_QV'))}; combined: {flatten_cell(context.get('combined_QV'))}",
-            "≥ 40",
+            qv_benchmark,
         )
         add_row(
             "*k*-mer completeness",
@@ -394,19 +398,19 @@ def make_table4_rows(context: dict) -> dict:
         add_row(
             "Percentage of assembly assigned to chromosomes",
             f"{flatten_cell(context.get('hap1_perc_assembled'))}%",
-            "≥ 90%",
+            perc_assembled_benchmark,
         )
     elif assemblies_type == "prim_alt":
         metric_label = resolve_single_assembly_metric_label(context)
         metric_prefix = resolve_single_assembly_metric_prefix(context)
-        add_row(f"EBP summary ({metric_label})", flatten_cell(context.get("ebp_metric")), "6.C.Q40")
-        add_row("Contig N50 length", f"{flatten_cell(context.get('contig_N50'))} Mb", "≥ 1 Mb")
+        add_row(f"EBP summary ({metric_label})", flatten_cell(context.get("ebp_metric")), reference_standard)
+        add_row("Contig N50 length", f"{flatten_cell(context.get('contig_N50'))} Mb", contig_n50_benchmark)
         add_row("Scaffold N50 length", f"{flatten_cell(context.get('scaffold_N50'))} Mb", "= chromosome N50")
         if has_alternate_assembly(context):
             add_row(
                 "Consensus quality (QV)",
                 f"{metric_prefix}: {flatten_cell(context.get('prim_QV'))}; alternate: {flatten_cell(context.get('alt_QV'))}; combined: {flatten_cell(context.get('combined_QV'))}",
-                "≥ 40",
+                qv_benchmark,
             )
             add_row(
                 "*k*-mer completeness",
@@ -417,7 +421,7 @@ def make_table4_rows(context: dict) -> dict:
             add_row(
                 "Consensus quality (QV)",
                 f"{metric_prefix}: {flatten_cell(context.get('prim_QV'))}",
-                "≥ 40",
+                qv_benchmark,
             )
             add_row(
                 "*k*-mer completeness",
@@ -428,7 +432,7 @@ def make_table4_rows(context: dict) -> dict:
         add_row(
             "Percentage of assembly assigned to chromosomes",
             f"{flatten_cell(context.get('perc_assembled'))}%",
-            "≥ 90%",
+            perc_assembled_benchmark,
         )
     else:
         add_row("Assembly type not recognised", "no metrics available", "")

@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from ..calculate_metrics import calc_ebp_metric
+from ..calculate_metrics import calc_ebp_metric, evaluate_ebp_reference_standard
 from ..io_utils import load_and_apply_corrections
 from ..models import NoteContext, NoteData
 from ..sampling_template_fields import populate_sampling_template_fields
@@ -25,6 +25,7 @@ class RenderContextBuilder:
     context_assembler: ContextAssembler = field(default_factory=ContextAssembler)
     correction_loader: Callable[[dict[str, Any], str], dict[str, Any]] = load_and_apply_corrections
     ebp_metric_calculator: Callable[[dict[str, Any]], str] = calc_ebp_metric
+    ebp_reference_evaluator: Callable[[dict[str, Any]], dict[str, Any]] = evaluate_ebp_reference_standard
 
     def snapshot(
         self,
@@ -70,6 +71,7 @@ class RenderContextBuilder:
         self._apply_assembly_rendering_context(note_context)
         populate_sampling_template_fields(note_context)
         note_context["ebp_metric"] = self.ebp_metric_calculator(note_context)
+        note_context.update(self.ebp_reference_evaluator(note_context))
         rendered_context = profile.build_tables(note_context)
         if isinstance(rendered_context, NoteContext):
             return rendered_context
