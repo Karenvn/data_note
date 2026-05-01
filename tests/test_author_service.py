@@ -346,6 +346,45 @@ class AuthorServiceTests(unittest.TestCase):
             [{"credit": "Resources"}, {"credit": "Investigation"}],
         )
 
+    def test_biosamples_raw_name_order_takes_precedence_over_partial_db_rows(self) -> None:
+        with closing(sqlite3.connect(self.db_path)) as connection, connection:
+            connection.execute(
+                """
+                INSERT INTO sample(sample_id, specimen_id, biosample_accession, tolid, species, project)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                ("6", "SPEC-RAW", "BS-RAW", "tol3", "Species three", "DTOL"),
+            )
+            connection.execute(
+                """
+                INSERT INTO sample_role(sample_role_id, sample_id, person_id, role_type_id, raw_name, source)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (20, "6", 3, 1, "Cara Cole", "test"),
+            )
+
+        context = {
+            "technology_data": {
+                "pacbio": {"pacbio_sample_accession": "BS-RAW"},
+            },
+            "pacbio_collector": "Alice Able | Bob Baker | Cara Cole",
+        }
+
+        result = self.service.build_context(context)
+        self.assertEqual(
+            [f"{author.given_names} {author.surname}" for author in result.people],
+            ["Alice Able", "Bob Baker", "Cara Cole"],
+        )
+
+        parsed_yaml = yaml.safe_load(result.yaml_block)
+        self.assertEqual(
+            [
+                f"{author['given-names']} {author['surname']}"
+                for author in parsed_yaml["author"]
+            ],
+            ["Alice Able", "Bob Baker", "Cara Cole"],
+        )
+
     def test_uses_staged_name_match_for_corrected_raw_names(self) -> None:
         context = {
             "technology_data": {

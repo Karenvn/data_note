@@ -123,6 +123,12 @@ class AuthorService:
             connection.row_factory = sqlite3.Row
             for slot_ref in slot_refs:
                 slot_rows = self._fetch_slot_rows(connection, slot_ref)
+                self._merge_raw_name_fallbacks(
+                    connection,
+                    slot_ref,
+                    ordered_authors,
+                    authors_by_key,
+                )
                 for row in slot_rows:
                     author = self._matched_author_from_row(connection, row)
                     self._merge_author(
@@ -131,13 +137,6 @@ class AuthorService:
                         ordered_authors,
                         authors_by_key,
                     )
-
-                self._merge_raw_name_fallbacks(
-                    connection,
-                    slot_ref,
-                    ordered_authors,
-                    authors_by_key,
-                )
 
         return ordered_authors
 
