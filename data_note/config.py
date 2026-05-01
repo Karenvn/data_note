@@ -38,7 +38,6 @@ class AppConfig:
     author_db_path: Path
     portal_url: str | None
     portal_api_path: str
-    tola_tsv_url: str | None
     jira_base_url: str | None
     jira_domain: str | None
     yaml_cache_dir: Path
@@ -93,7 +92,6 @@ class AppConfig:
             ),
             portal_url=env.get("PORTAL_URL"),
             portal_api_path=env.get("PORTAL_API_PATH", "/api/v1"),
-            tola_tsv_url=env.get("DATA_NOTE_TOLA_TSV_URL"),
             jira_base_url=jira_base_url.rstrip("/") if jira_base_url else None,
             jira_domain=jira_domain,
             yaml_cache_dir=_expand_path(env.get("YAML_CACHE_DIR", "yaml_cache")),
@@ -139,7 +137,6 @@ class AppConfig:
             "1" if self.include_bold_barcode else "0",
         )
         self._set_optional("PORTAL_URL", self.portal_url)
-        self._set_optional("DATA_NOTE_TOLA_TSV_URL", self.tola_tsv_url)
         self._set_optional("JIRA_BASE_URL", self.jira_base_url)
         self._set_optional("JIRA_DOMAIN", self.jira_domain)
         self._set_optional("YAML_SSH_USER", self.yaml_ssh_user)

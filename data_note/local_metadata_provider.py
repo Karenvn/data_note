@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import logging
-import os
 from typing import Iterable
 
-import pandas as pd
 from dateutil.parser import parse as parse_date
 
 from .local_metadata import LocalMetadataProvider, NullLocalMetadataProvider
@@ -19,8 +17,6 @@ except ImportError:
     portal = None
 
 
-DATA_NOTE_TOLA_TSV_URL = "DATA_NOTE_TOLA_TSV_URL"
-_MISSING_JIRA_VALUES = {"", "N/A", "nan", "None"}
 _CURATION_TOLID_FILTERS = ("grit_tolid.id", "tolid.id")
 
 logger = logging.getLogger(__name__)
@@ -108,51 +104,10 @@ class PortalCurationMetadataProvider:
         return getattr(selected, "id", None) or (selected.attributes or {}).get("identifier")
 
 
-class ToLASpreadsheetMetadataProvider:
-    def __init__(self, spreadsheet_url: str) -> None:
-        self.spreadsheet_url = spreadsheet_url
-
-    def lookup_jira_ticket(
-        self,
-        accession: str,
-        *,
-        tolid: str | None = None,
-        assembly_name: str | None = None,
-    ) -> str | None:
-        if not accession:
-            return None
-
-        try:
-            info_df = pd.read_csv(
-                self.spreadsheet_url,
-                sep="\t",
-                usecols=["jira", "accession"],
-                low_memory=False,
-            )
-        except Exception as exc:
-            logger.warning("Local ToLA lookup unavailable for %s: %s", accession, exc)
-            return None
-
-        info_df.columns = ["jira", "accession"]
-        rows = info_df.loc[info_df["accession"] == accession, "jira"]
-        if rows.empty:
-            return None
-
-        jira_values = rows.fillna("").astype(str).str.strip()
-        for jira_ticket in jira_values:
-            if jira_ticket not in _MISSING_JIRA_VALUES:
-                return jira_ticket
-        return None
-
-
 def get_local_metadata_provider() -> LocalMetadataProvider:
     providers: list[LocalMetadataProvider] = []
     if portal is not None and DataSourceFilter is not None:
         providers.append(PortalCurationMetadataProvider())
-
-    spreadsheet_url = os.getenv(DATA_NOTE_TOLA_TSV_URL)
-    if spreadsheet_url:
-        providers.append(ToLASpreadsheetMetadataProvider(spreadsheet_url))
 
     if not providers:
         return NullLocalMetadataProvider()

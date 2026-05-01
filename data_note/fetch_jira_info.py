@@ -219,7 +219,7 @@ def text_num(n: int) -> str:
 # -------------------------------- core functions---------------
 
 def fetch_jira_issue(jira_ticket_id):
-    """ Fetch a JIRA issue using the ticket ID from ToLA spreadsheet. """
+    """Fetch a JIRA issue using the resolved ticket ID."""
     jira_base_url = _jira_base_url()
     if not jira_base_url:
         logger.info("JIRA is not configured; skipping JIRA lookup.")

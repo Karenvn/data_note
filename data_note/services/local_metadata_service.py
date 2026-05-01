@@ -26,13 +26,13 @@ class LocalMetadataService:
         local_data_context = CurationInfo()
 
         accession, assembly_name = self._resolve_lookup_values(assembly_selection)
-        if not accession:
-            logger.warning("No valid accession found for ToLA lookup.")
+        if not any((accession, assembly_name, tolid)):
+            logger.warning("No valid assembly identifiers found for curation lookup.")
             return local_data_context
 
         provider = self.provider_factory()
         jira_ticket = provider.lookup_jira_ticket(
-            accession,
+            accession or "",
             tolid=tolid,
             assembly_name=assembly_name,
         )
