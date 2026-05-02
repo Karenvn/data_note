@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import timezone
 from typing import Iterable
 
 from dateutil.parser import parse as parse_date
@@ -18,6 +19,8 @@ except ImportError:
 
 
 _CURATION_TOLID_FILTERS = ("grit_tolid.id", "tolid.id")
+_COMPLETE_STATUSES = {"complete", "completed", "done"}
+_REJECTED_STATUSES = {"cancelled", "canceled", "failed", "rejected"}
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +44,25 @@ def _best_effort_datetime(value):
 
 def _sort_key(curation_obj):
     attrs = curation_obj.attributes or {}
-    done_date = _best_effort_datetime(attrs.get("done_date"))
-    created = _best_effort_datetime(attrs.get("created"))
-    done_rank = 1 if done_date is None else 0
-    return (done_rank, created or done_date or 0)
+    status = str(attrs.get("grit_status") or attrs.get("status") or "").strip().casefold()
+    if status in _COMPLETE_STATUSES:
+        status_rank = 2
+    elif status in _REJECTED_STATUSES:
+        status_rank = 0
+    else:
+        status_rank = 1
+
+    done_date = _best_effort_datetime(attrs.get("done_date") or attrs.get("grit_done_date"))
+    created = _best_effort_datetime(attrs.get("created") or attrs.get("grit_created"))
+    return (status_rank, _datetime_rank(done_date or created))
+
+
+def _datetime_rank(value):
+    if value is None:
+        return 0.0
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.timestamp()
 
 
 class PortalCurationMetadataProvider:
