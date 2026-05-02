@@ -150,18 +150,49 @@ def _resolve_reference_standard(context: Mapping[str, Any]) -> tuple[str, str]:
         or context.get("ebp_reference_standard")
         or context.get("ebp_standard_override")
     )
-    if override is not None:
+    metric_input = _metric_input(context)
+    reaches_standard_reference = _metric_input_meets_reference(metric_input, EBP_STANDARD_REFERENCE)
+    if reaches_standard_reference:
+        return EBP_STANDARD_REFERENCE, "standard_input"
+
+    if override is not None and _lower_reference_is_relevant(metric_input):
         return override, "manual_override"
 
-    if _is_truthy(context.get("is_uli")) or _is_truthy(context.get("uli_sample")) or _is_truthy(
-        context.get("low_input_material")
-    ):
-        return EBP_ULI_REFERENCE, "low_input_material"
+    if _lower_reference_is_relevant(metric_input):
+        if _is_truthy(context.get("is_uli")) or _is_truthy(context.get("uli_sample")) or _is_truthy(
+            context.get("low_input_material")
+        ):
+            return EBP_ULI_REFERENCE, "low_input_material"
 
-    if _context_indicates_uli(context):
-        return EBP_ULI_REFERENCE, "uli"
+        if _context_indicates_uli(context):
+            return EBP_ULI_REFERENCE, "uli"
 
     return EBP_STANDARD_REFERENCE, "standard_input"
+
+
+def _metric_input_meets_reference(metric_input: Mapping[str, Any] | None, standard: str) -> bool:
+    if metric_input is None:
+        return False
+
+    thresholds = _REFERENCE_STANDARDS[standard]
+    contig_n50 = _as_float(metric_input["contig_n50"])
+    perc_assembled = _as_float(metric_input["perc_assembled"])
+    qv = _as_float(metric_input["qv"])
+
+    if contig_n50 is None or perc_assembled is None or qv is None:
+        return False
+    return (
+        contig_n50 >= thresholds["contig_n50_mb"]
+        and perc_assembled >= thresholds["percent_assigned_to_chromosomes"]
+        and qv >= thresholds["qv"]
+    )
+
+
+def _lower_reference_is_relevant(metric_input: Mapping[str, Any] | None) -> bool:
+    if metric_input is None:
+        return False
+    contig_n50 = _as_float(metric_input["contig_n50"])
+    return contig_n50 is not None and contig_n50 < _REFERENCE_STANDARDS[EBP_STANDARD_REFERENCE]["contig_n50_mb"]
 
 
 def _context_indicates_uli(context: Mapping[str, Any]) -> bool:

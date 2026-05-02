@@ -62,6 +62,25 @@ class EbpMetricTests(unittest.TestCase):
         self.assertTrue(result["ebp_reference_standard_met"])
         self.assertEqual(result["ebp_contig_n50_benchmark_label"], "≥ 0.1 Mb")
 
+    def test_uli_protocol_keeps_6_c_q40_when_highest_standard_passes(self) -> None:
+        context = {
+            "assemblies_type": "prim_alt",
+            "contig_N50": 2.4,
+            "scaffold_N50": 12.5,
+            "perc_assembled": 95.2,
+            "prim_QV": 42.7,
+            "pacbio_protocols": ["PacBio - HiFi", "PacBio - HiFi (ULI)"],
+        }
+
+        self.assertEqual(calc_ebp_metric(context), "6.C.Q42")
+
+        result = evaluate_ebp_reference_standard(context)
+
+        self.assertEqual(result["ebp_reference_standard"], "6.C.Q40")
+        self.assertEqual(result["ebp_reference_standard_reason"], "standard_input")
+        self.assertTrue(result["ebp_reference_standard_met"])
+        self.assertEqual(result["ebp_contig_n50_benchmark_label"], "≥ 1 Mb")
+
     def test_low_contig_metric_fails_standard_input_without_uli(self) -> None:
         context = {
             "assemblies_type": "prim_alt",
@@ -92,6 +111,24 @@ class EbpMetricTests(unittest.TestCase):
 
         result = evaluate_ebp_reference_standard(context)
 
+        self.assertFalse(result["ebp_reference_standard_met"])
+        self.assertIn("qv_below_standard", result["ebp_reference_standard_failures"])
+
+    def test_uli_protocol_with_high_contig_n50_still_fails_against_6_c_q40_when_qv_fails(self) -> None:
+        context = {
+            "assemblies_type": "prim_alt",
+            "contig_N50": 4.2,
+            "scaffold_N50": 20.0,
+            "perc_assembled": 98.0,
+            "prim_QV": 39.9,
+            "pacbio_protocols": ["PacBio - HiFi (ULI)"],
+        }
+
+        self.assertEqual(calc_ebp_metric(context), "6.C.Q39")
+
+        result = evaluate_ebp_reference_standard(context)
+
+        self.assertEqual(result["ebp_reference_standard"], "6.C.Q40")
         self.assertFalse(result["ebp_reference_standard_met"])
         self.assertIn("qv_below_standard", result["ebp_reference_standard_failures"])
 
