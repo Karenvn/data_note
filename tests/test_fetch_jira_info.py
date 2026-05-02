@@ -118,6 +118,27 @@ class FetchJiraInfoTests(unittest.TestCase):
         mock_get_yaml_for_ticket.assert_called_once_with("GRIT-1124", sentinel.auth)
         mock_jira_get.assert_not_called()
 
+    @patch("data_note.fetch_jira_info.get_auth", return_value=sentinel.auth)
+    @patch("data_note.fetch_jira_info.get_yaml_for_ticket", return_value=None)
+    @patch("data_note.fetch_jira_info.fetch_jira_issue")
+    def test_fetch_and_parse_jira_data_tolerates_null_chromosome_result(
+        self,
+        mock_fetch_jira_issue,
+        _mock_get_yaml_for_ticket,
+        _mock_get_auth,
+    ) -> None:
+        mock_fetch_jira_issue.return_value = {
+            "fields": {
+                "customfield_11608": "",
+                "customfield_11645": None,
+                "customfield_11648": "",
+            }
+        }
+
+        jira_dict = fetch_and_parse_jira_data("GRIT-1124")
+
+        self.assertNotIn("jira_perc_assem", jira_dict)
+
 
 if __name__ == "__main__":
     unittest.main()

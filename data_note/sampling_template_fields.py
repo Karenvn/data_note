@@ -33,6 +33,8 @@ def _populate_display_fields(context: MutableMapping[str, Any], tech: str) -> No
     context[f"{tech}_identifier_affiliation_text"] = _format_pipe_text(identifier_affiliation)
     context[f"{tech}_identifier_display"] = _format_people_with_affiliations(identifier, identifier_affiliation)
     context[f"{tech}_specimen_label"] = _format_specimen_label(context, tech)
+    context[f"{tech}_coll_lat_display"] = _format_coordinate(context.get(f"{tech}_coll_lat"))
+    context[f"{tech}_coll_long_display"] = _format_coordinate(context.get(f"{tech}_coll_long"))
 
     # Backfill the legacy template typo with a readable value.
     context[f"{tech}_coll_institute"] = context[f"{tech}_collector_institute_text"]
@@ -49,6 +51,9 @@ def _populate_relationship_fields(context: MutableMapping[str, Any]) -> None:
     context["rna_differs_from_pacbio"] = rna_to_pacbio == "different"
     context["rna_same_as_hic"] = rna_to_hic == "same"
     context["rna_differs_from_hic"] = rna_to_hic == "different"
+    context["hic_collection_same_as_pacbio"] = _same_collection_event(context, "hic", "pacbio")
+    context["rna_collection_same_as_pacbio"] = _same_collection_event(context, "rna", "pacbio")
+    context["rna_collection_same_as_hic"] = _same_collection_event(context, "rna", "hic")
 
     pacbio_label = _clean_string(context.get("pacbio_specimen_label"))
     hic_label = _clean_string(context.get("hic_specimen_label"))
@@ -116,6 +121,54 @@ def _format_specimen_label(context: MutableMapping[str, Any], tech: str) -> str:
     if not parts and source_individual:
         parts.append(f"source individual BioSample {source_individual}")
     return ", ".join(parts)
+
+
+def _same_collection_event(context: MutableMapping[str, Any], left: str, right: str) -> bool:
+    left_date = _clean_string(context.get(f"{left}_coll_date"))
+    right_date = _clean_string(context.get(f"{right}_coll_date"))
+    if not left_date or not right_date or left_date != right_date:
+        return False
+
+    return _same_collection_location(context, left, right)
+
+
+def _same_collection_location(context: MutableMapping[str, Any], left: str, right: str) -> bool:
+    left_lat = _clean_string(context.get(f"{left}_coll_lat"))
+    left_long = _clean_string(context.get(f"{left}_coll_long"))
+    right_lat = _clean_string(context.get(f"{right}_coll_lat"))
+    right_long = _clean_string(context.get(f"{right}_coll_long"))
+
+    if left_lat and left_long and right_lat and right_long:
+        return _same_coordinate(left_lat, right_lat) and _same_coordinate(left_long, right_long)
+
+    left_location = _clean_string(context.get(f"{left}_coll_location"))
+    right_location = _clean_string(context.get(f"{right}_coll_location"))
+    return bool(left_location and right_location and left_location.casefold() == right_location.casefold())
+
+
+def _same_coordinate(left: str, right: str) -> bool:
+    try:
+        return float(left.replace("\u2212", "-")) == float(right.replace("\u2212", "-"))
+    except ValueError:
+        return _normalise_coordinate_text(left) == _normalise_coordinate_text(right)
+
+
+def _format_coordinate(value: Any) -> str:
+    text = _clean_string(value)
+    if text.startswith("--"):
+        return "\u2212" + text[2:]
+    if text.startswith("-"):
+        return "\u2212" + text[1:]
+    return text
+
+
+def _normalise_coordinate_text(value: str) -> str:
+    text = _clean_string(value)
+    if text.startswith("--"):
+        text = "-" + text[2:]
+    if text.startswith("\u2212"):
+        text = "-" + text[1:]
+    return text
 
 
 def _format_people_with_affiliations(names: Any, affiliations: Any) -> str:

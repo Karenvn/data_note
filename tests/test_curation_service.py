@@ -14,6 +14,11 @@ class _LocalMetadataService:
         )
 
 
+class _FailingLocalMetadataService:
+    def build_context(self, assembly_selection, *, tolid=None, species=None):
+        raise RuntimeError("jira parse failed")
+
+
 class CurationServiceTests(unittest.TestCase):
     def test_build_context_combines_local_metadata_extraction_and_barcoding(self) -> None:
         selection = AssemblySelection(
@@ -46,6 +51,33 @@ class CurationServiceTests(unittest.TestCase):
         self.assertEqual(context["gqn"], "40")
         self.assertEqual(context["sts_tremoved"], "Y")
         self.assertEqual(context["sample_set_id"], "SS-1")
+
+    def test_build_context_keeps_extraction_when_local_metadata_fails(self) -> None:
+        selection = AssemblySelection(
+            assemblies_type="prim_alt",
+            primary=AssemblyRecord(accession="GCA_1.1", assembly_name="ixExample1.1", role="primary"),
+        )
+        service = CurationService(
+            local_metadata_service=_FailingLocalMetadataService(),
+            sequencing_extraction_fetcher=lambda lookup_id: ({}, {}),
+            extraction_fallback_fetcher=lambda lookup_id: {"sanger_sample_id": "LIB1", "gqn": "40"},
+            barcoding_fetcher=lambda tolid: {"sts_tremoved": "Y"},
+        )
+
+        with self.assertLogs("data_note.services.curation_service", level="WARNING") as logs:
+            bundle = service.build_context(
+                selection,
+                species="Example species",
+                tolid="ixExample1",
+                extraction_lookup_id="LIB1",
+            )
+
+        context = bundle.to_context_dict()
+        self.assertNotIn("jira", context)
+        self.assertEqual(context["sanger_sample_id"], "LIB1")
+        self.assertEqual(context["gqn"], "40")
+        self.assertEqual(context["sts_tremoved"], "Y")
+        self.assertIn("Failed to process local curation metadata for ixExample1", "\n".join(logs.output))
 
     def test_build_extraction_returns_empty_when_lookup_missing(self) -> None:
         service = CurationService(

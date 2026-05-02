@@ -395,8 +395,9 @@ def fetch_and_parse_jira_data(jira_ticket_id):
         except (ValueError, TypeError):
             jira_dict['autosomes'] = 0
 
-    if 'chromosome_result' in jira_dict:
-        chromosome_lines = jira_dict['chromosome_result'].split('\n')
+    chromosome_result = jira_dict.get('chromosome_result')
+    if chromosome_result:
+        chromosome_lines = str(chromosome_result).split('\n')
         for line in chromosome_lines:
             assigned_to_chr_match = re.match(r'Chr length (\S+) \%', line)
             if assigned_to_chr_match:

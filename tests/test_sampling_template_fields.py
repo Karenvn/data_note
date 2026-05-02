@@ -63,6 +63,29 @@ class SamplingTemplateFieldsTests(unittest.TestCase):
             "the same specimen used for Hi-C sequencing (specimen ID NHMUK014438725, ToLID ilSabHarp1)",
         )
 
+    def test_formats_coordinates_and_detects_shared_collection_event(self) -> None:
+        context = {
+            "pacbio_coll_location": "Trefor, Gwyneth, UK",
+            "pacbio_coll_date": "2022-08-08",
+            "pacbio_coll_lat": "52.9871",
+            "pacbio_coll_long": "-4.4362",
+            "hic_coll_location": "Trefor, Gwyneth, United Kingdom",
+            "hic_coll_date": "2022-08-08",
+            "hic_coll_lat": "52.9871",
+            "hic_coll_long": "--4.4362",
+            "rna_coll_location": "Elsewhere",
+            "rna_coll_date": "2022-08-09",
+            "rna_coll_lat": "51.0",
+            "rna_coll_long": "-1.0",
+        }
+
+        populate_sampling_template_fields(context)
+
+        self.assertEqual(context["pacbio_coll_long_display"], "\u22124.4362")
+        self.assertEqual(context["hic_coll_long_display"], "\u22124.4362")
+        self.assertTrue(context["hic_collection_same_as_pacbio"])
+        self.assertFalse(context["rna_collection_same_as_hic"])
+
 
 if __name__ == "__main__":
     unittest.main()

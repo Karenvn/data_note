@@ -40,10 +40,29 @@ class CurationService:
         tolid: str | None,
         extraction_lookup_id: str | None,
     ) -> CurationBundle:
+        local_metadata = CurationInfo()
+        extraction = ExtractionInfo()
+        barcoding = BarcodingInfo()
+
+        try:
+            local_metadata = self.build_local_metadata(assembly_selection, species=species, tolid=tolid)
+        except Exception as exc:
+            logger.warning("Failed to process local curation metadata for %s: %s", tolid or species, exc)
+
+        try:
+            extraction = self.build_extraction(extraction_lookup_id)
+        except Exception as exc:
+            logger.warning("Failed to process extraction metadata for %s: %s", extraction_lookup_id, exc)
+
+        try:
+            barcoding = self.build_barcoding(tolid)
+        except Exception as exc:
+            logger.warning("Failed to process barcoding metadata for %s: %s", tolid, exc)
+
         return CurationBundle(
-            local_metadata=self.build_local_metadata(assembly_selection, species=species, tolid=tolid),
-            extraction=self.build_extraction(extraction_lookup_id),
-            barcoding=self.build_barcoding(tolid),
+            local_metadata=local_metadata,
+            extraction=extraction,
+            barcoding=barcoding,
         )
 
     def build_local_metadata(
