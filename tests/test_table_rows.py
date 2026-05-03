@@ -402,6 +402,30 @@ class TableRowsTests(unittest.TestCase):
             )
         )
 
+    def test_make_table4_rows_renders_missing_chromosome_assignment_as_missing(self) -> None:
+        context = {
+            "assemblies_type": "prim_alt",
+            "species": "Example species",
+            "ebp_metric": "6.?.Q47",
+            "contig_N50": "7.8",
+            "scaffold_N50": "25.6",
+            "prim_QV": "47.0",
+            "prim_kmer_completeness": "98.2",
+            "BUSCO_string": "C:95.0% [S:94.2%, D:0.8%], F:1.5%, M:3.5%, n:425",
+            "perc_assembled": None,
+            "is_haploid": True,
+        }
+
+        table = make_table4_rows(context)
+
+        self.assertTrue(
+            any(
+                row["measure"] == "Percentage of assembly assigned to chromosomes"
+                and row["value"] == r"\-"
+                for row in table["native_rows"]
+            )
+        )
+
     def test_make_table4_rows_uses_selected_ebp_reference_standard(self) -> None:
         context = {
             "assemblies_type": "hap_asm",

@@ -7,7 +7,11 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from data_note.fetch_server_data import get_merqury_results_haplotype_assemblies, parse_genomescope
+from data_note.fetch_server_data import (
+    get_merqury_results_haplotype_assemblies,
+    get_merqury_results_prim_alt,
+    parse_genomescope,
+)
 
 
 class FetchServerDataTests(unittest.TestCase):
@@ -87,6 +91,33 @@ class FetchServerDataTests(unittest.TestCase):
         self.assertEqual(result["combined_QV"], "38.5")
         self.assertIsNone(result["hap1_kmer_completeness"])
         self.assertIsNone(result["hap2_kmer_completeness"])
+        self.assertEqual(result["combined_kmer_completeness"], "100.00")
+
+    @patch("data_note.fetch_server_data.read_merqury_results")
+    def test_prim_alt_merqury_accepts_hap1_hap2_labels(self, mock_read_merqury_results) -> None:
+        stats_df = pd.DataFrame(
+            [
+                {"Assembly": "hap1", "Region": "all", "Found": "10", "Total": "12", "% Covered": "83.33"},
+                {"Assembly": "hap2", "Region": "all", "Found": "9", "Total": "12", "% Covered": "75.00"},
+                {"Assembly": "both", "Region": "all", "Found": "12", "Total": "12", "% Covered": "100.00"},
+            ]
+        )
+        qv_df = pd.DataFrame(
+            [
+                {"Assembly": "hap1", "No Support": "1", "Total": "10", "Error %": "0.1", "QV": "40.0"},
+                {"Assembly": "hap2", "No Support": "2", "Total": "10", "Error %": "0.2", "QV": "37.0"},
+                {"Assembly": "both", "No Support": "3", "Total": "20", "Error %": "0.15", "QV": "38.5"},
+            ]
+        )
+        mock_read_merqury_results.return_value = (stats_df, qv_df)
+
+        result = get_merqury_results_prim_alt("drPruPadu1")
+
+        self.assertEqual(result["prim_QV"], "40.0")
+        self.assertEqual(result["alt_QV"], "37.0")
+        self.assertEqual(result["combined_QV"], "38.5")
+        self.assertEqual(result["prim_kmer_completeness"], "83.33")
+        self.assertEqual(result["alt_kmer_completeness"], "75.00")
         self.assertEqual(result["combined_kmer_completeness"], "100.00")
 
 

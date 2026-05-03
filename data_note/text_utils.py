@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+# Text rendering help functions
 
 def oxford_comma_list(items: list[str]) -> str:
     if len(items) == 0:

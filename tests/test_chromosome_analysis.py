@@ -118,6 +118,38 @@ class ChromosomeAnalyzerTests(unittest.TestCase):
         self.assertEqual(combined[1]["hap1_INSDC"], "")
         self.assertEqual(combined[1]["hap2_INSDC"], "H2_X")
 
+    def test_get_chromosome_lengths_uses_raw_base_pairs(self) -> None:
+        analyzer = ChromosomeAnalyzer()
+        reports = [
+            {
+                "role": "assembled-molecule",
+                "assigned_molecule_location_type": "Chromosome",
+                "chr_name": "1",
+                "length": 1_234_567,
+                "genbank_accession": "CM000001.1",
+                "gc_percent": 41.0,
+            },
+            {
+                "role": "unlocalized-scaffold",
+                "assigned_molecule_location_type": "",
+                "chr_name": "1",
+                "length": 2_345_678,
+                "genbank_accession": "unused",
+                "gc_percent": None,
+            },
+            {
+                "role": "unplaced-scaffold",
+                "assigned_molecule_location_type": "Chromosome",
+                "chr_name": "Un",
+                "length": 9_999,
+                "genbank_accession": "unused",
+                "gc_percent": None,
+            },
+        ]
+
+        self.assertEqual(analyzer.get_chromosome_lengths(reports), 3_580_245)
+        self.assertEqual(analyzer.extract_chromosomes_only(reports)[0]["length"], 3.58)
+
     def test_calculate_percentage_assembled_uses_injected_length_fetcher(self) -> None:
         analyzer = ChromosomeAnalyzer(
             chromosome_length_fetcher=lambda accession: {
@@ -146,6 +178,30 @@ class ChromosomeAnalyzerTests(unittest.TestCase):
         self.assertEqual(primary_result["perc_assembled"], 80.0)
         self.assertEqual(haplotype_result["hap1_perc_assembled"], 80.0)
         self.assertEqual(haplotype_result["hap2_perc_assembled"], 90.0)
+
+    def test_calculate_percentage_assembled_returns_none_for_missing_denominator(self) -> None:
+        analyzer = ChromosomeAnalyzer(chromosome_length_fetcher=lambda accession: 100_000_000)
+
+        primary_result = analyzer.calculate_percentage_assembled(
+            AssemblyCoverageInput(
+                assemblies_type="prim_alt",
+                primary_accession="GCA_1.1",
+                genome_length_unrounded=None,
+            )
+        )
+        haplotype_result = analyzer.calculate_percentage_assembled(
+            AssemblyCoverageInput(
+                assemblies_type="hap_asm",
+                hap1_accession="GCA_1.1",
+                hap2_accession="GCA_2.1",
+                hap1_genome_length_unrounded=0,
+                hap2_genome_length_unrounded=None,
+            )
+        )
+
+        self.assertIsNone(primary_result["perc_assembled"])
+        self.assertIsNone(haplotype_result["hap1_perc_assembled"])
+        self.assertIsNone(haplotype_result["hap2_perc_assembled"])
 
 
 if __name__ == "__main__":

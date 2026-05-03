@@ -97,6 +97,11 @@ def _format_read_count_cell(context: dict, prefix: str) -> str:
     return f"{value} million"
 
 
+def _format_percent_cell(value) -> str:
+    percent = flatten_cell(value)
+    return f"{percent}%" if percent else r"\-"
+
+
 def make_table1_rows(context):
     headers = ["**Platform**", "**PacBio HiFi**", "**Hi-C**"]
 
@@ -405,7 +410,7 @@ def make_table4_rows(context: dict) -> dict:
         add_row("BUSCO", _format_haplotype_busco(context), "S > 90%; D < 5%")
         add_row(
             "Percentage of assembly assigned to chromosomes",
-            f"{flatten_cell(context.get('hap1_perc_assembled'))}%",
+            _format_percent_cell(context.get("hap1_perc_assembled")),
             perc_assembled_benchmark,
         )
     elif assemblies_type == "prim_alt":
@@ -439,7 +444,7 @@ def make_table4_rows(context: dict) -> dict:
         add_row("BUSCO", flatten_cell(context.get("BUSCO_string")), "S > 90%; D < 5%")
         add_row(
             "Percentage of assembly assigned to chromosomes",
-            f"{flatten_cell(context.get('perc_assembled'))}%",
+            _format_percent_cell(context.get("perc_assembled")),
             perc_assembled_benchmark,
         )
     else:

@@ -39,32 +39,13 @@ class ChromosomeAnalyzer:
         return round(longest.get("length", 0) / 1e6, 2)
 
     def extract_chromosomes_only(self, reports: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        chr_data: dict[str, dict[str, Any]] = {}
-        for record in self._filter_relevant_reports(reports):
-            name = record.get("chr_name")
-            role = record.get("role")
-            location = record.get("assigned_molecule_location_type", "")
-            if not name:
-                continue
-            if (role == "assembled-molecule" and location == "Chromosome") or role == "unlocalized-scaffold":
-                length = record.get("length", 0)
-                entry = chr_data.setdefault(name, {"length": 0, "INSDC": None, "GC": None})
-                entry["length"] += length
-                if role == "assembled-molecule" and location == "Chromosome":
-                    entry["INSDC"] = record.get("genbank_accession")
-                    entry["GC"] = record.get("gc_percent")
-
         chrom_list = []
-        for name, info in chr_data.items():
-            if name.upper() in {"MT", "PLTD"}:
-                continue
-            if not info["INSDC"]:
-                continue
+        for name, info in self._collect_assigned_chromosome_data(reports).items():
             chrom_list.append(
                 {
                     "INSDC": info["INSDC"],
                     "molecule": name,
-                    "length": round(info["length"] / 1e6, 2),
+                    "length": round(info["length_bp"] / 1e6, 2),
                     "GC": info["GC"],
                 }
             )
@@ -97,8 +78,8 @@ class ChromosomeAnalyzer:
         return combined
 
     def get_chromosome_lengths(self, reports: list[dict[str, Any]]) -> int:
-        chromosomes = self.extract_chromosomes_only(reports)
-        return sum(int(chromosome["length"] * 1e6) for chromosome in chromosomes)
+        chromosomes = self._collect_assigned_chromosome_data(reports)
+        return sum(int(chromosome["length_bp"]) for chromosome in chromosomes.values())
 
     def calculate_percentage_assembled(self, info: AssemblyCoverageInput | dict) -> dict[str, Any]:
         coverage = info if isinstance(info, AssemblyCoverageInput) else AssemblyCoverageInput.from_mapping(info)
@@ -109,8 +90,8 @@ class ChromosomeAnalyzer:
 
         if coverage.assemblies_type == "prim_alt":
             total_chromosome_length = chromosome_length_fetcher(coverage.primary_accession)
-            genome_length = coverage.genome_length_unrounded or 0
-            percentage = round((total_chromosome_length / genome_length) * 100, 2) if genome_length else 0
+            genome_length = coverage.genome_length_unrounded
+            percentage = self._calculate_percentage(total_chromosome_length, genome_length)
             return {
                 "total_chromosome_length": total_chromosome_length,
                 "genome_length_unrounded": genome_length,
@@ -119,10 +100,10 @@ class ChromosomeAnalyzer:
 
         total_hap1 = chromosome_length_fetcher(coverage.hap1_accession)
         total_hap2 = chromosome_length_fetcher(coverage.hap2_accession)
-        genome_hap1 = coverage.hap1_genome_length_unrounded or 0
-        genome_hap2 = coverage.hap2_genome_length_unrounded or 0
-        percentage_hap1 = round((total_hap1 / genome_hap1) * 100, 2) if genome_hap1 else 0
-        percentage_hap2 = round((total_hap2 / genome_hap2) * 100, 2) if genome_hap2 else 0
+        genome_hap1 = coverage.hap1_genome_length_unrounded
+        genome_hap2 = coverage.hap2_genome_length_unrounded
+        percentage_hap1 = self._calculate_percentage(total_hap1, genome_hap1)
+        percentage_hap2 = self._calculate_percentage(total_hap2, genome_hap2)
         return {
             "hap1_chromosome_length": total_hap1,
             "hap2_chromosome_length": total_hap2,
@@ -149,6 +130,34 @@ class ChromosomeAnalyzer:
             for report in reports
             if report.get("role") in ("assembled-molecule", "unlocalized-scaffold")
         ]
+
+    def _collect_assigned_chromosome_data(self, reports: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+        chr_data: dict[str, dict[str, Any]] = {}
+        for record in self._filter_relevant_reports(reports):
+            name = record.get("chr_name")
+            role = record.get("role")
+            location = record.get("assigned_molecule_location_type", "")
+            if not name:
+                continue
+            if (role == "assembled-molecule" and location == "Chromosome") or role == "unlocalized-scaffold":
+                length = int(record.get("length") or 0)
+                entry = chr_data.setdefault(name, {"length_bp": 0, "INSDC": None, "GC": None})
+                entry["length_bp"] += length
+                if role == "assembled-molecule" and location == "Chromosome":
+                    entry["INSDC"] = record.get("genbank_accession")
+                    entry["GC"] = record.get("gc_percent")
+
+        return {
+            name: info
+            for name, info in chr_data.items()
+            if name.upper() not in {"MT", "PLTD"} and info["INSDC"]
+        }
+
+    @staticmethod
+    def _calculate_percentage(total_chromosome_length: int, genome_length: float | None) -> float | None:
+        if genome_length is None or genome_length <= 0:
+            return None
+        return round((total_chromosome_length / genome_length) * 100, 2)
 
 
 __all__ = ["ChromosomeAnalyzer"]

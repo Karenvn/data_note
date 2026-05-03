@@ -181,18 +181,20 @@ def get_merqury_results_prim_alt(tolid):
     if df1 is None or df2 is None:
         return {}
 
-    def safe_extract(df, column, assembly, default=None):
-        try:
-            return df.loc[df['Assembly'] == assembly, column].iloc[0]
-        except IndexError:
-            return default
+    def safe_extract(df, column, *assemblies, default=None):
+        labels = df["Assembly"].astype(str).str.casefold()
+        for assembly in assemblies:
+            matches = df.loc[labels == str(assembly).casefold(), column]
+            if not matches.empty:
+                return matches.iloc[0]
+        return default
 
     return {
-        'prim_QV': safe_extract(df2, 'QV', 'primary'),
-        'alt_QV': safe_extract(df2, 'QV', 'alt'),
+        'prim_QV': safe_extract(df2, 'QV', 'primary', 'prim', 'hap1'),
+        'alt_QV': safe_extract(df2, 'QV', 'alt', 'alternate', 'hap2'),
         'combined_QV': safe_extract(df2, 'QV', 'both'),
-        'prim_kmer_completeness': safe_extract(df1, '% Covered', 'primary'),
-        'alt_kmer_completeness': safe_extract(df1, '% Covered', 'alt'),
+        'prim_kmer_completeness': safe_extract(df1, '% Covered', 'primary', 'prim', 'hap1'),
+        'alt_kmer_completeness': safe_extract(df1, '% Covered', 'alt', 'alternate', 'hap2'),
         'combined_kmer_completeness': safe_extract(df1, '% Covered', 'both'),
     }
 
