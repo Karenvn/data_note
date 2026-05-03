@@ -15,6 +15,23 @@ GN_ASSETS_ROOT = os.getenv(
 )
 
 
+def _parse_percent_values(line: str) -> list[float]:
+    values = []
+    for raw_value in re.findall(r"(\d[\d,.]*)\s*%", line):
+        try:
+            values.append(float(raw_value.replace(",", "")))
+        except ValueError:
+            continue
+    return values
+
+
+def _average_percent_values(line: str) -> float | None:
+    values = _parse_percent_values(line)
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
 def parse_genomescope(tolid):
     """Parse GenomeScope2 results."""
     script_dir = Path(__file__).resolve().parent
@@ -59,12 +76,10 @@ def parse_genomescope(tolid):
                     else:
                         logging.warning("Failed to parse Genome Haploid Length line.")
 
-                if "Heterozygous (ab)" in line:
-                    match = re.search(r"([\d,.]+)%\s+([\d,.]+)%", line)
-                    if match:
-                        het_min = float(match.group(1).replace(',', ''))
-                        het_max = float(match.group(2).replace(',', ''))
-                        results["gscope_het"] = format_with_nbsp((het_min + het_max) / 2)
+                if line.lstrip().startswith("Heterozygous"):
+                    heterozygous_percent = _average_percent_values(line)
+                    if heterozygous_percent is not None:
+                        results["gscope_het"] = format_with_nbsp(heterozygous_percent)
 
                 if "Genome Repeat Length" in line and size_max:
                     match = re.search(r"([\d,.]+)\s*bp\s+([\d,.]+)\s*bp", line)
