@@ -32,7 +32,12 @@ class ChromosomeAnalyzer:
         return order_map.get(molecule, (float("inf"), molecule))
 
     def get_longest_scaffold(self, reports: list[dict[str, Any]]) -> float | None:
-        relevant_reports = self._filter_relevant_reports(reports)
+        relevant_reports = [
+            report
+            for report in reports
+            if report.get("role") in ("assembled-molecule", "unlocalized-scaffold", "unplaced-scaffold")
+            and report.get("assigned_molecule_location_type") not in ("Mitochondrion", "Chloroplast", "Plastid")
+        ]
         if not relevant_reports:
             return None
         longest = max(relevant_reports, key=lambda report: report.get("length", 0))

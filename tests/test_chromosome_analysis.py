@@ -150,6 +150,34 @@ class ChromosomeAnalyzerTests(unittest.TestCase):
         self.assertEqual(analyzer.get_chromosome_lengths(reports), 3_580_245)
         self.assertEqual(analyzer.extract_chromosomes_only(reports)[0]["length"], 3.58)
 
+    def test_get_longest_scaffold_includes_unplaced_scaffolds(self) -> None:
+        analyzer = ChromosomeAnalyzer()
+        reports = [
+            {
+                "role": "assembled-molecule",
+                "assigned_molecule_location_type": "Mitochondrion",
+                "chr_name": "MT",
+                "length": 18_000_000,
+                "genbank_accession": "CMITO1",
+            },
+            {
+                "role": "unplaced-scaffold",
+                "assigned_molecule_location_type": "Chromosome",
+                "chr_name": "Un",
+                "length": 12_345_678,
+                "genbank_accession": "JAAA010000001.1",
+            },
+            {
+                "role": "unlocalized-scaffold",
+                "assigned_molecule_location_type": "",
+                "chr_name": "1",
+                "length": 8_000_000,
+                "genbank_accession": "JAAA010000002.1",
+            },
+        ]
+
+        self.assertEqual(analyzer.get_longest_scaffold(reports), 12.35)
+
     def test_calculate_percentage_assembled_uses_injected_length_fetcher(self) -> None:
         analyzer = ChromosomeAnalyzer(
             chromosome_length_fetcher=lambda accession: {
