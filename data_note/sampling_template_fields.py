@@ -33,6 +33,11 @@ def _populate_display_fields(context: MutableMapping[str, Any], tech: str) -> No
     context[f"{tech}_identifier_affiliation_text"] = _format_pipe_text(identifier_affiliation)
     context[f"{tech}_identifier_display"] = _format_people_with_affiliations(identifier, identifier_affiliation)
     context[f"{tech}_specimen_label"] = _format_specimen_label(context, tech)
+    _set_short_specimen_reference_fields(
+        context,
+        tech,
+        _format_specimen_short_label(context, tech),
+    )
     context[f"{tech}_coll_lat_display"] = _format_coordinate(context.get(f"{tech}_coll_lat"))
     context[f"{tech}_coll_long_display"] = _format_coordinate(context.get(f"{tech}_coll_long"))
 
@@ -60,25 +65,37 @@ def _populate_relationship_fields(context: MutableMapping[str, Any]) -> None:
     rna_label = _clean_string(context.get("rna_specimen_label"))
 
     context["pacbio_specimen_reference"] = _with_label("the specimen used for genome sequencing", pacbio_label)
+    _set_short_specimen_reference_fields(
+        context,
+        "pacbio",
+        _clean_string(context.get("pacbio_specimen_short_label")),
+    )
 
     if context["hic_same_as_pacbio"]:
         hic_base = "the specimen used for genome sequencing"
         hic_reference_label = hic_label or pacbio_label
+        hic_short_label = _preferred_short_label(context, "hic", fallback_tech="pacbio")
     else:
         hic_base = "the Hi-C specimen"
         hic_reference_label = hic_label
+        hic_short_label = _preferred_short_label(context, "hic")
     context["hic_specimen_reference"] = _with_label(hic_base, hic_reference_label)
+    _set_short_specimen_reference_fields(context, "hic", hic_short_label)
 
     if context["rna_same_as_pacbio"]:
         rna_base = "the specimen used for genome sequencing"
         rna_reference_label = rna_label or pacbio_label
+        rna_short_label = _preferred_short_label(context, "rna", fallback_tech="pacbio")
     elif context["rna_same_as_hic"]:
         rna_base = "the same specimen used for Hi-C sequencing"
         rna_reference_label = rna_label or hic_label
+        rna_short_label = _preferred_short_label(context, "rna", fallback_tech="hic")
     else:
         rna_base = "the RNA specimen"
         rna_reference_label = rna_label
+        rna_short_label = _preferred_short_label(context, "rna")
     context["rna_specimen_reference"] = _with_label(rna_base, rna_reference_label)
+    _set_short_specimen_reference_fields(context, "rna", rna_short_label)
 
     isoseq_label = _clean_string(context.get("isoseq_specimen_label"))
     context["isoseq_specimen_reference"] = _with_label("the Iso-Seq specimen", isoseq_label)
@@ -121,6 +138,52 @@ def _format_specimen_label(context: MutableMapping[str, Any], tech: str) -> str:
     if not parts and source_individual:
         parts.append(f"source individual BioSample {source_individual}")
     return ", ".join(parts)
+
+
+def _format_specimen_short_label(context: MutableMapping[str, Any], tech: str) -> str:
+    tolid = _clean_string(context.get(f"{tech}_tolid"))
+    specimen_id = _clean_string(context.get(f"{tech}_specimen_id"))
+    source_individual = _clean_string(context.get(f"{tech}_sample_derived_from"))
+    sample_accession = _clean_string(context.get(f"{tech}_sample_accession"))
+
+    if tolid:
+        return f"{tolid} specimen"
+    if specimen_id:
+        return f"specimen {specimen_id}"
+    if source_individual:
+        return f"source individual BioSample {source_individual}"
+    if sample_accession:
+        return f"BioSample {sample_accession}"
+    return ""
+
+
+def _preferred_short_label(
+    context: MutableMapping[str, Any],
+    tech: str,
+    *,
+    fallback_tech: str | None = None,
+) -> str:
+    if _clean_string(context.get(f"{tech}_tolid")) or _clean_string(context.get(f"{tech}_specimen_id")):
+        return _clean_string(context.get(f"{tech}_specimen_short_label"))
+
+    if fallback_tech:
+        fallback_label = _clean_string(context.get(f"{fallback_tech}_specimen_short_label"))
+        if fallback_label:
+            return fallback_label
+
+    return _clean_string(context.get(f"{tech}_specimen_short_label"))
+
+
+def _set_short_specimen_reference_fields(
+    context: MutableMapping[str, Any],
+    tech: str,
+    label: str,
+) -> None:
+    short_label = _clean_string(label)
+    short_reference = f"the {short_label}" if short_label else "the specimen"
+    context[f"{tech}_specimen_short_label"] = short_label
+    context[f"{tech}_specimen_short_reference"] = short_reference
+    context[f"{tech}_specimen_short_sentence_reference"] = _sentence_start(short_reference)
 
 
 def _same_collection_event(context: MutableMapping[str, Any], left: str, right: str) -> bool:
@@ -226,6 +289,12 @@ def _with_label(base: str, label: str) -> str:
     if not label:
         return base
     return f"{base} ({label})"
+
+
+def _sentence_start(text: str) -> str:
+    if not text:
+        return text
+    return text[0].upper() + text[1:]
 
 
 def _clean_string(value: Any) -> str:

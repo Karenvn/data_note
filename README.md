@@ -25,7 +25,7 @@ This repository does not handle:
 - BibTeX cleanup and publication-specific bibliography management
 - final publication packaging
 
-These publishing steps require a separate Pandoc/typesetting workflow, such as [Inara](https://github.com/openjournals/inara/tree/main/test), [Seismica-sce-v2](https://github.com/WeAreSeismica/seismica-sce-v2), or the [pandoc-data-note](https://github.com/Karenvn/pandoc-data-note) package used for Tree of Life genome notes.
+These publishing steps require a separate Pandoc/typesetting workflow, such as [Inara](https://github.com/openjournals/inara/), [Seismica-sce-v2](https://github.com/WeAreSeismica/seismica-sce-v2), or the [pandoc-data-note](https://github.com/Karenvn/pandoc-data-note) package used for Tree of Life genome notes.
 
 ## Quick start
 

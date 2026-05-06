@@ -54,14 +54,40 @@ class SamplingTemplateFieldsTests(unittest.TestCase):
             context["pacbio_specimen_label"],
             "specimen ID NHMUK014438727, ToLID ilSabHarp2",
         )
+        self.assertEqual(context["pacbio_specimen_short_label"], "ilSabHarp2 specimen")
+        self.assertEqual(context["pacbio_specimen_short_reference"], "the ilSabHarp2 specimen")
+        self.assertEqual(
+            context["pacbio_specimen_short_sentence_reference"],
+            "The ilSabHarp2 specimen",
+        )
         self.assertEqual(
             context["hic_specimen_reference"],
             "the Hi-C specimen (specimen ID NHMUK014438725, ToLID ilSabHarp1)",
         )
+        self.assertEqual(context["hic_specimen_short_reference"], "the ilSabHarp1 specimen")
         self.assertEqual(
             context["rna_specimen_reference"],
             "the same specimen used for Hi-C sequencing (specimen ID NHMUK014438725, ToLID ilSabHarp1)",
         )
+        self.assertEqual(context["rna_specimen_short_reference"], "the ilSabHarp1 specimen")
+        self.assertEqual(
+            context["rna_specimen_short_sentence_reference"],
+            "The ilSabHarp1 specimen",
+        )
+
+    def test_short_reference_prefers_related_tolid_over_biosample_only_label(self) -> None:
+        context = {
+            "pacbio_sample_accession": "SAMEA112975585",
+            "pacbio_specimen_id": "NHMUK014438727",
+            "pacbio_tolid": "ilSabHarp2",
+            "rna_sample_accession": "SAMEA112975585",
+        }
+
+        populate_sampling_template_fields(context)
+
+        self.assertTrue(context["rna_same_as_pacbio"])
+        self.assertEqual(context["rna_specimen_short_label"], "ilSabHarp2 specimen")
+        self.assertEqual(context["rna_specimen_short_reference"], "the ilSabHarp2 specimen")
 
     def test_formats_coordinates_and_detects_shared_collection_event(self) -> None:
         context = {
