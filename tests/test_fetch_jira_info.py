@@ -12,6 +12,7 @@ from data_note.fetch_jira_info import (
     fetch_and_parse_jira_data,
     fetch_jira_issue,
     get_yaml_for_ticket,
+    parse_yaml_attachment,
 )
 
 
@@ -117,6 +118,28 @@ class FetchJiraInfoTests(unittest.TestCase):
         self.assertEqual(jira_dict["hifiasm_version"], "1.0.0")
         mock_get_yaml_for_ticket.assert_called_once_with("GRIT-1124", sentinel.auth)
         mock_jira_get.assert_not_called()
+
+    def test_parse_yaml_attachment_ignores_quality_metrics(self) -> None:
+        yaml_content = """\
+busco_lineage: eudicots_odb10
+pipeline:
+  - hifiasm (version 0.16.1-r375)
+  - purge_dups (version 1.2.3)
+stats: |
+  merqury QV (CCS): 59.4
+  merqury KMER completeness (CCS): 99.00
+  BUSCO: C:98.2%[S:93.4%,D:4.8%],F:0.8%,M:1.0%,n:2326
+"""
+
+        parsed = parse_yaml_attachment(yaml_content)
+
+        self.assertEqual(parsed["hifiasm_version"], "0.16.1-r375")
+        self.assertEqual(parsed["purge_dups_version"], "1.2.3")
+        self.assertNotIn("yaml_BUSCO_lineage", parsed)
+        self.assertNotIn("yaml_BUSCO_n", parsed)
+        self.assertNotIn("yaml_BUSCO_string", parsed)
+        self.assertNotIn("yaml_merqury_QV", parsed)
+        self.assertNotIn("yaml_merqury_kmer_completeness", parsed)
 
     @patch("data_note.fetch_jira_info.get_auth", return_value=sentinel.auth)
     @patch("data_note.fetch_jira_info.get_yaml_for_ticket", return_value=None)

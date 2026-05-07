@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 from Bio import Entrez
@@ -43,6 +44,13 @@ KNOWN_TOLID_FIX = {
 }
 
 logger = logging.getLogger(__name__)
+
+
+def _default_corrections_file() -> str:
+    assets_root = os.getenv("DATA_NOTE_GN_ASSETS") or os.getenv("DATA_NOTE_SERVER_DATA")
+    if assets_root:
+        return str(Path(assets_root).expanduser() / "text_corrections.json")
+    return str(Path.home() / "gn_assets" / "text_corrections.json")
 
 
 class DataNoteOrchestrator:
@@ -227,7 +235,7 @@ class DataNoteOrchestrator:
 
         corrections_file = os.getenv(
             "DATA_NOTE_CORRECTIONS_FILE",
-            os.path.expanduser("~/genome_note_templates/text_corrections.json"),
+            _default_corrections_file(),
         )
         context = self.render_context_builder.build(
             note_data,

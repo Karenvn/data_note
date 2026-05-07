@@ -19,7 +19,7 @@ def download_btk_images(accession, download_dir, output_names=None):
     image_paths = []
     for image_type, file_name in image_types.items():
         if image_type == "snail":
-            if download_btk_snail_from_viewer(accession, download_dir, output_name=file_name):
+            if download_btk_view_from_viewer(accession, image_type, download_dir, output_name=file_name):
                 image_paths.append(file_name)
                 continue
 
@@ -44,24 +44,39 @@ def download_btk_images(accession, download_dir, output_names=None):
                     snippet = handle.read(100)
                 if "Not Found" in snippet:
                     os.remove(file_path)
+                    if image_type in {"snail", "blob"} and download_btk_view_from_viewer(
+                        accession,
+                        image_type,
+                        download_dir,
+                        output_name=file_name,
+                    ):
+                        image_paths.append(file_name)
                 else:
                     image_paths.append(file_name)
             else:
                 logging.warning(f"Failed to download {file_name}. Response: {result.stderr}")
+                if image_type in {"snail", "blob"} and download_btk_view_from_viewer(
+                    accession,
+                    image_type,
+                    download_dir,
+                    output_name=file_name,
+                ):
+                    image_paths.append(file_name)
         except Exception as exc:
             logging.warning(f"Error downloading {image_type}: {exc}")
 
     return image_paths
 
 
-def download_btk_snail_from_viewer(
+def download_btk_view_from_viewer(
     accession,
+    view,
     download_dir,
-    output_name="Fig_5_Snail.png",
+    output_name=None,
     timeout_ms=60000,
     headless=True,
 ) -> bool:
-    """Use the BlobToolKit viewer's PNG download button to fetch the correct snail plot."""
+    """Use the BlobToolKit viewer's PNG download button to fetch a BTK plot."""
     try:
         from playwright.sync_api import TimeoutError as PWTimeoutError
         from playwright.sync_api import sync_playwright
@@ -69,9 +84,11 @@ def download_btk_snail_from_viewer(
         logging.warning(f"Playwright not available for viewer download: {exc}")
         return False
 
-    url = f"https://blobtoolkit.genomehubs.org/view/{accession}/dataset/{accession}/snail#Filters"
+    url = f"https://blobtoolkit.genomehubs.org/view/{accession}/dataset/{accession}/{view}#Filters"
     out_dir = Path(download_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    if output_name is None:
+        output_name = "Fig_5_Snail.png" if view == "snail" else "Fig_6_Blob.png"
     out_path = out_dir / output_name
 
     try:
@@ -118,11 +135,29 @@ def download_btk_snail_from_viewer(
 
             download.save_as(str(out_path))
             browser.close()
-            logging.info(f"Downloaded BTK snail via viewer → {out_path}")
+            logging.info(f"Downloaded BTK {view} via viewer → {out_path}")
             return True
     except Exception as exc:
-        logging.warning(f"Viewer-based snail download failed: {exc}")
+        logging.warning(f"Viewer-based {view} download failed: {exc}")
         return False
+
+
+def download_btk_snail_from_viewer(
+    accession,
+    download_dir,
+    output_name="Fig_5_Snail.png",
+    timeout_ms=60000,
+    headless=True,
+) -> bool:
+    """Use the BlobToolKit viewer's PNG download button to fetch the correct snail plot."""
+    return download_btk_view_from_viewer(
+        accession,
+        "snail",
+        download_dir,
+        output_name=output_name,
+        timeout_ms=timeout_ms,
+        headless=headless,
+    )
 
 
 def download_and_process_btk(accession, output_dir, output_names=None, dpi=(300, 300), max_width=1200):

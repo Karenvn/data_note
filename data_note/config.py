@@ -25,6 +25,13 @@ def _assets_root_from_env(env: Mapping[str, str], home: Path) -> Path:
     return _expand_path(value)
 
 
+def _corrections_file_from_env(env: Mapping[str, str], server_data_root: Path) -> Path:
+    value = env.get("DATA_NOTE_CORRECTIONS_FILE")
+    if value:
+        return _expand_path(value)
+    return server_data_root / "text_corrections.json"
+
+
 @dataclass(slots=True)
 class AppConfig:
     entrez_email: str
@@ -71,12 +78,7 @@ class AppConfig:
             debug_ensembl=_env_bool(env.get("GN_DEBUG_ENSEMBL"), default=False),
             profile_name=env.get("DATA_NOTE_PROFILE", "darwin").strip().lower() or "darwin",
             server_data_root=server_data_root,
-            corrections_file=_expand_path(
-                env.get(
-                    "DATA_NOTE_CORRECTIONS_FILE",
-                    str(home / "genome_note_templates" / "text_corrections.json"),
-                )
-            ),
+            corrections_file=_corrections_file_from_env(env, server_data_root),
             cyto_info_tsv=_expand_path(
                 env.get(
                     "DATA_NOTE_CYTO_INFO_TSV",

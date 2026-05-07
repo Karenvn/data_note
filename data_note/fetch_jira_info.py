@@ -443,8 +443,8 @@ def download_jira_attachment(jira_ticket_id, directory):
 
 
 def parse_yaml_attachment(yaml_content):
-    """Parse the YAML content and extract software versions."""
-    versions = {
+    """Parse the YAML content and extract pipeline software versions."""
+    yaml_data = {
         'hifiasm_version': None,
         'mitohifi_version': None,
         'yahs_version': None,
@@ -455,6 +455,8 @@ def parse_yaml_attachment(yaml_content):
 
     try:
         parsed_yaml = yaml.safe_load(yaml_content)
+        if not isinstance(parsed_yaml, dict):
+            return yaml_data
         if 'pipeline' in parsed_yaml:
             for entry in parsed_yaml['pipeline']:
                 # Update the regex to handle software names with/without spaces before the version
@@ -462,17 +464,17 @@ def parse_yaml_attachment(yaml_content):
                 if match:
                     software, version = match.groups()
                     key = f"{software.lower()}_version"
-                    if key in versions:
-                        versions[key] = version
+                    if key in yaml_data:
+                        yaml_data[key] = version
                 else:
                     # If only software name is mentioned without version
                     key = f"{entry.lower()}_version"
-                    if key in versions:
-                        versions[key] = None
+                    if key in yaml_data:
+                        yaml_data[key] = None
     except yaml.YAMLError as e:
         logger.warning("Error parsing YAML: %s", e)
 
-    return versions
+    return yaml_data
 
 
 

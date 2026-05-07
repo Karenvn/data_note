@@ -179,7 +179,7 @@ Text corrections, local asset files, and the author database also come from conf
 
 The setup will need `ENTREZ_EMAIL` and `ENTREZ_API_KEY` to be set. The default profile is `darwin`, but it can be changed with `DATA_NOTE_PROFILE`.
 
-Local file paths are usually taken from `DATA_NOTE_GN_ASSETS`, with `DATA_NOTE_SERVER_DATA` kept as a legacy alias. From that base location, `data_note` can also read a corrections file, a flow-cytometry table, a long-read sample preparation table, and an author database through `DATA_NOTE_CORRECTIONS_FILE`, `DATA_NOTE_CYTO_INFO_TSV`, `DATA_NOTE_LR_SAMPLE_PREP_TSV`, and `DATA_NOTE_AUTHOR_DB`.
+Local file paths are usually taken from `DATA_NOTE_GN_ASSETS`, with `DATA_NOTE_SERVER_DATA` kept as a legacy alias. From that base location, `data_note` can also read a corrections file, a flow-cytometry table, a long-read sample preparation table, and an author database through `DATA_NOTE_CORRECTIONS_FILE`, `DATA_NOTE_CYTO_INFO_TSV`, `DATA_NOTE_LR_SAMPLE_PREP_TSV`, and `DATA_NOTE_AUTHOR_DB`. The corrections file defaults to `~/gn_assets/text_corrections.json`.
 
 Optional text additions are controlled by `DATA_NOTE_INCLUDE_GBIF_DISTRIBUTION` and `DATA_NOTE_INCLUDE_BOLD_BARCODE`. If the BOLD workflow is not installed as a module, `DATA_NOTE_BOLD_REPO` can point to a checkout containing `bold_coi_pipeline.py`.
 
@@ -204,6 +204,7 @@ If you are using the Ensembl transition code, the related variables are `GN_DEBU
 - Assembly quality assets such as BlobToolKit, GenomeScope, Merqury run results, a chromosome map, ancestral linkage groups plots, and metagenome analyses are expected to exist already.
 - Some local metadata lookup steps rely on internal data, and are not required for the public core workflow.
 - Optional plant flow-cytometry data is expected at `DATA_NOTE_CYTO_INFO_TSV`, defaulting to `~/gn_assets/cyto_info.tsv`.
+- Optional text corrections are expected at `DATA_NOTE_CORRECTIONS_FILE`, defaulting to `~/gn_assets/text_corrections.json`.
 - Optional LR extraction spreadsheet data is expected at `DATA_NOTE_LR_SAMPLE_PREP_TSV`, defaulting to `~/gn_assets/LR_sample_prep.tsv` with a legacy fallback to `~/genome_note_templates/LR_sample_prep.tsv`.
 - Templates are expected to be Markdown templates with Jinja2 placeholders and syntax.
 

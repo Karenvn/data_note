@@ -40,6 +40,21 @@ class ConfigTests(unittest.TestCase):
         config = load_config({})
         self.assertEqual(config.author_db_path, Path.home() / "gn_assets" / "author_db.sqlite3")
 
+    def test_corrections_file_defaults_to_gn_assets(self) -> None:
+        config = load_config({})
+        self.assertEqual(config.corrections_file, Path.home() / "gn_assets" / "text_corrections.json")
+
+    def test_corrections_file_uses_configured_assets_root(self) -> None:
+        config = load_config({"DATA_NOTE_GN_ASSETS": "~/preferred-assets"})
+        self.assertEqual(
+            config.corrections_file,
+            Path.home() / "preferred-assets" / "text_corrections.json",
+        )
+
+    def test_corrections_file_env_override(self) -> None:
+        config = load_config({"DATA_NOTE_CORRECTIONS_FILE": "~/custom/text_corrections.json"})
+        self.assertEqual(config.corrections_file, Path.home() / "custom" / "text_corrections.json")
+
     def test_cyto_info_tsv_defaults_to_gn_assets(self) -> None:
         config = load_config({})
         self.assertEqual(config.cyto_info_tsv, Path.home() / "gn_assets" / "cyto_info.tsv")
