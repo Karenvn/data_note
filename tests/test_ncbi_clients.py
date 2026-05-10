@@ -23,57 +23,136 @@ class _Response:
 
 class NcbiTaxonomyClientTests(unittest.TestCase):
     def test_fetch_lineage_and_ranks_uses_datasets_taxonomy_report(self) -> None:
+        def parent_report(tax_id: int, rank: str, name: str):
+            return {
+                "taxonomy": {
+                    "tax_id": tax_id,
+                    "rank": rank,
+                    "current_scientific_name": {"name": name},
+                }
+            }
+
+        calls = []
+
         def fake_get(url, headers=None, params=None, timeout=None):
-            self.assertEqual(
-                url,
-                "https://api.ncbi.nlm.nih.gov/datasets/v2/taxonomy/taxon/9606/dataset_report",
-            )
             self.assertEqual(headers, {"accept": "application/json"})
-            self.assertIsNone(params)
             self.assertEqual(timeout, 30)
-            return _Response(
-                200,
-                {
-                    "reports": [
-                        {
-                            "taxonomy": {
-                                "tax_id": 9606,
-                                "rank": "SPECIES",
-                                "current_scientific_name": {
-                                    "name": "Homo sapiens",
-                                    "authority": "Linnaeus, 1758",
-                                },
-                                "curator_common_name": "human",
-                                "group_name": "primates",
-                                "classification": {
-                                    "domain": {"name": "Eukaryota"},
-                                    "kingdom": {"name": "Metazoa"},
-                                    "phylum": {"name": "Chordata"},
-                                    "class": {"name": "Mammalia"},
-                                    "order": {"name": "Primates"},
-                                    "family": {"name": "Hominidae"},
-                                    "genus": {"name": "Homo"},
-                                    "species": {"name": "Homo sapiens"},
-                                },
+            calls.append((url, params))
+            if url == "https://api.ncbi.nlm.nih.gov/datasets/v2/taxonomy/taxon/9606/dataset_report":
+                self.assertEqual(params, {"returned_content": "METADATA"})
+                return _Response(
+                    200,
+                    {
+                        "reports": [
+                            {
+                                "taxonomy": {
+                                    "tax_id": 9606,
+                                    "rank": "SPECIES",
+                                    "current_scientific_name": {
+                                        "name": "Homo sapiens",
+                                        "authority": "Linnaeus, 1758",
+                                    },
+                                    "curator_common_name": "human",
+                                    "group_name": "primates",
+                                    "parents": [
+                                        1,
+                                        131567,
+                                        2759,
+                                        33154,
+                                        33208,
+                                        7711,
+                                        40674,
+                                        9443,
+                                        9604,
+                                        207598,
+                                        9605,
+                                    ],
+                                    "classification": {
+                                        "domain": {"name": "Eukaryota", "id": 2759},
+                                        "kingdom": {"name": "Metazoa", "id": 33208},
+                                        "phylum": {"name": "Chordata", "id": 7711},
+                                        "class": {"name": "Mammalia", "id": 40674},
+                                        "order": {"name": "Primates", "id": 9443},
+                                        "family": {"name": "Hominidae", "id": 9604},
+                                        "genus": {"name": "Homo", "id": 9605},
+                                        "species": {"name": "Homo sapiens", "id": 9606},
+                                    },
+                                }
                             }
-                        }
-                    ]
-                },
-            )
+                        ]
+                    },
+                )
+            if (
+                url
+                == "https://api.ncbi.nlm.nih.gov/datasets/v2/taxonomy/taxon/"
+                "2759,33154,33208,7711,40674,9443,9604,207598,9605/dataset_report"
+            ):
+                self.assertEqual(params, {"returned_content": "METADATA", "page_size": 9})
+                return _Response(
+                    200,
+                    {
+                        "reports": [
+                            parent_report(9605, "GENUS", "Homo"),
+                            parent_report(33154, "CLADE", "Opisthokonta"),
+                            parent_report(2759, "DOMAIN", "Eukaryota"),
+                            parent_report(207598, "SUBFAMILY", "Homininae"),
+                            parent_report(9604, "FAMILY", "Hominidae"),
+                            parent_report(33208, "KINGDOM", "Metazoa"),
+                            parent_report(7711, "PHYLUM", "Chordata"),
+                            parent_report(40674, "CLASS", "Mammalia"),
+                            parent_report(9443, "ORDER", "Primates"),
+                        ]
+                    },
+                )
+            raise AssertionError(f"unexpected URL {url}")
 
         client = NcbiTaxonomyClient(session_get=fake_get)
         taxonomy = client.fetch_lineage_and_ranks("9606")
 
+        self.assertEqual(len(calls), 2)
         self.assertEqual(taxonomy["tax_id"], "9606")
         self.assertEqual(taxonomy["species"], "Homo sapiens")
         self.assertEqual(taxonomy["genus"], "Homo")
         self.assertEqual(taxonomy["family"], "Hominidae")
         self.assertEqual(
             taxonomy["lineage"],
-            "Eukaryota; Metazoa; Chordata; Mammalia; Primates; Hominidae; *Homo*; *Homo sapiens*",
+            (
+                "Eukaryota; Opisthokonta; Metazoa; Chordata; Mammalia; Primates; "
+                "Hominidae; Homininae; *Homo*; *Homo sapiens*"
+            ),
         )
+        self.assertEqual(taxonomy["lineage_source"], "ncbi_datasets_parents")
         self.assertEqual(taxonomy["tax_auth_ncbi"], "Linnaeus, 1758")
         self.assertEqual(taxonomy["common_name_ncbi"], "human")
+
+    def test_parse_taxonomy_report_falls_back_to_classification_lineage(self) -> None:
+        taxonomy = NcbiTaxonomyClient.parse_taxonomy_report(
+            {
+                "taxonomy": {
+                    "tax_id": 9606,
+                    "current_scientific_name": {"name": "Homo sapiens"},
+                    "classification": {
+                        "domain": {"name": "Eukaryota", "id": 2759},
+                        "kingdom": {"name": "Metazoa", "id": 33208},
+                        "phylum": {"name": "Chordata", "id": 7711},
+                        "class": {"name": "Mammalia", "id": 40674},
+                        "order": {"name": "Primates", "id": 9443},
+                        "family": {"name": "Hominidae", "id": 9604},
+                        "genus": {"name": "Homo", "id": 9605},
+                        "species": {"name": "Homo sapiens", "id": 9606},
+                    },
+                }
+            }
+        )
+
+        self.assertEqual(
+            taxonomy["lineage"],
+            (
+                "Eukaryota; Metazoa; Chordata; Mammalia; Primates; "
+                "Hominidae; *Homo*; *Homo sapiens*"
+            ),
+        )
+        self.assertEqual(taxonomy["lineage_source"], "ncbi_datasets_classification")
 
     def test_fetch_lineage_and_ranks_returns_empty_dict_when_report_missing(self) -> None:
         client = NcbiTaxonomyClient(
