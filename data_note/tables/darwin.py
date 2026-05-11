@@ -487,7 +487,7 @@ def make_table5_rows(context: dict) -> dict:
         ("Gfastats", software_version(context, "gfastats_version", "1.3.6"), "[https://github.com/vgl-hub/gfastats](https://github.com/vgl-hub/gfastats)"),
         ("Hifiasm", context.get("hifiasm_version"), "[https://github.com/chhylp123/hifiasm](https://github.com/chhylp123/hifiasm)"),
         ("HiGlass", software_version(context, "higlass_version", "1.13.4"), "[https://github.com/higlass/higlass](https://github.com/higlass/higlass)"),
-        ("MerquryFK", software_version(context, "merquryfk_version", "1.1.2"), "[https://github.com/thegenemyers/MERQURY.FK](https://github.com/thegenemyers/MERQURY.FK)"),
+        ("MerquryFK", "1.1.0-c1", "[https://github.com/thegenemyers/MERQURY.FK](https://github.com/thegenemyers/MERQURY.FK)"),
         ("Minimap2", context.get("minimap2_version"), "[https://github.com/lh3/minimap2](https://github.com/lh3/minimap2)"),
         ("MitoHiFi", context.get("mitohifi_version"), "[https://github.com/marcelauliano/MitoHiFi](https://github.com/marcelauliano/MitoHiFi)"),
         ("Oatk", context.get("oatk_version"), "[https://github.com/c-zhou/oatk](https://github.com/c-zhou/oatk)"),

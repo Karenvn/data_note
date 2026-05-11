@@ -186,7 +186,7 @@ class ProfileRegressionTests(unittest.TestCase):
         self.assertIn("Fig_6_Snail", context)
         self.assertIn("Fig_7_Blob", context)
         self.assertNotIn("Fig_4_Merqury", context)
-        self.assertIn("lep_busco_painter,1.0.0", "\n".join(context["tables"]["table5"]["rows"]))
+        self.assertIn("merian-busco-painter,v1.0.0", "\n".join(context["tables"]["table5"]["rows"]))
         self.assertEqual(context["tables"]["table3"]["native_headers"][-1], "**Assigned Merian elements**")
         self.assertIn("Fig_4_Merian.gif", generated_files)
         self.assertIn("Fig_5_Merqury.gif", generated_files)

@@ -101,7 +101,7 @@ class PsycheTableTests(unittest.TestCase):
         joined_rows = "\n".join(table["rows"])
         self.assertNotIn("BEDTools,2.30.0", joined_rows)
         self.assertNotIn("Cooler,0.8.11", joined_rows)
-        self.assertIn("lep_busco_painter,1.0.0", joined_rows)
+        self.assertIn("merian-busco-painter,v1.0.0", joined_rows)
 
 
 if __name__ == "__main__":

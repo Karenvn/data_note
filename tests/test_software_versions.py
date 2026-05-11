@@ -12,6 +12,7 @@ from data_note.software_versions import (
 )
 from data_note.services.software_version_service import SoftwareVersionService
 from data_note.tables.darwin import make_table5_rows
+from data_note.tables.psyche import make_table5_rows as make_psyche_table5_rows
 from scripts.collect_assembly_software_versions import extract_versions_from_report
 
 
@@ -73,8 +74,20 @@ genomescope_version: 2.0.1
 
         self.assertIn("TreeVal,1.4.7", "\n".join(table["rows"]))
 
+    def test_merquryfk_uses_manual_module_version_not_assembly_context(self) -> None:
+        context = {"species": "Example species", "merquryfk_version": "assembly-derived-hash"}
+
+        darwin_table = make_table5_rows(context)
+        psyche_table = make_psyche_table5_rows(context)
+
+        self.assertIn("MerquryFK,1.1.0-c1", "\n".join(darwin_table["rows"]))
+        self.assertIn("MerquryFK,1.1.0-c1", "\n".join(psyche_table["rows"]))
+        self.assertNotIn("MerquryFK,assembly-derived-hash", "\n".join(darwin_table["rows"]))
+        self.assertNotIn("MerquryFK,assembly-derived-hash", "\n".join(psyche_table["rows"]))
+
     def test_canonical_key_maps_known_tool_names(self) -> None:
         self.assertEqual(canonical_version_key("sanger-tol/treeval"), "treeval_version")
+        self.assertEqual(canonical_version_key("merian-busco-painter"), "merian_busco_painter_version")
         self.assertEqual(canonical_version_key("MERQURY.FK"), "merquryfk_version")
 
     def test_extracts_pipeline_versions_from_nextflow_log(self) -> None:
