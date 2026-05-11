@@ -30,6 +30,7 @@ from .services import (
     SequencingService,
     SequencingWorkflowService,
     ServerDataService,
+    SoftwareVersionService,
     TaxonomyService,
 )
 from .species_summary_service import SpeciesSummaryService
@@ -117,6 +118,7 @@ class DataNoteOrchestrator:
             render_context_builder=self.render_context_builder,
         )
         self.server_data_service = ServerDataService()
+        self.software_version_service = SoftwareVersionService()
         self.species_summary_service = SpeciesSummaryService()
         self.annotation_quality_workflow_service = AnnotationQualityWorkflowService(
             annotation_service=self.annotation_service,
@@ -232,6 +234,11 @@ class DataNoteOrchestrator:
             assembly_bundle=assembly_bundle,
             tax_id=context.tax_id,
         )
+
+        software_versions = self.software_version_service.build_context(tolid)
+        if software_versions:
+            note_data.extra_sections.append(software_versions)
+            context = self.render_context_builder.snapshot(note_data)
 
         corrections_file = os.getenv(
             "DATA_NOTE_CORRECTIONS_FILE",

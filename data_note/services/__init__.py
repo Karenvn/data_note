@@ -20,6 +20,7 @@ __all__ = [
     "SequencingService",
     "SequencingWorkflowService",
     "ServerDataService",
+    "SoftwareVersionService",
     "TaxonomyService",
 ]
 
@@ -109,6 +110,10 @@ def __getattr__(name: str):
         from .server_data_service import ServerDataService
 
         return ServerDataService
+    if name == "SoftwareVersionService":
+        from .software_version_service import SoftwareVersionService
+
+        return SoftwareVersionService
     if name == "TaxonomyService":
         from .taxonomy_service import TaxonomyService
 

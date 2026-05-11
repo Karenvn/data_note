@@ -22,6 +22,13 @@ def safe_str(value):
     return str(value) if value is not None else ""
 
 
+def software_version(context, key: str, fallback=None):
+    value = context.get(key)
+    if value in (None, ""):
+        return fallback
+    return value
+
+
 def flatten_cell(value, digits=2):
     """Flatten table cell to safe string format."""
     if value is None:

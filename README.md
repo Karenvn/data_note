@@ -179,7 +179,7 @@ Text corrections, local asset files, and the author database also come from conf
 
 The setup will need `ENTREZ_EMAIL` and `ENTREZ_API_KEY` to be set. The default profile is `darwin`, but it can be changed with `DATA_NOTE_PROFILE`.
 
-Local file paths are usually taken from `DATA_NOTE_GN_ASSETS`, with `DATA_NOTE_SERVER_DATA` kept as a legacy alias. From that base location, `data_note` can also read a corrections file, a flow-cytometry table, a long-read sample preparation table, and an author database through `DATA_NOTE_CORRECTIONS_FILE`, `DATA_NOTE_CYTO_INFO_TSV`, `DATA_NOTE_LR_SAMPLE_PREP_TSV`, and `DATA_NOTE_AUTHOR_DB`. The corrections file defaults to `~/gn_assets/text_corrections.json`.
+Local file paths are usually taken from `DATA_NOTE_GN_ASSETS`, with `DATA_NOTE_SERVER_DATA` kept as a legacy alias. From that base location, `data_note` can also read per-assembly software-version files, a corrections file, a flow-cytometry table, a long-read sample preparation table, and an author database through `DATA_NOTE_SOFTWARE_VERSIONS_DIR`, `DATA_NOTE_CORRECTIONS_FILE`, `DATA_NOTE_CYTO_INFO_TSV`, `DATA_NOTE_LR_SAMPLE_PREP_TSV`, and `DATA_NOTE_AUTHOR_DB`. The software-version directory defaults to `~/gn_assets/software_versions`, and the corrections file defaults to `~/gn_assets/text_corrections.json`.
 
 Optional text additions are controlled by `DATA_NOTE_INCLUDE_GBIF_DISTRIBUTION` and `DATA_NOTE_INCLUDE_BOLD_BARCODE`. If the BOLD workflow is not installed as a module, `DATA_NOTE_BOLD_REPO` can point to a checkout containing `bold_coi_pipeline.py`.
 
@@ -195,6 +195,8 @@ Matched portal rows are filtered against the public run rows selected for the no
 
 Internal or machine-local integrations use `PORTAL_URL`, `PORTAL_API_PATH`, `JIRA_BASE_URL`, `JIRA_DOMAIN`, `YAML_CACHE_DIR`, `YAML_SSH_USER`, `YAML_SSH_HOST`, and `YAML_SSH_IDENTITY_FILE`. YAML files are refreshed into `YAML_CACHE_DIR` for inspection, but the remote path recorded in Jira remains the source of truth and the YAML is not copied into the output note folders.
 
+Per-assembly software-version files can be YAML, JSON, CSV, or TSV. The expected local location is `~/gn_assets/software_versions/<tolid>.yml`; flat context keys such as `treeval_version` are accepted, as are raw TreeVal-style nested mappings such as `PROCESS_NAME: {tool: version}`. To collect TreeVal output on a server, run `scripts/collect_assembly_software_versions.py <tolid> --run-dir <treeval_outdir>` or use `--work-root <assembly_work_root>` when the exact output directory is not known.
+
 If you are using the Ensembl transition code, the related variables are `GN_DEBUG_ENSEMBL`, `GN_ENSEMBL_GRAPHQL_URL`, `GN_ENSEMBL_ORGANISMS_BASE`, `GN_ENSEMBL_MAIN_GFF3_BASE`, and `GN_ENSEMBL_MAIN_GTF_BASE`.
 
 ## Assumptions and limitations
@@ -204,6 +206,7 @@ If you are using the Ensembl transition code, the related variables are `GN_DEBU
 - Assembly quality assets such as BlobToolKit, GenomeScope, Merqury run results, a chromosome map, ancestral linkage groups plots, and metagenome analyses are expected to exist already.
 - Some local metadata lookup steps rely on internal data, and are not required for the public core workflow.
 - Optional plant flow-cytometry data is expected at `DATA_NOTE_CYTO_INFO_TSV`, defaulting to `~/gn_assets/cyto_info.tsv`.
+- Optional per-assembly software versions are expected at `DATA_NOTE_SOFTWARE_VERSIONS_DIR`, defaulting to `~/gn_assets/software_versions`.
 - Optional text corrections are expected at `DATA_NOTE_CORRECTIONS_FILE`, defaulting to `~/gn_assets/text_corrections.json`.
 - Optional LR extraction spreadsheet data is expected at `DATA_NOTE_LR_SAMPLE_PREP_TSV`, defaulting to `~/gn_assets/LR_sample_prep.tsv` with a legacy fallback to `~/genome_note_templates/LR_sample_prep.tsv`.
 - Templates are expected to be Markdown templates with Jinja2 placeholders and syntax.
