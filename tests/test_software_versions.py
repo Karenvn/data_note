@@ -13,7 +13,6 @@ from data_note.software_versions import (
 from data_note.services.software_version_service import SoftwareVersionService
 from data_note.tables.darwin import make_table5_rows
 from data_note.tables.psyche import make_table5_rows as make_psyche_table5_rows
-from scripts.collect_assembly_software_versions import extract_versions_from_report
 
 
 class SoftwareVersionTests(unittest.TestCase):
@@ -89,20 +88,6 @@ genomescope_version: 2.0.1
         self.assertEqual(canonical_version_key("sanger-tol/treeval"), "treeval_version")
         self.assertEqual(canonical_version_key("merian-busco-painter"), "merian_busco_painter_version")
         self.assertEqual(canonical_version_key("MERQURY.FK"), "merquryfk_version")
-
-    def test_extracts_pipeline_versions_from_nextflow_log(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / ".nextflow.log"
-            path.write_text(
-                "N E X T F L O W  ~  version 24.10.5\n"
-                "nextflow run sanger-tol/treeval -r 1.4.7 --input treeval.yaml\n"
-            )
-
-            versions = extract_versions_from_report(path)
-
-        self.assertEqual(versions["treeval_version"], "1.4.7")
-        self.assertEqual(versions["nextflow_version"], "24.10.5")
-
 
 if __name__ == "__main__":
     unittest.main()

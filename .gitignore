@@ -12,8 +12,6 @@
 !/tests/**
 !/assets/
 !/assets/**
-!/scripts/
-!/scripts/**
 
 .DS_Store
 __pycache__/

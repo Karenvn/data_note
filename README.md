@@ -195,7 +195,7 @@ Matched portal rows are filtered against the public run rows selected for the no
 
 Internal or machine-local integrations use `PORTAL_URL`, `PORTAL_API_PATH`, `JIRA_BASE_URL`, `JIRA_DOMAIN`, `YAML_CACHE_DIR`, `YAML_SSH_USER`, `YAML_SSH_HOST`, and `YAML_SSH_IDENTITY_FILE`. YAML files are refreshed into `YAML_CACHE_DIR` for inspection, but the remote path recorded in Jira remains the source of truth and the YAML is not copied into the output note folders.
 
-Per-assembly software-version files can be YAML, JSON, CSV, or TSV. The expected local location is `~/gn_assets/software_versions/<tolid>.yml`; flat context keys such as `treeval_version` are accepted, as are raw TreeVal-style nested mappings such as `PROCESS_NAME: {tool: version}`. To collect TreeVal output on a server, run `scripts/collect_assembly_software_versions.py <tolid> --run-dir <treeval_outdir>` or use `--work-root <assembly_work_root>` when the exact output directory is not known.
+Per-assembly software-version files can be YAML, JSON, CSV, or TSV. The expected local location is `~/gn_assets/software_versions/<tolid>.yml`; flat context keys such as `treeval_version` are accepted, as are raw TreeVal-style nested mappings such as `PROCESS_NAME: {tool: version}`. These files should be drawn down by an external/server-side workflow before running `data_note`; the package only reads the normalised local assets and does not trawl server work directories itself.
 
 If you are using the Ensembl transition code, the related variables are `GN_DEBUG_ENSEMBL`, `GN_ENSEMBL_GRAPHQL_URL`, `GN_ENSEMBL_ORGANISMS_BASE`, `GN_ENSEMBL_MAIN_GFF3_BASE`, and `GN_ENSEMBL_MAIN_GTF_BASE`.
 
