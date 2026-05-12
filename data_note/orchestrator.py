@@ -25,6 +25,7 @@ from .services import (
     FlowCytometryService,
     NcbiDatasetsService,
     BoldResultService,
+    OrganelleProvenanceService,
     RenderContextBuilder,
     RenderingService,
     SequencingService,
@@ -115,6 +116,7 @@ class DataNoteOrchestrator:
         )
         self.server_data_service = ServerDataService()
         self.software_version_service = SoftwareVersionService()
+        self.organelle_provenance_service = OrganelleProvenanceService()
         self.species_summary_service = SpeciesSummaryService()
         self.annotation_quality_workflow_service = AnnotationQualityWorkflowService(
             annotation_service=self.annotation_service,
@@ -233,6 +235,11 @@ class DataNoteOrchestrator:
         software_versions = self.software_version_service.build_context(tolid)
         if software_versions:
             note_data.extra_sections.append(software_versions)
+            context = self.render_context_builder.snapshot(note_data)
+
+        organelle_provenance = self.organelle_provenance_service.build_context(tolid)
+        if organelle_provenance:
+            note_data.extra_sections.append(organelle_provenance)
             context = self.render_context_builder.snapshot(note_data)
 
         corrections_file = os.getenv(

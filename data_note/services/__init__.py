@@ -13,6 +13,7 @@ __all__ = [
     "FlowCytometryService",
     "LocalMetadataService",
     "NcbiDatasetsService",
+    "OrganelleProvenanceService",
     "RenderContextBuilder",
     "RenderingService",
     "SequencingFetchService",
@@ -82,6 +83,10 @@ def __getattr__(name: str):
         from .ncbi_datasets_service import NcbiDatasetsService
 
         return NcbiDatasetsService
+    if name == "OrganelleProvenanceService":
+        from .organelle_provenance_service import OrganelleProvenanceService
+
+        return OrganelleProvenanceService
     if name == "RenderContextBuilder":
         from .render_context_builder import RenderContextBuilder
 
