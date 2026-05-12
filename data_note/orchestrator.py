@@ -40,10 +40,6 @@ from .io_utils import dict_to_csv, read_bioprojects_from_file, read_bioprojects_
 from .profiles import ProgrammeProfile, get_profile
 
 
-KNOWN_TOLID_FIX = {
-    "GCA_945910005.1": "ipIsoGram3",
-}
-
 logger = logging.getLogger(__name__)
 
 
@@ -176,7 +172,6 @@ class DataNoteOrchestrator:
             umbrella_data,
             tax_id,
             child_accessions=child_accessions,
-            known_tolid_fixes=KNOWN_TOLID_FIX,
         )
         assembly_selection = assembly_bundle.selection
         assemblies_type = assembly_bundle.assemblies_type
@@ -248,7 +243,6 @@ class DataNoteOrchestrator:
             note_data,
             self.profile,
             corrections_file=corrections_file,
-            known_tolid_fixes=KNOWN_TOLID_FIX,
         )
 
         final_context = context.to_dict()

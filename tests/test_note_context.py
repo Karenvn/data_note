@@ -21,12 +21,5 @@ class NoteContextTests(unittest.TestCase):
         context.set_formatted_parent_projects()
         self.assertEqual(context.formatted_parent_projects, "Project A (PRJEB1) and Project B (PRJEB2)")
 
-    def test_apply_known_tolid_fix(self) -> None:
-        context = NoteContext()
-        context["prim_accession"] = "GCA_945910005.1"
-        context.apply_known_tolid_fix({"GCA_945910005.1": "ipIsoGram3"})
-        self.assertEqual(context.tolid, "ipIsoGram3")
-
-
 if __name__ == "__main__":
     unittest.main()

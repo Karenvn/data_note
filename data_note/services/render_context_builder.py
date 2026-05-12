@@ -39,13 +39,10 @@ class RenderContextBuilder:
         note_data: NoteData,
         *,
         context: NoteContext | Mapping[str, Any] | None = None,
-        known_tolid_fixes: Mapping[str, str] | None = None,
     ) -> NoteContext:
         note_context = self.snapshot(note_data, context=context)
         note_context.set_formatted_parent_projects()
         note_context.ensure_tolid()
-        if known_tolid_fixes:
-            note_context.apply_known_tolid_fix(dict(known_tolid_fixes))
 
         note_data.base.formatted_parent_projects = note_context.formatted_parent_projects
         if note_context.tax_id:
@@ -60,12 +57,8 @@ class RenderContextBuilder:
         profile: ProgrammeProfile,
         *,
         corrections_file: str | None = None,
-        known_tolid_fixes: Mapping[str, str] | None = None,
     ) -> NoteContext:
-        note_context = self.derive_note_fields(
-            note_data,
-            known_tolid_fixes=known_tolid_fixes,
-        )
+        note_context = self.derive_note_fields(note_data)
         if corrections_file:
             self.correction_loader(note_context, corrections_file)
         self._apply_assembly_rendering_context(note_context)

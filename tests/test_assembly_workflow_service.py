@@ -26,12 +26,10 @@ class _RenderContextBuilderStub:
     def snapshot(self, note_data: NoteData, context=None) -> NoteContext:
         return self._context_for(note_data)
 
-    def derive_note_fields(self, note_data: NoteData, *, context=None, known_tolid_fixes=None) -> NoteContext:
+    def derive_note_fields(self, note_data: NoteData, *, context=None) -> NoteContext:
         note_context = self._context_for(note_data)
         note_context.set_formatted_parent_projects()
         note_context.ensure_tolid()
-        if known_tolid_fixes:
-            note_context.apply_known_tolid_fix(dict(known_tolid_fixes))
         note_data.base.formatted_parent_projects = note_context.formatted_parent_projects
         if note_context.tolid:
             note_data.base.tolid = note_context.tolid

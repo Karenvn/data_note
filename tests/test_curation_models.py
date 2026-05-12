@@ -44,6 +44,18 @@ class CurationModelTests(unittest.TestCase):
         self.assertEqual(context["protocol"], "MagAttract")
         self.assertEqual(context["extra_field"], "kept")
 
+    def test_extraction_info_adds_display_weight_rounded_to_three_decimal_places(self) -> None:
+        extraction = ExtractionInfo.from_mapping(
+            {
+                "tissue_weight_mg": 45.800000000000004,
+            }
+        )
+
+        context = extraction.to_context_dict()
+
+        self.assertEqual(context["tissue_weight_mg"], 45.800000000000004)
+        self.assertEqual(context["tissue_weight_mg_display"], "45.800")
+
     def test_barcoding_info_round_trips_legacy_keys(self) -> None:
         barcoding = BarcodingInfo.from_mapping(
             {

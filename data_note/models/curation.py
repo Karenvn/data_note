@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 
@@ -95,6 +96,9 @@ class ExtractionInfo:
             value = getattr(self, name)
             if value is not None:
                 context[name] = value
+        tissue_weight_display = _format_decimal_places(self.tissue_weight_mg, places=3)
+        if tissue_weight_display:
+            context["tissue_weight_mg_display"] = tissue_weight_display
         context.update(self.extras)
         return context
 
@@ -140,3 +144,13 @@ class CurationBundle:
         context.update(self.extraction.to_context_dict())
         context.update(self.barcoding.to_context_dict())
         return context
+
+
+def _format_decimal_places(value: Any, *, places: int) -> str:
+    if value in (None, ""):
+        return ""
+    try:
+        number = Decimal(str(value).replace(",", ""))
+    except (InvalidOperation, ValueError):
+        return str(value)
+    return f"{number:.{places}f}"

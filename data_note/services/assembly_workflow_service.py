@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass, field
 import logging
 from typing import Any, Callable
@@ -42,7 +41,6 @@ class AssemblyWorkflowService:
         tax_id: str,
         *,
         child_accessions: list[str] | None = None,
-        known_tolid_fixes: Mapping[str, str] | None = None,
     ) -> tuple[AssemblyBundle, NoteContext]:
         assembly_selection = self.assembly_service.build_context(
             umbrella_data,
@@ -96,8 +94,5 @@ class AssemblyWorkflowService:
         if assembly_bundle.assemblies_type in {"prim_alt", "hap_asm"}:
             assembly_bundle.btk = self.btk_service.build_context(assembly_selection)
 
-        context = self.render_context_builder.derive_note_fields(
-            note_data,
-            known_tolid_fixes=known_tolid_fixes,
-        )
+        context = self.render_context_builder.derive_note_fields(note_data)
         return assembly_bundle, context
