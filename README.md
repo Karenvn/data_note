@@ -130,7 +130,7 @@ fetch/service layers -> typed models -> NoteData -> workflow services -> RenderC
 
 ## Requirements
 
-- Python 3.10+
+- `Python 3.10+`
 - `biopython`
 - `jinja2`
 - `num2words`
