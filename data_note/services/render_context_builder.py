@@ -8,6 +8,7 @@ from ..calculate_metrics import calc_ebp_metric, evaluate_ebp_reference_standard
 from ..io_utils import load_and_apply_corrections
 from ..models import NoteContext, NoteData
 from ..sampling_template_fields import populate_sampling_template_fields
+from ..wet_lab_protocols import build_wet_lab_protocol_context
 from ..tables.common import (
     has_alternate_assembly,
     is_haploid_note,
@@ -26,6 +27,7 @@ class RenderContextBuilder:
     correction_loader: Callable[[dict[str, Any], str], dict[str, Any]] = load_and_apply_corrections
     ebp_metric_calculator: Callable[[dict[str, Any]], str] = calc_ebp_metric
     ebp_reference_evaluator: Callable[[dict[str, Any]], dict[str, Any]] = evaluate_ebp_reference_standard
+    wet_lab_protocol_builder: Callable[[Mapping[str, Any]], dict[str, Any]] = build_wet_lab_protocol_context
 
     def snapshot(
         self,
@@ -63,6 +65,7 @@ class RenderContextBuilder:
             self.correction_loader(note_context, corrections_file)
         self._apply_assembly_rendering_context(note_context)
         populate_sampling_template_fields(note_context)
+        note_context.update(self.wet_lab_protocol_builder(note_context))
         note_context["ebp_metric"] = self.ebp_metric_calculator(note_context)
         note_context.update(self.ebp_reference_evaluator(note_context))
         rendered_context = profile.build_tables(note_context)

@@ -6,8 +6,6 @@
 
 `data_note` is a Python workflow for generating genome note documents in [Pandoc](https://pandoc.org/) Markdown from a list of BioProject accession numbers. It collects sampling, sequencing, taxonomy, assembly, annotation and quality metadata from public sources, with optional addition of metadata for methods and analyses from local systems. It then renders, for each BioProject, a species directory containing the note with associated figures and references in the required formats.
 
-The repository is designed for preparation of genome notes in Markdown. It treats metadata integration, text generation and figure preparation as a distinct workflow, separate from upstream pipelines that analyse genome assembly quality.
-
 ## Scope
 
 This repository covers:
@@ -47,11 +45,8 @@ For profile selection, use:
 python -m data_note --profile darwin --template_file ~/genome_note_templates/dtol_template.md bioprojects.txt
 ```
 
-`plant` is the profile name for a subset of DToL notes. It uses the Darwin table and figure plan, but gives plant notes a dedicated profile name so they can diverge later without affecting other DToL notes. It is also the profile that adds plant flow cytometry metadata. It works with plant-specific templates, e.g.:
+`plant` is the profile name for a subset of DToL notes. It adds plant flow cytometry metadata and works with plant-specific templates.
 
-```bash
-python -m data_note --profile plant --template_file ~/genome_note_templates/dtol_plant_template.md bioprojects.txt
-```
 
 `psyche` is the profile name for Project Psyche genome notes. It has its own table module, with the first extracted differences from DToL:
 - Table 3 adds assigned Merian elements and, for dual chromosome-level haplotypes, reports haplotype 1 only.
@@ -106,16 +101,11 @@ Rules for assembly overrides:
 
 Taxonomy overrides:
 
-The assembly overrides do not bypass the normal candidate taxon id filter. They only let you choose explicitly from assemblies that still count as relevant for that BioProject after taxon id and excluded-name filtering.
-
-`data_note` is not intended to produce genome notes from genuinely misassigned organism records. If an assembly is under the wrong organism taxon id, the preferred approach is to wait for the public ENA and NCBI records to be corrected.
-
-The taxonomy override layer in `data_note/taxonomy_mapper.py` is for a narrower problem: accepted taxonomy changes where some public metadata are stale (often following a taxon merger) or inconsistent between sources.
+The taxonomy override layer in `data_note/taxonomy_mapper.py` is for cases where some public metadata are stale (often following a taxon merger) or inconsistent between sources.
 
 - use `TAX_ID_MAPPINGS` when merged or replacement taxon ids should still be treated as allowed for that species or BioProject
 - use `BIOPROJECT_TAX_ID_OVERRIDES` when the umbrella BioProject taxon id itself is outdated and should be replaced before assembly selection
 - these overrides are for cases such as taxon mergers, reclassifications, or outdated XML-layer metadata after a taxonomy update
-
 
 ### Automatic intro text
 
@@ -134,8 +124,6 @@ Optional additions (separate from `auto_text`):
 
 
 ## Structure
-
-For each BioProject, `data_note` collects assembly, taxonomy, sequencing, sampling and quality metadata, adds optional local information where it is available, prepares the required tables and figures, and then fills a Jinja2 Markdown template.
 
 The main coordination happens in `data_note/orchestrator.py`. Most of the fetching, lookup and text-building work is done in small modules under `data_note/services/`. The data collected along the way is kept in classes under `data_note/models/` until it is turned into the final template context for rendering.
 
@@ -169,35 +157,29 @@ Optional local integration would also require:
 
 ## Configuration
 
-`data_note` can be controlled in three places: the command line, environment variables, and the Markdown template given with `--template_file`. For most runs, the main choices are the profile, the template file, and whether to include optional text such as the GBIF distribution summary or the BOLD barcode paragraph.
+Most runs are controlled by the BioProject input, the profile, and the Markdown template.
 
-Assembly overrides can be set either on the command line or through environment variables. The environment variables mirror the CLI flags: `DATA_NOTE_ASSEMBLY`, `DATA_NOTE_ALT_ASSEMBLY`, `DATA_NOTE_HAP1_ASSEMBLY`, and `DATA_NOTE_HAP2_ASSEMBLY`. Use either the primary/alternate pair or the haplotype 1/2 pair, not both. As with the CLI flags, these overrides only work when the input resolves to exactly one BioProject.
+Environment variables are mainly for things that are local to a machine or lab setup: NCBI credentials, paths to local assets, optional portal/Jira access, and a few switches for sequencing summaries. The full list is in [.env.example](.env.example).
 
-Text corrections, local asset files, and the author database also come from configuration rather than from fixed paths in the code. The current set of variables is shown in [.env.example](.env.example).
+The minimum setup is:
 
-## Environment
+- `ENTREZ_EMAIL`
+- `ENTREZ_API_KEY`
+- `DATA_NOTE_GN_ASSETS`, if your local assets are not in `~/gn_assets`
 
-The setup will need `ENTREZ_EMAIL` and `ENTREZ_API_KEY` to be set. The default profile is `darwin`, but it can be changed with `DATA_NOTE_PROFILE`.
+`DATA_NOTE_GN_ASSETS` is the base folder for local files such as software versions, text corrections, flow cytometry data, LR sample-prep data, and the author database. Individual paths can still be overridden when needed.
 
-Local file paths are usually taken from `DATA_NOTE_GN_ASSETS`, with `DATA_NOTE_SERVER_DATA` kept as a legacy alias. From that base location, `data_note` can also read per-assembly software-version files, a corrections file, a flow-cytometry table, a long-read sample preparation table, and an author database through `DATA_NOTE_SOFTWARE_VERSIONS_DIR`, `DATA_NOTE_CORRECTIONS_FILE`, `DATA_NOTE_CYTO_INFO_TSV`, `DATA_NOTE_LR_SAMPLE_PREP_TSV`, and `DATA_NOTE_AUTHOR_DB`. The software-version directory defaults to `~/gn_assets/software_versions`, and the corrections file defaults to `~/gn_assets/text_corrections.json`.
+Sequencing summaries use public ENA/NCBI metadata by default, with an optional portal check where available. The default count style keeps paired-end Illumina libraries as read pairs. Both behaviours can be changed through `.env.example`.
 
-Optional text additions are controlled by `DATA_NOTE_INCLUDE_GBIF_DISTRIBUTION` and `DATA_NOTE_INCLUDE_BOLD_BARCODE`. If the BOLD workflow is not installed as a module, `DATA_NOTE_BOLD_REPO` can point to a checkout containing `bold_coi_pipeline.py`.
+Internal integrations are optional. The public workflow does not need portal, Jira, YAML cache, or server-side result access, but those hooks are there for local Tree of Life work.
 
-Sequencing summaries are based on public ENA/NCBI run metadata by default, with an optional internal portal enrichment layer. Set `DATA_NOTE_SEQUENCING_SOURCE` to choose the policy:
+## Wet lab protocol notes
 
-- `public`: use only ENA/NCBI metadata
-- `public-with-portal`: keep public metadata, but repair missing or zero public counts from matched ToL Portal/TOLQC run data when available
-- `portal`: prefer matched ToL Portal/TOLQC counts where available
+`data_note` keeps a local copy of the published Sanger Tree of Life Wet Laboratory Protocol Collection V.3 in [data_note/wet_lab_protocols.py](data_note/wet_lab_protocols.py). During rendering, it adds likely protocol matches to the context and templates can insert `wet_lab_protocol_editor_comment` into the generated Markdown.
 
-Matched portal rows are filtered against the public run rows selected for the note. The workflow does not use ToLID-level portal aggregates directly, because portal relations can include multiplexed or misattributed run rows. Diagnostic fields such as `sequencing_portal_excluded_runs`, `sequencing_portal_unmatched_runs`, and `sequencing_portal_warnings` are written to the context CSV when portal data are inspected.
+That comment is hidden in rendered output, but visible when editing the `.md` file. It lists the source metadata, likely protocol choices, any warnings, and the full published protocol catalog, so the methods prose can still be corrected by hand.
 
-`DATA_NOTE_ILLUMINA_COUNT_UNIT` controls paired-end Illumina count reporting. The default, `read_pairs`, keeps the existing genome-note convention of counting a paired-end fragment/pair as one unit. Set it to `reads` to report individual reads instead.
-
-Internal or machine-local integrations use `PORTAL_URL`, `PORTAL_API_PATH`, `JIRA_BASE_URL`, `JIRA_DOMAIN`, `YAML_CACHE_DIR`, `YAML_SSH_USER`, `YAML_SSH_HOST`, and `YAML_SSH_IDENTITY_FILE`. YAML files are refreshed into `YAML_CACHE_DIR` for inspection, but the remote path recorded in Jira remains the source of truth and the YAML is not copied into the output note folders.
-
-Per-assembly software-version files can be YAML, JSON, CSV, or TSV. The expected local location is `~/gn_assets/software_versions/<tolid>.yml`; flat context keys such as `treeval_version` are accepted, as are raw TreeVal-style nested mappings such as `PROCESS_NAME: {tool: version}`. These files should be drawn down by an external/server-side workflow before running `data_note`; the package only reads the normalised local assets and does not trawl server work directories itself.
-
-If you are using the Ensembl transition code, the related variables are `GN_DEBUG_ENSEMBL`, `GN_ENSEMBL_GRAPHQL_URL`, `GN_ENSEMBL_ORGANISMS_BASE`, `GN_ENSEMBL_MAIN_GFF3_BASE`, and `GN_ENSEMBL_MAIN_GTF_BASE`.
+Ambiguous values such as `MagAttract Standard 48xrn` are flagged for review rather than silently treated as final.
 
 ## Assumptions and limitations
 
@@ -205,10 +187,7 @@ If you are using the Ensembl transition code, the related variables are `GN_DEBU
 - Data for each BioProject should be available in ENA using a structure matching the Earth BioGenome Project recommendation for a Species X assembly project (see https://www.earthbiogenome.org/report-on-assembly-standards).
 - Assembly quality assets such as BlobToolKit, GenomeScope, Merqury run results, a chromosome map, ancestral linkage groups plots, and metagenome analyses are expected to exist already.
 - Some local metadata lookup steps rely on internal data, and are not required for the public core workflow.
-- Optional plant flow-cytometry data is expected at `DATA_NOTE_CYTO_INFO_TSV`, defaulting to `~/gn_assets/cyto_info.tsv`.
-- Optional per-assembly software versions are expected at `DATA_NOTE_SOFTWARE_VERSIONS_DIR`, defaulting to `~/gn_assets/software_versions`.
-- Optional text corrections are expected at `DATA_NOTE_CORRECTIONS_FILE`, defaulting to `~/gn_assets/text_corrections.json`.
-- Optional LR extraction spreadsheet data is expected at `DATA_NOTE_LR_SAMPLE_PREP_TSV`, defaulting to `~/gn_assets/LR_sample_prep.tsv` with a legacy fallback to `~/genome_note_templates/LR_sample_prep.tsv`.
+- Optional local assets are expected under `~/gn_assets` unless configured otherwise.
 - Templates are expected to be Markdown templates with Jinja2 placeholders and syntax.
 
 
@@ -232,7 +211,6 @@ python -m data_note --template_file tests/fixtures/template.md tests/fixtures/bi
 ```
 
 This performs metadata searches, so it is not a completely offline example. Generated species folders are written into the current working directory.
-
 
 ## Standards
 
