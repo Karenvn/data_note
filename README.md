@@ -74,19 +74,12 @@ For cases where the automatic choice is not the genome of interest, the assembly
 - `--assembly GCA_...` and  `--alt-assembly GCA_...`
 - `--hap1-assembly GCA_...` and `--hap2-assembly GCA_...`
 
-The same override values can be supplied by setting environment variables:
-
-- `DATA_NOTE_ASSEMBLY` and  `DATA_NOTE_ALT_ASSEMBLY`
-- `DATA_NOTE_HAP1_ASSEMBLY` and `DATA_NOTE_HAP2_ASSEMBLY`
-
-These runtime overrides are useful when the assembly cannot be identified reliably from the BioProject metadata, for example because the BioProject structure is unusual or there are several valid candidate assemblies after filtering.
-
+These overrides are useful when the assembly cannot be identified reliably from the BioProject metadata, e.g., if the BioProject structure is unusual or if there are several valid candidate assemblies after filtering.
 
 To force an explicit assembly choice within one BioProject:
 
 ```bash
-python -m data_note --template_file ~/genome_note_templates/dtol_template.md \
---assembly GCA_123456789.1 PRJEB12345
+python -m data_note --template_file ~/genome_note_templates/dtol_template.md --assembly GCA_123456789.1 PRJEB12345
 ```
 
 That tells the workflow to use the supplied primary assembly or haplotype 1 assembly accession for `PRJEB12345` and then infer the matching alternate or haplotype 2 when possible.
@@ -97,11 +90,11 @@ Rules for assembly overrides:
 - `--alt-assembly` requires `--assembly`
 - `--hap2-assembly` requires `--hap1-assembly`
 - the supplied accession must survive the normal taxon id and excluded-name filtering
-- assembly override flags and their environment-variable equivalents only work when the input resolves to exactly one BioProject, not a batch list
+- assembly override flags only work when the input resolves to exactly one BioProject, not a batch list
 
 Taxonomy overrides:
 
-The taxonomy override layer in `data_note/taxonomy_mapper.py` is for cases where some public metadata are stale (often following a taxon merger) or inconsistent between sources.
+The taxonomy override layer in `data_note/taxonomy_mapper.py` is for cases where the metadata are stale (often following a taxon merger) or inconsistent between sources.
 
 - use `TAX_ID_MAPPINGS` when merged or replacement taxon ids should still be treated as allowed for that species or BioProject
 - use `BIOPROJECT_TAX_ID_OVERRIDES` when the umbrella BioProject taxon id itself is outdated and should be replaced before assembly selection
