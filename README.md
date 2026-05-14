@@ -47,11 +47,9 @@ python -m data_note --profile darwin --template_file ~/genome_note_templates/dto
 
 `plant` is the profile name for a subset of DToL notes. It adds plant flow cytometry metadata and works with plant-specific templates.
 
-
-`psyche` is the profile name for Project Psyche genome notes. It has its own table module, with the first extracted differences from DToL:
-- Table 3 adds assigned Merian elements and, for dual chromosome-level haplotypes, reports haplotype 1 only.
+`psyche` is the profile name for Project Psyche genome notes. Figures include a Merian plot, generated via the [merian-busco-painter](https://github.com/Karenvn/merian-busco-painter) scripts. This profile also has its own table module, with differences from DToL:
+- Table 3 adds assigned Merian elements.
 - Table 5 includes the extra Psyche software rows.
-- Figures include a merian plot of chromosomes, generated via the [merian-busco-painter](https://github.com/Karenvn/merian-busco-painter) scripts.
 
 `asg` is the profile name for Aquatic Symbiosis Genomics genome notes. It currently provides:
 - ASG figure numbering, including dedicated numbers for metagenome figures.
@@ -115,6 +113,13 @@ Optional additions (separate from `auto_text`):
 - the flag `--include-gbif-distribution` adds a `distribution_text` paragraph based on GBIF occurrence data when a matching GBIF usage key can be resolved (slow)
 - the flag `--include-bold-barcode` adds a `barcode_text` paragraph from the external BOLD barcode workflow for a single BioProject run (very slow)
 
+### Wet lab protocol notes
+
+`data_note` keeps a local copy of the published Sanger Tree of Life Wet Laboratory Protocol Collection V.3 in [data_note/wet_lab_protocols.py](data_note/wet_lab_protocols.py). During rendering, it adds likely protocol matches to the context and templates can insert `wet_lab_protocol_editor_comment` into the generated Markdown.
+
+That comment is hidden in rendered output, but visible when editing the `.md` file. It lists the source metadata, likely protocol choices, any warnings, and the full published protocol catalog, so the methods prose can still be corrected by hand.
+
+Ambiguous values such as `MagAttract Standard 48xrn` are flagged for review rather than silently treated as final.
 
 ## Structure
 
@@ -165,14 +170,6 @@ The minimum setup is:
 Sequencing summaries use public ENA/NCBI metadata by default, with an optional portal check where available. The default count style keeps paired-end Illumina libraries as read pairs. Both behaviours can be changed through `.env.example`.
 
 Internal integrations are optional. The public workflow does not need portal, Jira, YAML cache, or server-side result access, but those hooks are there for local Tree of Life work.
-
-## Wet lab protocol notes
-
-`data_note` keeps a local copy of the published Sanger Tree of Life Wet Laboratory Protocol Collection V.3 in [data_note/wet_lab_protocols.py](data_note/wet_lab_protocols.py). During rendering, it adds likely protocol matches to the context and templates can insert `wet_lab_protocol_editor_comment` into the generated Markdown.
-
-That comment is hidden in rendered output, but visible when editing the `.md` file. It lists the source metadata, likely protocol choices, any warnings, and the full published protocol catalog, so the methods prose can still be corrected by hand.
-
-Ambiguous values such as `MagAttract Standard 48xrn` are flagged for review rather than silently treated as final.
 
 ## Assumptions and limitations
 
