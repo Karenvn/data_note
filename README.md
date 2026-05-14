@@ -115,9 +115,7 @@ Optional additions (separate from `auto_text`):
 
 ### Wet lab protocol notes
 
-`data_note` keeps a local copy of the published Sanger Tree of Life Wet Laboratory Protocol Collection V.3 in [data_note/wet_lab_protocols.py](data_note/wet_lab_protocols.py). During rendering, it adds likely protocol matches to the context and templates can insert `wet_lab_protocol_editor_comment` into the generated Markdown.
-
-That comment is hidden in rendered output, but visible when editing the `.md` file. It lists the source metadata, likely protocol choices, any warnings, and the full published protocol catalog, so the methods prose can still be corrected by hand.
+`data_note` keeps a local copy of the published Sanger Tree of Life Wet Laboratory Protocol Collection V.3 in [data_note/wet_lab_protocols.py](data_note/wet_lab_protocols.py). During rendering, it adds likely protocol matches to the context and templates can insert `wet_lab_protocol_editor_comment` into the generated Markdown. This comment text lists the source metadata, likely protocol choices, any warnings, and the full published protocol catalogue, so the methods prose can still be corrected by hand.
 
 Ambiguous values such as `MagAttract Standard 48xrn` are flagged for review rather than silently treated as final.
 
