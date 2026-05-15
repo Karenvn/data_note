@@ -309,6 +309,8 @@ class SequencingSummary:
                 "multiplex_identifier",
             )
             context[f"{technology}_sequencing_runs"] = self._join_record_values(records, "sequencing_run")
+            context[f"{technology}_plex_count"] = self._join_record_values(records, "plex_count")
+            context[f"{technology}_plex_level"] = self._format_plex_levels(records)
         return context
 
     def multiplexing_summary(self) -> str:
@@ -336,4 +338,17 @@ class SequencingSummary:
                 continue
             seen.add(value)
             values.append(str(value))
+        return "; ".join(values)
+
+    @staticmethod
+    def _format_plex_levels(records: list[dict[str, Any]]) -> str:
+        values = []
+        seen = set()
+        for record in records:
+            value = record.get("plex_count")
+            if value in (None, "") or value in seen:
+                continue
+            seen.add(value)
+            text = str(value)
+            values.append(text if text.endswith("-plex") else f"{text}-plex")
         return "; ".join(values)

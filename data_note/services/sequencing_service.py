@@ -89,6 +89,7 @@ TEXT_COLUMNS: tuple[str, ...] = (
     "mlwh_tag_index",
     "mlwh_tag1_id",
     "mlwh_tag_sequence",
+    "mlwh_plex_count",
     "mlwh_pac_bio_run_name",
     "mlwh_pac_bio_library_tube_name",
     "mlwh_run_complete",
@@ -464,6 +465,7 @@ class SequencingService:
                 "sequencing_run": SequencingService._string_value(row.get("sequencing_run")),
                 "run_alias": SequencingService._string_value(row.get("run_alias")),
                 "experiment_alias": SequencingService._string_value(row.get("experiment_alias")),
+                "plex_count": SequencingService._string_value(row.get("mlwh_plex_count")),
             }
             multiplex_sample = SequencingService._string_value(row.get("multiplex_sample"))
             if multiplex_sample:
@@ -552,9 +554,14 @@ class SequencingService:
                     "portal_run_id",
                     "mlwh_library_id",
                     "mlwh_pipeline_id_lims",
+                    "mlwh_plex_count",
                 )
                 if SequencingService._string_value(row.get(key))
             }
+            plex_count = SequencingService._string_value(row.get("mlwh_plex_count"))
+            if plex_count:
+                extras[f"{tech_name}_plex_count"] = plex_count
+                extras[f"{tech_name}_plex_level"] = f"{plex_count}-plex"
             records[tech_name] = TechnologyRecord(
                 name=tech_name,
                 sample_accession=SequencingService._string_value(row.get("sample_accession")),

@@ -295,6 +295,64 @@ class SequencingServiceTests(unittest.TestCase):
         self.assertEqual(hic_run["portal_reads"], "6676902688")
         self.assertEqual(hic_run["mlwh_library_id"], "DN952587P:E1")
 
+    def test_build_context_exposes_pacbio_plex_count_from_portal(self) -> None:
+        runinfo_df = pd.DataFrame(
+            [
+                {
+                    "study_accession": "PRJEB104567",
+                    "run_accession": "ERR15996643",
+                    "sample_accession": "SAMEA118260618",
+                    "fastq_bytes": 0,
+                    "submitted_bytes": 26_424_128_708,
+                    "read_count": 7_241_360,
+                    "instrument_model": "Revio",
+                    "base_count": 56_049_164_578,
+                    "instrument_platform": "PACBIO_SMRT",
+                    "library_strategy": "WGS",
+                    "library_layout": "SINGLE",
+                    "library_name": "PSYCHE15752215",
+                    "library_construction_protocol": "PacBio - HiFi",
+                    "submitted_ftp": (
+                        "ftp.sra.ebi.ac.uk/vol1/run/ERR159/ERR15996643/"
+                        "m84047_250808_174518_s3.hifi_reads.bc2020.bam"
+                    ),
+                    "metadata_source": "ena",
+                    "read_count_basis": "reads",
+                }
+            ]
+        )
+        portal_runs = [
+            _PortalObject(
+                "m84047_250808_174518_s3#2020",
+                {
+                    "tolqc_reporting_category": "pacbio",
+                    "tolqc_reads": 7_241_360,
+                    "tolqc_bases": 56_049_164_578,
+                    "mlwh_biosample_accession": "SAMEA118260618",
+                    "mlwh_irods_file": "m84047_250808_174518_s3.hifi_reads.bc2020.bam",
+                    "mlwh_run_id": "m84047_250808_174518_s3",
+                    "mlwh_tag1_id": "bc2020",
+                    "mlwh_plex_count": 2,
+                },
+            ),
+        ]
+        portal_service = PortalSequencingService(datasource_factory=lambda: _PortalDatasource(portal_runs))
+        service = SequencingService(
+            fetch_service=StubSequencingFetchService(runinfo_df),
+            portal_service=portal_service,
+            biosample_tolid_getter=lambda biosamples: {"SAMEA118260618": "ilBupPini2"},
+            sequencing_source="public-with-portal",
+        )
+
+        summary = service.build_context(["PRJEB104567"], "ilBupPini2")
+        context = summary.to_context_dict()
+
+        self.assertEqual(context["pacbio_plex_count"], "2")
+        self.assertEqual(context["pacbio_plex_level"], "2-plex")
+        self.assertEqual(context["pacbio_multiplex_identifiers"], "bc2020")
+        self.assertEqual(context["technology_data"]["pacbio"]["pacbio_plex_level"], "2-plex")
+        self.assertEqual(context["seq_data"]["PacBio"][0]["mlwh_plex_count"], "2")
+
     def test_ena_paired_illumina_read_counts_are_normalised_to_pairs(self) -> None:
         runinfo_df = pd.DataFrame(
             [

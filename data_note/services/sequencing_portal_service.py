@@ -38,6 +38,7 @@ MLWH_RUN_FIELDS: tuple[str, ...] = (
     "mlwh_tag_index",
     "mlwh_tag1_id",
     "mlwh_tag_sequence",
+    "mlwh_plex_count",
     "mlwh_pac_bio_run_name",
     "mlwh_pac_bio_library_tube_name",
     "mlwh_run_complete",
