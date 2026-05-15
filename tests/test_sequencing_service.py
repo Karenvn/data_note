@@ -329,6 +329,93 @@ class SequencingServiceTests(unittest.TestCase):
         self.assertEqual(summary.totals.rna_total_reads, "40.00")
         self.assertEqual(summary.totals.extras["rna_read_count_unit"], "read pairs")
 
+    def test_build_context_exposes_multiplexing_from_public_aliases(self) -> None:
+        runinfo_df = pd.DataFrame(
+            [
+                {
+                    "study_accession": "PRJEB104567",
+                    "run_accession": "ERR15996643",
+                    "run_alias": "SC_PacBio_RUN_m84047_250808_174518_s3:s1:tbc2020",
+                    "experiment_alias": "SC_PacBio_EXP_m84047_250808_174518_s3:s1:tbc2020",
+                    "sample_accession": "SAMEA118260618",
+                    "fastq_bytes": "17131398556",
+                    "submitted_bytes": "26424128708;16",
+                    "read_count": "7241360",
+                    "instrument_model": "Revio",
+                    "base_count": "56049164578",
+                    "instrument_platform": "PACBIO_SMRT",
+                    "library_strategy": "WGS",
+                    "library_layout": "SINGLE",
+                    "library_name": "PSYCHE15752215",
+                    "library_construction_protocol": "PacBio - HiFi",
+                    "metadata_source": "ena",
+                    "read_count_basis": "reads",
+                },
+                {
+                    "study_accession": "PRJEB104567",
+                    "run_accession": "ERR15985865",
+                    "run_alias": "SC_RUN_51012_6#2",
+                    "experiment_alias": "SC_EXP_51012_6#2",
+                    "sample_accession": "SAMEA118260617",
+                    "fastq_bytes": "20483007733;20331726580",
+                    "submitted_bytes": "27093394437",
+                    "read_count": "612698734",
+                    "instrument_model": "Illumina NovaSeq X",
+                    "base_count": "92517508834",
+                    "instrument_platform": "ILLUMINA",
+                    "library_strategy": "Hi-C",
+                    "library_layout": "PAIRED",
+                    "library_name": "",
+                    "library_construction_protocol": "Hi-C - Arima v2",
+                    "metadata_source": "ena",
+                    "read_count_basis": "reads",
+                },
+                {
+                    "study_accession": "PRJEB104567",
+                    "run_accession": "ERR16910178",
+                    "run_alias": "SC_RUN_51987_7#77",
+                    "experiment_alias": "SC_EXP_51987_7#77",
+                    "sample_accession": "SAMEA118260619",
+                    "fastq_bytes": "2973829163;3006588253",
+                    "submitted_bytes": "3946408065",
+                    "read_count": "98872246",
+                    "instrument_model": "Illumina NovaSeq X",
+                    "base_count": "14929709146",
+                    "instrument_platform": "ILLUMINA",
+                    "library_strategy": "RNA-Seq",
+                    "library_layout": "PAIRED",
+                    "library_name": "",
+                    "library_construction_protocol": "RNA PolyA",
+                    "metadata_source": "ena",
+                    "read_count_basis": "reads",
+                },
+            ]
+        )
+        service = SequencingService(
+            fetch_service=StubSequencingFetchService(runinfo_df),
+            biosample_tolid_getter=lambda biosamples: {
+                "SAMEA118260618": "ilBupPini2",
+                "SAMEA118260617": "ilBupPini2",
+                "SAMEA118260619": "ilBupPini2",
+            },
+            sequencing_source="public",
+            illumina_count_unit="read_pairs",
+        )
+
+        summary = service.build_context(["PRJEB104567"], "ilBupPini2")
+        context = summary.to_context_dict()
+
+        self.assertTrue(context["sequencing_multiplexing_detected"])
+        self.assertEqual(context["pacbio_multiplex_identifiers"], "tbc2020")
+        self.assertEqual(context["hic_multiplex_identifiers"], "2")
+        self.assertEqual(context["rna_multiplex_identifiers"], "77")
+        self.assertEqual(context["pacbio_sequencing_runs"], "m84047_250808_174518_s3")
+        self.assertEqual(context["hic_sequencing_runs"], "51012_6")
+        self.assertIn("PacBio HiFi ERR15996643: barcode tbc2020", context["sequencing_multiplexing_summary"])
+        self.assertEqual(context["technology_data"]["pacbio"]["pacbio_multiplex_label"], "barcode tbc2020")
+        self.assertEqual(context["seq_data"]["Hi-C"][0]["multiplex_identifier"], "2")
+        self.assertEqual(context["seq_data"]["Hi-C"][0]["fastq_bytes"], "38.01")
+
 
 if __name__ == "__main__":
     unittest.main()

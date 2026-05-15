@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import logging
 import os
 from pathlib import Path
@@ -37,11 +38,17 @@ from .services import (
 from .species_summary_service import SpeciesSummaryService
 from . import taxonomy_mapper
 from .bioproject_client import BioprojectClient
-from .io_utils import dict_to_csv, read_bioprojects_from_file, read_bioprojects_input
+from .io_utils import dict_to_csv, dict_to_json, read_bioprojects_from_file, read_bioprojects_input
 from .profiles import ProgrammeProfile, get_profile
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class ProcessedGenomeNote:
+    context: dict[str, Any]
+    note_data: NoteData
 
 
 def _default_corrections_file() -> str:
@@ -137,7 +144,18 @@ class DataNoteOrchestrator:
     def write_context_csv(context: dict[str, Any], csv_path: str) -> None:
         dict_to_csv(context, csv_path)
 
+    @staticmethod
+    def write_context_json(context: dict[str, Any], json_path: str) -> None:
+        dict_to_json(context, json_path)
+
+    @staticmethod
+    def write_note_data_json(note_data: NoteData, json_path: str) -> None:
+        dict_to_json(note_data, json_path)
+
     def process_bioproject(self, bioproject: str) -> dict[str, Any]:
+        return self.process_bioproject_result(bioproject).context
+
+    def process_bioproject_result(self, bioproject: str) -> ProcessedGenomeNote:
         note_data = NoteData()
 
         umbrella_data = self.bioproject_client.fetch_umbrella_project(bioproject)
@@ -253,7 +271,7 @@ class DataNoteOrchestrator:
         )
 
         final_context = context.to_dict()
-        return final_context
+        return ProcessedGenomeNote(context=final_context, note_data=note_data)
 
     def write_note(self, template_file: str, context: dict[str, Any]) -> str:
         return self.rendering_service.write_note(template_file, context, self.profile)

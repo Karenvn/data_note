@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
+from dataclasses import fields, is_dataclass
 import json
+import math
 from pathlib import Path
 import re
 
@@ -13,6 +15,62 @@ BIOPROJECT_ACCESSION_PATTERN = re.compile(r"^PRJ[A-Z]{2}\d+$")
 def dict_to_csv(data_dict, csv_filename):
     df = pd.DataFrame(data_dict.items(), columns=["key", "value"])
     df.to_csv(csv_filename, index=False, encoding="utf-8-sig")
+
+
+def make_json_safe(value):
+    if is_dataclass(value) and not isinstance(value, type):
+        return {
+            field.name: make_json_safe(getattr(value, field.name))
+            for field in fields(value)
+        }
+    if isinstance(value, dict):
+        return {str(key): make_json_safe(nested) for key, nested in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [make_json_safe(nested) for nested in value]
+    if isinstance(value, set):
+        return [make_json_safe(nested) for nested in sorted(value, key=str)]
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+
+    try:
+        if value is pd.NA:
+            return None
+    except AttributeError:
+        pass
+
+    try:
+        if not isinstance(value, (str, bytes)) and pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+
+    item = getattr(value, "item", None)
+    if callable(item):
+        try:
+            return make_json_safe(item())
+        except (TypeError, ValueError):
+            pass
+
+    if isinstance(value, (str, int, bool)) or value is None:
+        return value
+    return str(value)
+
+
+def dict_to_json(data_dict, json_filename):
+    json_path = Path(json_filename)
+    json_path.write_text(
+        json.dumps(
+            make_json_safe(data_dict),
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+            allow_nan=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def _apply_context_overrides(context_dict, corrections):

@@ -60,6 +60,44 @@ class SequencingFetchServiceTests(unittest.TestCase):
         mock_summary.assert_called_once_with("PRJEB1")
         mock_ena.assert_called_once_with("PRJEB1")
 
+    def test_fetch_rows_for_accession_augments_ncbi_rows_with_ena_alias_fields(self) -> None:
+        service = SequencingFetchService()
+        ncbi_rows = [
+            {
+                "run_accession": "ERR1",
+                "sample_accession": "SAMEA1",
+                "submitted_ftp": "",
+                "metadata_source": "ncbi_runinfo",
+            }
+        ]
+        ena_rows = [
+            {
+                "run_accession": "ERR1",
+                "run_alias": "SC_RUN_12345_6#7",
+                "experiment_alias": "SC_EXP_12345_6#7",
+                "library_source": "GENOMIC",
+                "library_selection": "Restriction Digest",
+                "submitted_ftp": "ftp.sra.ebi.ac.uk/example/12345_6#7.cram",
+                "metadata_source": "ena",
+            }
+        ]
+
+        with patch.object(SequencingFetchService, "fetch_runinfo_rows_for_accession", return_value=ncbi_rows):
+            with patch.object(
+                SequencingFetchService, "fetch_sra_summary_rows_for_accession"
+            ) as mock_summary:
+                with patch.object(
+                    SequencingFetchService, "fetch_read_runs_for_bioproject", return_value=ena_rows
+                ):
+                    rows = service.fetch_rows_for_accession("PRJEB1")
+
+        self.assertEqual(rows[0]["run_alias"], "SC_RUN_12345_6#7")
+        self.assertEqual(rows[0]["library_selection"], "Restriction Digest")
+        self.assertEqual(rows[0]["submitted_ftp"], "ftp.sra.ebi.ac.uk/example/12345_6#7.cram")
+        self.assertEqual(rows[0]["metadata_source"], "ncbi_runinfo")
+        self.assertEqual(rows[0]["supplementary_metadata_source"], "ena")
+        mock_summary.assert_not_called()
+
     def test_fetch_for_bioprojects_with_sources_omits_accessions_without_runs(self) -> None:
         service = SequencingFetchService()
         rows_by_accession = {

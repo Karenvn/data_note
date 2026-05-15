@@ -12,7 +12,10 @@ class DataNotePipeline:
         self._orchestrator: DataNoteOrchestrator | None = None
 
     def process_bioproject(self, bioproject: str):
-        return self._orchestrator_instance().process_bioproject(bioproject)
+        return self.process_bioproject_result(bioproject).context
+
+    def process_bioproject_result(self, bioproject: str):
+        return self._orchestrator_instance().process_bioproject_result(bioproject)
 
     def run(self, bioproject_input: str, template_file: str, error_file: str = "error_log.txt") -> int:
         orchestrator = self._orchestrator_instance()
@@ -26,7 +29,8 @@ class DataNotePipeline:
             for bioproject in bioproject_list:
                 try:
                     print(f"Processing BioProject: {bioproject}")
-                    context = self.process_bioproject(bioproject)
+                    processed = self.process_bioproject_result(bioproject)
+                    context = processed.context
 
                     assemblies_type = context.get("assemblies_type")
                     if assemblies_type in ["prim_alt", "hap_asm"]:
@@ -34,7 +38,14 @@ class DataNotePipeline:
                             genome_note_dir = orchestrator.write_note(template_file, context)
                             if genome_note_dir:
                                 output_csv = Path(genome_note_dir) / f"{bioproject}_context.csv"
+                                output_json = Path(genome_note_dir) / f"{bioproject}_context.json"
+                                output_note_data_json = Path(genome_note_dir) / f"{bioproject}_note_data.json"
                                 orchestrator.write_context_csv(context, str(output_csv))
+                                orchestrator.write_context_json(context, str(output_json))
+                                orchestrator.write_note_data_json(
+                                    processed.note_data,
+                                    str(output_note_data_json),
+                                )
                         except Exception as exc:
                             error_message = f"Error in write_note for BioProject {bioproject}: {exc}\n"
                             error_log.write(error_message)

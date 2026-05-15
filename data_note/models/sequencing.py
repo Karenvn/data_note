@@ -226,6 +226,7 @@ class SequencingSummary:
     totals: SequencingTotals = field(default_factory=SequencingTotals)
     pacbio_protocols: list[str] = field(default_factory=list)
     run_accessions: dict[str, str] = field(default_factory=dict)
+    multiplexing: list[dict[str, Any]] = field(default_factory=list)
 
     @classmethod
     def from_legacy_parts(
@@ -236,6 +237,7 @@ class SequencingSummary:
         totals: dict[str, Any],
         pacbio_protocols: list[str],
         run_accessions: dict[str, str],
+        multiplexing: list[dict[str, Any]] | None = None,
     ) -> "SequencingSummary":
         return cls(
             technology_records={
@@ -249,6 +251,7 @@ class SequencingSummary:
             totals=SequencingTotals.from_mapping(totals or {}),
             pacbio_protocols=pacbio_protocols,
             run_accessions=run_accessions,
+            multiplexing=list(multiplexing or []),
         )
 
     @property
@@ -277,8 +280,12 @@ class SequencingSummary:
             "seq_data": self.seq_data,
             **self.totals.to_context_dict(),
             "pacbio_protocols": self.pacbio_protocols,
+            "sequencing_multiplexing": self.multiplexing,
+            "sequencing_multiplexing_detected": bool(self.multiplexing),
+            "sequencing_multiplexing_summary": self.multiplexing_summary(),
             **self.run_accessions,
         }
+        context.update(self.multiplexing_context())
         return context
 
     def pacbio_library_name(self) -> str | None:
@@ -287,3 +294,46 @@ class SequencingSummary:
         if library_name in (None, ""):
             return None
         return str(library_name)
+
+    def multiplexing_context(self) -> dict[str, Any]:
+        context: dict[str, Any] = {}
+        for technology in ("pacbio", "hic", "chromium", "rna"):
+            records = [
+                record
+                for record in self.multiplexing
+                if record.get("technology") == technology
+            ]
+            context[f"{technology}_multiplexing"] = self._join_record_values(records, "multiplex_label")
+            context[f"{technology}_multiplex_identifiers"] = self._join_record_values(
+                records,
+                "multiplex_identifier",
+            )
+            context[f"{technology}_sequencing_runs"] = self._join_record_values(records, "sequencing_run")
+        return context
+
+    def multiplexing_summary(self) -> str:
+        parts = []
+        for record in self.multiplexing:
+            label = record.get("technology_label") or record.get("technology")
+            accession = record.get("read_accession")
+            multiplex_label = record.get("multiplex_label") or record.get("multiplex_identifier")
+            if not multiplex_label:
+                continue
+            phrase = f"{label} {accession}: {multiplex_label}" if accession else f"{label}: {multiplex_label}"
+            sequencing_run = record.get("sequencing_run")
+            if sequencing_run:
+                phrase = f"{phrase} on {sequencing_run}"
+            parts.append(phrase)
+        return "; ".join(parts)
+
+    @staticmethod
+    def _join_record_values(records: list[dict[str, Any]], key: str) -> str:
+        values = []
+        seen = set()
+        for record in records:
+            value = record.get(key)
+            if value in (None, "") or value in seen:
+                continue
+            seen.add(value)
+            values.append(str(value))
+        return "; ".join(values)

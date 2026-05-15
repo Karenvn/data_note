@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 import logging
 from numbers import Real
 import os
+import re
 from typing import Any, Callable
 
 import pandas as pd
@@ -30,20 +31,36 @@ RUN_ACCESSION_GROUPS: tuple[tuple[str, str], ...] = (
     ("Hi-C", "hic"),
     ("RNA", "rna"),
 )
+TECHNOLOGY_LABELS: dict[str, str] = {
+    "pacbio": "PacBio HiFi",
+    "hic": "Hi-C",
+    "chromium": "Chromium",
+    "rna": "RNA-seq",
+}
 NUMERIC_COLUMNS: tuple[str, ...] = ("fastq_bytes", "submitted_bytes", "read_count", "base_count")
 TEXT_COLUMNS: tuple[str, ...] = (
     "study_accession",
     "run_accession",
+    "run_alias",
+    "experiment_accession",
+    "experiment_alias",
+    "experiment_title",
     "sample_accession",
+    "sample_alias",
     "instrument_model",
     "library_strategy",
     "library_layout",
     "library_name",
     "library_construction_protocol",
+    "library_source",
+    "library_selection",
+    "nominal_length",
+    "nominal_sdev",
     "instrument_platform",
     "submitted_ftp",
     "fastq_ftp",
     "metadata_source",
+    "supplementary_metadata_source",
     "read_count_basis",
     "read_count_source",
     "base_count_source",
@@ -75,6 +92,12 @@ TEXT_COLUMNS: tuple[str, ...] = (
     "mlwh_pac_bio_run_name",
     "mlwh_pac_bio_library_tube_name",
     "mlwh_run_complete",
+    "multiplex_identifier",
+    "multiplex_identifier_type",
+    "multiplex_label",
+    "multiplex_source",
+    "sequencing_run",
+    "multiplex_sample",
 )
 SEQUENCING_COLUMNS: tuple[str, ...] = (
     "study_accession",
@@ -121,6 +144,7 @@ class SequencingService:
             totals=self._build_totals(empty_df, technology_records),
             pacbio_protocols=[],
             run_accessions=run_accessions,
+            multiplexing=[],
         )
 
     def build_context(self, bioprojects: Any, tolid: str) -> SequencingSummary:
@@ -156,8 +180,10 @@ class SequencingService:
         read_study_df = portal_result.dataframe
         technology_df = self._select_columns(read_study_df)
         technology_df = self._normalise_read_count_units(technology_df)
+        technology_df = self._add_multiplexing_columns(technology_df)
         technology_records = self._build_technology_records(technology_df)
         run_groups = self._build_run_groups(technology_df)
+        multiplexing = self._build_multiplexing_records(technology_df)
 
         pacbio_protocols = self._extract_pacbio_protocols(technology_df)
 
@@ -175,6 +201,7 @@ class SequencingService:
             ),
             pacbio_protocols=pacbio_protocols,
             run_accessions=run_accessions,
+            multiplexing=multiplexing,
         )
 
     @staticmethod
@@ -196,7 +223,7 @@ class SequencingService:
         for column in NUMERIC_COLUMNS:
             if column not in normalised.columns:
                 normalised[column] = 0
-            normalised[column] = pd.to_numeric(normalised[column], errors="coerce").fillna(0).astype(int)
+            normalised[column] = normalised[column].apply(SequencingService._numeric_total).astype(int)
 
         for column in TEXT_COLUMNS:
             if column not in normalised.columns:
@@ -270,6 +297,189 @@ class SequencingService:
         return normalised
 
     @staticmethod
+    def _add_multiplexing_columns(df: pd.DataFrame) -> pd.DataFrame:
+        normalised = df.copy()
+        for column in (
+            "multiplex_identifier",
+            "multiplex_identifier_type",
+            "multiplex_label",
+            "multiplex_source",
+            "sequencing_run",
+            "multiplex_sample",
+        ):
+            if column not in normalised.columns:
+                normalised[column] = ""
+
+        for index, row in normalised.iterrows():
+            multiplexing = SequencingService._extract_multiplexing(row)
+            for key, value in multiplexing.items():
+                normalised.at[index, key] = value
+
+        return normalised
+
+    @staticmethod
+    def _extract_multiplexing(row: pd.Series) -> dict[str, str]:
+        match = SequencingService._match_technology(row)
+        tech_name = match[0] if match else ""
+
+        if tech_name == "pacbio":
+            pacbio_barcode = SequencingService._extract_pacbio_barcode(row)
+            if pacbio_barcode:
+                return pacbio_barcode
+
+        portal_tag = SequencingService._extract_portal_tag(row)
+        if portal_tag:
+            return portal_tag
+
+        illumina_tag = SequencingService._extract_illumina_tag(row)
+        if illumina_tag:
+            return illumina_tag
+
+        if tech_name != "pacbio":
+            pacbio_barcode = SequencingService._extract_pacbio_barcode(row)
+            if pacbio_barcode:
+                return pacbio_barcode
+
+        return {}
+
+    @staticmethod
+    def _extract_portal_tag(row: pd.Series) -> dict[str, str]:
+        tag_index = SequencingService._string_value(row.get("mlwh_tag_index"))
+        tag_id = SequencingService._string_value(row.get("mlwh_tag1_id"))
+        tag_sequence = SequencingService._string_value(row.get("mlwh_tag_sequence"))
+        if not (tag_index or tag_id or tag_sequence):
+            return {}
+
+        identifier = tag_index or tag_id or tag_sequence
+        identifier_type = "Illumina tag index" if tag_index else "Illumina tag"
+        label = f"tag {identifier}"
+        if tag_sequence and tag_sequence != identifier:
+            label = f"{label} ({tag_sequence})"
+
+        return {
+            "multiplex_identifier": identifier,
+            "multiplex_identifier_type": identifier_type,
+            "multiplex_label": label,
+            "multiplex_source": "portal_mlwh",
+            "sequencing_run": SequencingService._string_value(row.get("mlwh_run_id")),
+        }
+
+    @staticmethod
+    def _extract_pacbio_barcode(row: pd.Series) -> dict[str, str]:
+        for field_name in (
+            "run_alias",
+            "experiment_alias",
+            "submitted_ftp",
+            "mlwh_irods_file",
+            "portal_run_id",
+        ):
+            value = SequencingService._string_value(row.get(field_name))
+            if not value:
+                continue
+            match = re.search(r"(?i)(?<![A-Za-z0-9])(?P<barcode>t?bc\d+)(?![A-Za-z0-9])", value)
+            if match is None:
+                continue
+            barcode = match.group("barcode")
+            result = {
+                "multiplex_identifier": barcode,
+                "multiplex_identifier_type": "PacBio barcode",
+                "multiplex_label": f"barcode {barcode}",
+                "multiplex_source": field_name,
+                "sequencing_run": SequencingService._extract_pacbio_run(value),
+            }
+            sample = SequencingService._extract_pacbio_sample(value)
+            if sample:
+                result["multiplex_sample"] = sample
+            return result
+        return {}
+
+    @staticmethod
+    def _extract_illumina_tag(row: pd.Series) -> dict[str, str]:
+        for field_name in (
+            "run_alias",
+            "experiment_alias",
+            "submitted_ftp",
+            "mlwh_irods_file",
+            "portal_run_id",
+        ):
+            value = SequencingService._string_value(row.get(field_name))
+            if not value:
+                continue
+            match = re.search(r"#(?P<tag>\d+)(?!\d)", value)
+            if match is None:
+                continue
+            tag = match.group("tag")
+            return {
+                "multiplex_identifier": tag,
+                "multiplex_identifier_type": "Illumina tag index",
+                "multiplex_label": f"tag {tag}",
+                "multiplex_source": field_name,
+                "sequencing_run": SequencingService._extract_illumina_run(value),
+            }
+        return {}
+
+    @staticmethod
+    def _extract_pacbio_run(value: str) -> str:
+        match = re.search(r"(m\d+_\d+_\d+_s\d+)", value)
+        return match.group(1) if match else ""
+
+    @staticmethod
+    def _extract_pacbio_sample(value: str) -> str:
+        match = re.search(r":(s\d+)(?::|$)", value)
+        return match.group(1) if match else ""
+
+    @staticmethod
+    def _extract_illumina_run(value: str) -> str:
+        match = re.search(r"(?P<run>(?:SC_(?:RUN|EXP)_)?[^/;\s#]+)#\d+", value)
+        if match is None:
+            return ""
+        return re.sub(r"^SC_(?:RUN|EXP)_", "", match.group("run"))
+
+    @staticmethod
+    def _build_multiplexing_records(df: pd.DataFrame) -> list[dict[str, str]]:
+        records: list[dict[str, str]] = []
+        seen: set[tuple[str, str, str]] = set()
+        for _, row in df.iterrows():
+            match = SequencingService._match_technology(row)
+            identifier = SequencingService._string_value(row.get("multiplex_identifier"))
+            if match is None or not identifier:
+                continue
+
+            tech_name, _ = match
+            read_accession = SequencingService._string_value(row.get("run_accession"))
+            key = (tech_name, read_accession, identifier)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            record = {
+                "technology": tech_name,
+                "technology_label": TECHNOLOGY_LABELS.get(tech_name, tech_name),
+                "read_accession": read_accession,
+                "sample_accession": SequencingService._string_value(row.get("sample_accession")),
+                "multiplex_identifier": identifier,
+                "multiplex_identifier_type": SequencingService._string_value(row.get("multiplex_identifier_type")),
+                "multiplex_label": SequencingService._string_value(row.get("multiplex_label")),
+                "multiplex_source": SequencingService._string_value(row.get("multiplex_source")),
+                "sequencing_run": SequencingService._string_value(row.get("sequencing_run")),
+                "run_alias": SequencingService._string_value(row.get("run_alias")),
+                "experiment_alias": SequencingService._string_value(row.get("experiment_alias")),
+            }
+            multiplex_sample = SequencingService._string_value(row.get("multiplex_sample"))
+            if multiplex_sample:
+                record["multiplex_sample"] = multiplex_sample
+            records.append({key: value for key, value in record.items() if value})
+
+        technology_order = {name: index for index, name in enumerate(TECHNOLOGY_NAMES)}
+        records.sort(
+            key=lambda record: (
+                technology_order.get(record.get("technology", ""), len(technology_order)),
+                record.get("read_accession", ""),
+            )
+        )
+        return records
+
+    @staticmethod
     def _extract_pacbio_protocols(df: pd.DataFrame) -> list[str]:
         if df.empty:
             return []
@@ -328,6 +538,17 @@ class SequencingService:
                     "read_count_source",
                     "base_count_source",
                     "metadata_source",
+                    "supplementary_metadata_source",
+                    "run_alias",
+                    "experiment_alias",
+                    "library_source",
+                    "library_selection",
+                    "multiplex_identifier",
+                    "multiplex_identifier_type",
+                    "multiplex_label",
+                    "multiplex_source",
+                    "sequencing_run",
+                    "multiplex_sample",
                     "portal_run_id",
                     "mlwh_library_id",
                     "mlwh_pipeline_id_lims",
@@ -551,6 +772,28 @@ class SequencingService:
         if pd.isna(value):
             return 0.0
         return float(value)
+
+    @staticmethod
+    def _numeric_total(value: Any) -> int:
+        if pd.isna(value):
+            return 0
+        if isinstance(value, Real):
+            return int(float(value))
+
+        text = str(value).strip()
+        if not text or text.lower() in {"nan", "none"}:
+            return 0
+
+        total = 0.0
+        for part in text.split(";"):
+            part = part.strip().replace(",", "")
+            if not part:
+                continue
+            try:
+                total += float(part)
+            except ValueError:
+                continue
+        return int(total)
 
     @staticmethod
     def _formatted_base_count_gb(value: Any) -> str:

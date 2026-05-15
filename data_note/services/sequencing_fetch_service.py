@@ -15,10 +15,26 @@ logger = logging.getLogger(__name__)
 
 
 READ_RUN_FIELDS = (
-    "run_accession,sample_accession,submitted_bytes,read_count,base_count,"
+    "run_accession,run_alias,experiment_accession,experiment_alias,experiment_title,"
+    "sample_accession,sample_alias,submitted_bytes,read_count,base_count,"
     "library_strategy,library_layout,library_name,library_construction_protocol,"
+    "library_source,library_selection,nominal_length,nominal_sdev,"
     "instrument_platform,instrument_model,study_accession,secondary_study_accession,"
     "submitted_ftp,fastq_ftp"
+)
+
+ENA_AUGMENT_FIELDS = (
+    "run_alias",
+    "experiment_accession",
+    "experiment_alias",
+    "experiment_title",
+    "sample_alias",
+    "library_source",
+    "library_selection",
+    "nominal_length",
+    "nominal_sdev",
+    "submitted_ftp",
+    "fastq_ftp",
 )
 
 
@@ -53,12 +69,14 @@ class SequencingFetchService:
     def fetch_rows_for_accession(self, accession: str) -> list[dict[str, Any]]:
         accession_rows = self.fetch_runinfo_rows_for_accession(accession)
         if accession_rows:
-            return accession_rows
+            ena_rows = self.fetch_read_runs_for_bioproject(accession)
+            return self._augment_rows_from_ena(accession_rows, ena_rows)
 
         logger.debug("No SRA RunInfo rows found for %s; trying NCBI E-utilities summary.", accession)
         accession_rows = self.fetch_sra_summary_rows_for_accession(accession)
         if accession_rows:
-            return accession_rows
+            ena_rows = self.fetch_read_runs_for_bioproject(accession)
+            return self._augment_rows_from_ena(accession_rows, ena_rows)
 
         logger.debug("No SRA summary rows found for %s; falling back to ENA filereport.", accession)
         accession_rows = self.fetch_read_runs_for_bioproject(accession)
@@ -229,6 +247,43 @@ class SequencingFetchService:
 
     def fetch_for_bioprojects(self, bioprojects: list[str]) -> pd.DataFrame:
         return self.fetch_for_bioprojects_with_sources(bioprojects).dataframe
+
+    @staticmethod
+    def _augment_rows_from_ena(
+        primary_rows: list[dict[str, Any]],
+        ena_rows: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        if not primary_rows or not ena_rows:
+            return primary_rows
+
+        ena_by_run = {
+            row.get("run_accession"): row
+            for row in ena_rows
+            if row.get("run_accession")
+        }
+        augmented: list[dict[str, Any]] = []
+        seen_runs: set[str] = set()
+
+        for row in primary_rows:
+            merged = dict(row)
+            run_accession = merged.get("run_accession")
+            if run_accession:
+                seen_runs.add(run_accession)
+            ena_row = ena_by_run.get(run_accession)
+            if ena_row:
+                for field_name in ENA_AUGMENT_FIELDS:
+                    if not merged.get(field_name) and ena_row.get(field_name):
+                        merged[field_name] = ena_row[field_name]
+                merged["supplementary_metadata_source"] = "ena"
+            augmented.append(merged)
+
+        for ena_row in ena_rows:
+            run_accession = ena_row.get("run_accession")
+            if run_accession and run_accession in seen_runs:
+                continue
+            augmented.append(ena_row)
+
+        return augmented
 
     def fetch_experiment_protocol(self, experiment_accession: str) -> str:
         url = "https://trace.ncbi.nlm.nih.gov/Traces/sra-db-be/exp"
