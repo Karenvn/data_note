@@ -95,7 +95,12 @@ class FigureService:
 
     @staticmethod
     def resolve_btk_accession(context: dict[str, Any]) -> str | None:
-        return context.get("prim_accession") or context.get("hap1_accession")
+        return (
+            context.get("btk_accession")
+            or context.get("prim_accession")
+            or context.get("hap1_btk_accession")
+            or context.get("hap1_accession")
+        )
 
     @staticmethod
     def _btk_kind_from_stem(path_like: Any) -> str | None:

@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from data_note.chromosome_analyzer import ChromosomeAnalyzer
 from data_note.models import AssemblyCoverageInput
 from data_note.ncbi_sequence_report_client import NcbiSequenceReportClient
+from data_note.pretext_images import (
+    _choose_mbp_tick_interval,
+    _filter_chromosomes_for_labelling,
+    _select_pretext_source,
+)
 
 
 class _Response:
@@ -37,6 +43,50 @@ class NcbiSequenceReportClientTests(unittest.TestCase):
 
 
 class ChromosomeAnalyzerTests(unittest.TestCase):
+    def test_custom_sort_order_handles_split_chromosome_labels(self) -> None:
+        labels = ["5", "2_2", "1_2", "X", "1_1", "2_1", "10", "B1"]
+
+        self.assertEqual(
+            sorted(labels, key=ChromosomeAnalyzer.custom_sort_order),
+            ["1_1", "1_2", "2_1", "2_2", "5", "10", "X", "B1"],
+        )
+
+    def test_pretext_labelling_keeps_chromosome_order_instead_of_length_order(self) -> None:
+        chroms = [
+            {"molecule": "4_1", "length": 2145.96},
+            {"molecule": "1_1", "length": 2144.89},
+            {"molecule": "2_1", "length": 2139.36},
+            {"molecule": "1_2", "length": 368.54},
+        ]
+
+        self.assertEqual(
+            [row["molecule"] for row in _filter_chromosomes_for_labelling(
+                chroms,
+                exclude_molecules=None,
+                min_fraction=0.0,
+            )],
+            ["1_1", "1_2", "2_1", "4_1"],
+        )
+
+    def test_select_pretext_source_prefers_custom_order_image(self) -> None:
+        self.assertEqual(
+            _select_pretext_source(
+                [
+                    Path("/tmp/aLisVul1.1.primary.curated_FullMap.png"),
+                    Path("/tmp/aLisVul1.1.primary.curated_CustomOrder.png"),
+                ]
+            ).name,
+            "aLisVul1.1.primary.curated_CustomOrder.png",
+        )
+
+    def test_choose_mbp_tick_interval_avoids_crowded_long_genome_labels(self) -> None:
+        class Font:
+            @staticmethod
+            def getbbox(text):
+                return (0, 0, len(str(text)) * 30, 20)
+
+        self.assertEqual(_choose_mbp_tick_interval(23_000, 3_850, Font()), 2000)
+
     def test_extract_chromosomes_only_combines_unlocalized_scaffolds(self) -> None:
         analyzer = ChromosomeAnalyzer()
         reports = [

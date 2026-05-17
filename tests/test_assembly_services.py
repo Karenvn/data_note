@@ -125,6 +125,59 @@ class ChromosomeServiceTests(unittest.TestCase):
 
 
 class BtkServiceTests(unittest.TestCase):
+    def test_build_context_uses_manual_btk_accession_override(self) -> None:
+        class Mapper:
+            @staticmethod
+            def get_btk_accession_override(accession):
+                if accession == "GCA_964261635.2":
+                    return {"accession": "GCA_964261635.1"}
+                return None
+
+        service = BtkService(
+            summary_fetcher=lambda accession, prefix="": {f"{prefix}summary_accession": accession},
+            software_versions_fetcher=lambda accession: {"software_accession": accession},
+            url_builder=lambda accession, prefix="": (
+                {f"{prefix}view_url": f"view:{accession}"},
+                {f"{prefix}download_url": f"download:{accession}"},
+            ),
+            taxonomy_mapper_module=Mapper,
+        )
+        selection = AssemblySelection(
+            assemblies_type="prim_alt",
+            primary=AssemblyRecord(accession="GCA_964261635.2", assembly_name="aLisHel1.2", role="primary"),
+        )
+
+        summary = service.build_context(selection)
+        context = summary.to_context_dict()
+
+        self.assertEqual(context["btk_accession"], "GCA_964261635.1")
+        self.assertEqual(context["summary_accession"], "GCA_964261635.1")
+        self.assertEqual(context["software_accession"], "GCA_964261635.1")
+
+    def test_build_context_uses_resolved_btk_accession_for_primary_record(self) -> None:
+        service = BtkService(
+            summary_fetcher=lambda accession, prefix="": {f"{prefix}summary_accession": accession},
+            software_versions_fetcher=lambda accession: {"software_accession": accession},
+            url_builder=lambda accession, prefix="": (
+                {f"{prefix}view_url": f"view:{accession}"},
+                {f"{prefix}download_url": f"download:{accession}"},
+            ),
+            accession_resolver=lambda accession: "GCA_1.1" if accession == "GCA_1.2" else accession,
+        )
+        selection = AssemblySelection(
+            assemblies_type="prim_alt",
+            primary=AssemblyRecord(accession="GCA_1.2", assembly_name="ixFooBar1.2", role="primary"),
+        )
+
+        summary = service.build_context(selection)
+        context = summary.to_context_dict()
+
+        self.assertEqual(context["btk_accession"], "GCA_1.1")
+        self.assertEqual(context["summary_accession"], "GCA_1.1")
+        self.assertEqual(context["software_accession"], "GCA_1.1")
+        self.assertEqual(context["view_url"], "view:GCA_1.1")
+        self.assertEqual(context["download_url"], "download:GCA_1.1")
+
     def test_build_context_uses_primary_record_from_selection(self) -> None:
         service = BtkService(
             summary_fetcher=lambda accession, prefix="": {f"{prefix}summary_accession": accession},

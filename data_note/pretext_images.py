@@ -9,6 +9,7 @@ from .ncbi_sequence_report_client import NcbiSequenceReportClient
 
 _DEFAULT_SEQUENCE_REPORT_CLIENT = NcbiSequenceReportClient()
 _DEFAULT_CHROMOSOME_ANALYZER = ChromosomeAnalyzer()
+_MBP_TICK_INTERVALS = (10, 25, 50, 100, 200, 500, 1000, 2000, 5000, 10000)
 
 
 def _extract_chromosomes_only(accession: str) -> list[dict]:
@@ -16,45 +17,79 @@ def _extract_chromosomes_only(accession: str) -> list[dict]:
     return _DEFAULT_CHROMOSOME_ANALYZER.extract_chromosomes_only(reports)
 
 
+def _select_pretext_source(matches: list[Path]) -> Path:
+    def rank(path: Path) -> tuple[int, str]:
+        name = path.name
+        if "CustomOrder" in name:
+            return (0, name)
+        if "FullMap" in name:
+            return (1, name)
+        return (2, name)
+
+    return sorted(matches, key=rank)[0]
+
+
+def _filter_chromosomes_for_labelling(
+    chroms: list[dict],
+    *,
+    exclude_molecules: list | None,
+    min_fraction: float,
+) -> list[dict]:
+    if not chroms:
+        return []
+
+    max_len = max(c["length"] for c in chroms)
+    excluded = set(exclude_molecules or [])
+    filtered = [
+        c
+        for c in chroms
+        if c["molecule"] not in excluded and c["length"] >= min_fraction * max_len
+    ]
+    return sorted(
+        filtered,
+        key=lambda chrom: _DEFAULT_CHROMOSOME_ANALYZER.custom_sort_order(chrom["molecule"]),
+    )
+
+
+def _initial_mbp_tick_interval(total_length: float) -> int:
+    if total_length <= 50:
+        return 10
+    if total_length <= 200:
+        return 25
+    if total_length <= 500:
+        return 50
+    if total_length <= 1000:
+        return 100
+    if total_length <= 2000:
+        return 200
+    return 500
+
+
+def _choose_mbp_tick_interval(total_length: float, width: int, font) -> int:
+    tick_interval = _initial_mbp_tick_interval(total_length)
+    start_index = _MBP_TICK_INTERVALS.index(tick_interval)
+    sample_labels = ("1000", str(int(total_length // tick_interval * tick_interval)))
+    max_label_width = max(font.getbbox(label)[2] - font.getbbox(label)[0] for label in sample_labels)
+    min_space_needed = max_label_width * 1.5
+
+    for candidate in _MBP_TICK_INTERVALS[start_index:]:
+        estimated_label_count = int(total_length / candidate) + 1
+        avg_space_per_label = width / max(estimated_label_count - 1, 1)
+        if avg_space_per_label >= min_space_needed:
+            return candidate
+
+    return _MBP_TICK_INTERVALS[-1]
+
+
 def add_mbp_scale(draw, font, left, top, w, h, total_length, font_size, text_colour):
     """Add Mbp scale to bottom of pretext map with smart positioning."""
 
-    if total_length <= 50:
-        tick_interval = 10
-    elif total_length <= 200:
-        tick_interval = 25
-    elif total_length <= 500:
-        tick_interval = 50
-    elif total_length <= 1000:
-        tick_interval = 100
-    elif total_length <= 2000:
-        tick_interval = 200
-    else:
-        tick_interval = 500
-
-    estimated_label_count = int(total_length / tick_interval) + 1
-    avg_space_per_label = w / estimated_label_count if estimated_label_count > 0 else w
-
-    sample_bbox = font.getbbox("1000")
-    typical_label_width = sample_bbox[2] - sample_bbox[0]
-    min_space_needed = typical_label_width * 1.5
-
-    if avg_space_per_label < min_space_needed:
-        if tick_interval == 10:
-            tick_interval = 25
-        elif tick_interval == 25:
-            tick_interval = 50
-        elif tick_interval == 50:
-            tick_interval = 100
-        elif tick_interval == 100:
-            tick_interval = 200
-        elif tick_interval == 200:
-            tick_interval = 500
-        elif tick_interval == 500:
-            tick_interval = 1000
-
+    initial_tick_interval = _initial_mbp_tick_interval(total_length)
+    tick_interval = _choose_mbp_tick_interval(total_length, w, font)
+    if tick_interval != initial_tick_interval:
         logging.info(
-            "[Mbp Scale] Adjusted interval from original to %s Mbp to prevent label crowding",
+            "[Mbp Scale] Adjusted interval from %s to %s Mbp to prevent label crowding",
+            initial_tick_interval,
             tick_interval,
         )
 
@@ -168,7 +203,7 @@ def label_pretext_map(
         logging.error("[Pretext] No .png files found for %s in %s", tolid, pretext_dir)
         return None
 
-    src_png = matches[0]
+    src_png = _select_pretext_source(matches)
     logging.info("[Pretext] Found source PNG: %s", src_png)
 
     if "prim_accession" in context:
@@ -194,13 +229,14 @@ def label_pretext_map(
     max_label_fraction = 0.97
     dot_width = font.getbbox(".")[2] - font.getbbox(".")[0]
 
-    max_len = max(c["length"] for c in chroms)
-    filtered = [
-        c
-        for c in chroms
-        if c["molecule"] not in (exclude_molecules or []) and c["length"] >= min_fraction * max_len
-    ]
-    sorted_chroms = sorted(filtered, key=lambda x: x["length"], reverse=True)
+    sorted_chroms = _filter_chromosomes_for_labelling(
+        chroms,
+        exclude_molecules=exclude_molecules,
+        min_fraction=min_fraction,
+    )
+    if not sorted_chroms:
+        logging.error("[Pretext] No chromosomes available for %s after filtering", tolid)
+        return None
 
     base_font_size = font_size
     chrom_count = len(sorted_chroms)

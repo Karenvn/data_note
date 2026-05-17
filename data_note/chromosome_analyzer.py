@@ -12,24 +12,35 @@ class ChromosomeAnalyzer:
     chromosome_length_fetcher: Callable[[str], int] | None = None
 
     @staticmethod
-    def custom_sort_order(molecule: str) -> tuple[Any, Any]:
+    def custom_sort_order(molecule: str) -> tuple[Any, ...]:
+        molecule = str(molecule)
+        split_match = re.match(r"^(\d+)(?:[_\-.](\d+))?([A-Za-z]*)$", molecule)
+        if split_match:
+            split_value = split_match.group(2)
+            return (
+                0,
+                int(split_match.group(1)),
+                int(split_value) if split_value else 0,
+                split_match.group(3),
+            )
+
         match = re.match(r"^(\d+)([A-Za-z]*)$", molecule)
         if match:
-            return (int(match.group(1)), match.group(2))
+            return (0, int(match.group(1)), 0, match.group(2))
         order_map = {
-            "X": (1000, ""),
-            "X1": (1000, "1"),
-            "X2": (1000, "2"),
-            "Y": (2000, ""),
-            "W": (3000, ""),
-            "Z": (4000, ""),
-            "Z1": (4000, "1"),
-            "Z2": (4000, "2"),
-            "B": (5000, ""),
-            "B1": (5000, "1"),
-            "B2": (5000, "2"),
+            "X": (1, 1000, 0, ""),
+            "X1": (1, 1000, 1, ""),
+            "X2": (1, 1000, 2, ""),
+            "Y": (1, 2000, 0, ""),
+            "W": (1, 3000, 0, ""),
+            "Z": (1, 4000, 0, ""),
+            "Z1": (1, 4000, 1, ""),
+            "Z2": (1, 4000, 2, ""),
+            "B": (1, 5000, 0, ""),
+            "B1": (1, 5000, 1, ""),
+            "B2": (1, 5000, 2, ""),
         }
-        return order_map.get(molecule, (float("inf"), molecule))
+        return order_map.get(molecule.upper(), (2, molecule))
 
     def get_longest_scaffold(self, reports: list[dict[str, Any]]) -> float | None:
         relevant_reports = [

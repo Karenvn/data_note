@@ -54,6 +54,19 @@ BIOPROJECT_TAX_ID_OVERRIDES = {
     }
 }
 
+# BTK datasets are tied to the assembly data used to run BlobToolKit. Keep these
+# explicit so newer assembly revisions do not silently reuse older BTK outputs.
+BTK_ACCESSION_OVERRIDES = {
+    "GCA_964261635.2": {
+        "accession": "GCA_964261635.1",
+        "reason": "aLisHel1.2 adds mitochondrial sequence; BTK dataset is for the unchanged nuclear assembly in aLisHel1.1",
+    },
+    "GCA_964263255.2": {
+        "accession": "GCA_964263255.1",
+        "reason": "aLisVul1.2 adds mitochondrial sequence; BTK dataset is for the unchanged nuclear assembly in aLisVul1.1",
+    },
+}
+
 def has_assembly_override(bioproject_id):
     """Check if a bioproject has manual assembly overrides."""
     return bioproject_id in ASSEMBLY_OVERRIDES
@@ -79,6 +92,10 @@ def has_tax_id_override(bioproject_id):
 def get_tax_id_override(bioproject_id):
     """Get the tax_id override for a bioproject."""
     return BIOPROJECT_TAX_ID_OVERRIDES.get(bioproject_id)
+
+def get_btk_accession_override(assembly_accession):
+    """Get a manual BlobToolKit assembly accession override."""
+    return BTK_ACCESSION_OVERRIDES.get(assembly_accession)
 
 def should_exclude_by_name(assembly_name):
     """Check if an assembly should be excluded based on name patterns."""
