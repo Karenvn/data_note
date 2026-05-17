@@ -51,7 +51,7 @@ class ChromosomeAnalyzerTests(unittest.TestCase):
             ["1_1", "1_2", "2_1", "2_2", "5", "10", "X", "B1"],
         )
 
-    def test_pretext_labelling_keeps_chromosome_order_instead_of_length_order(self) -> None:
+    def test_pretext_labelling_always_uses_size_order(self) -> None:
         chroms = [
             {"molecule": "4_1", "length": 2145.96},
             {"molecule": "1_1", "length": 2144.89},
@@ -65,7 +65,7 @@ class ChromosomeAnalyzerTests(unittest.TestCase):
                 exclude_molecules=None,
                 min_fraction=0.0,
             )],
-            ["1_1", "1_2", "2_1", "4_1"],
+            ["4_1", "1_1", "2_1", "1_2"],
         )
 
     def test_select_pretext_source_prefers_custom_order_image(self) -> None:

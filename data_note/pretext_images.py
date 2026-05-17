@@ -45,10 +45,7 @@ def _filter_chromosomes_for_labelling(
         for c in chroms
         if c["molecule"] not in excluded and c["length"] >= min_fraction * max_len
     ]
-    return sorted(
-        filtered,
-        key=lambda chrom: _DEFAULT_CHROMOSOME_ANALYZER.custom_sort_order(chrom["molecule"]),
-    )
+    return sorted(filtered, key=lambda chrom: chrom["length"], reverse=True)
 
 
 def _initial_mbp_tick_interval(total_length: float) -> int:
