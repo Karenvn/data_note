@@ -172,6 +172,40 @@ class RenderingServiceTests(unittest.TestCase):
 
             self.assertEqual([path.name for path in output_dir.iterdir()], ["ixExample1.md"])
 
+    def test_write_note_exposes_text_num_filter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            template_path = tmp_path / "template.md"
+            template_path.write_text(
+                "{{ total_bins | text_num }} "
+                "{{ num_mags | text_num }} "
+                "{{ ten | text_num }} "
+                "{{ large | text_num }}"
+            )
+
+            service = RenderingService(
+                gscope_image_copier=lambda tolid, output_dir, output_stem=None: None,
+                pretext_labeler=lambda tolid, context, output_dir, output_stem=None: None,
+                merian_image_copier=lambda tolid, output_dir, output_stem=None: None,
+                merqury_image_copier=lambda tolid, output_dir, output_stem=None: None,
+                btk_image_processor=lambda accession, output_dir, output_names=None: [],
+            )
+
+            context = {
+                "species": "Example species",
+                "tolid": "ixExample1",
+                "total_bins": 4,
+                "num_mags": 2,
+                "ten": 10,
+                "large": 1234,
+            }
+
+            with chdir(tmpdir):
+                output_dir = Path(service.write_note(str(template_path), context, AsgProfile()))
+
+            rendered = (output_dir / "ixExample1.md").read_text()
+            self.assertEqual(rendered, "four two 10 1,234")
+
 
 if __name__ == "__main__":
     unittest.main()

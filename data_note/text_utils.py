@@ -2,6 +2,8 @@
 
 # Text rendering help functions
 
+from num2words import num2words
+
 def oxford_comma_list(items: list[str]) -> str:
     if len(items) == 0:
         return ""
@@ -23,6 +25,15 @@ def to_title_case(value):
     if isinstance(value, str):
         return value.title()
     return value
+
+
+def text_num(value):
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return str(value)
+
+    return num2words(number) if number < 10 else f"{number:,}"
 
 
 def replace_special_characters(text, target_format="word"):

@@ -12,7 +12,7 @@ from ..btk_images import download_and_process_btk
 from ..pretext_images import label_pretext_map
 from ..profiles.base import ProgrammeProfile
 from .figure_service import FigureService
-from ..text_utils import replace_special_characters
+from ..text_utils import replace_special_characters, text_num
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,7 @@ class RenderingService:
             raise ValueError("species_name cannot be None or empty")
 
         env = Environment(loader=FileSystemLoader(searchpath=os.path.dirname(template_file)))
+        env.filters["text_num"] = text_num
         tpl = env.get_template(os.path.basename(template_file))
 
         output_dir = os.path.join(os.getcwd(), species_name.replace(" ", "_"))
