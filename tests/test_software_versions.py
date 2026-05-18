@@ -88,6 +88,10 @@ genomescope_version: 2.0.1
         self.assertEqual(canonical_version_key("sanger-tol/treeval"), "treeval_version")
         self.assertEqual(canonical_version_key("merian-busco-painter"), "merian_busco_painter_version")
         self.assertEqual(canonical_version_key("MERQURY.FK"), "merquryfk_version")
+        self.assertEqual(canonical_version_key("GTDB-Tk"), "gtdbtk_version")
+        self.assertEqual(canonical_version_key("DAS Tool"), "dastool_version")
+        self.assertEqual(canonical_version_key("MetaMDBG"), "metamdbg_version")
+
 
 if __name__ == "__main__":
     unittest.main()

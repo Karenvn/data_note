@@ -75,6 +75,37 @@ class AsgTableTests(unittest.TestCase):
 
         self.assertEqual(table["label"], "tbl:table6")
         self.assertEqual(table["native_headers"], ["**Software**", "**Version**", "**Source**"])
+        self.assertNotIn("Prokka", [row[0] for row in table["native_rows"]])
+
+    def test_make_table6_rows_includes_metagenome_software_when_present(self) -> None:
+        table = make_table6_rows(
+            {
+                "species": "Example species",
+                "has_metagenome": True,
+                "assembler": "metamdbg",
+                "binners": ["metabat2"],
+                "refiner": "magscot",
+                "use_drep": True,
+                "checkm_db": "checkM_DB release 2015-01-16",
+            }
+        )
+
+        versions = {row[0]: row[1] for row in table["native_rows"]}
+        expected_tools = (
+            "CheckM",
+            "dRep",
+            "ete3",
+            "GTDB-Tk",
+            "MAGScoT",
+            "matplotlib",
+            "MetaBAT2",
+            "MetaMDBG",
+            "Prokka",
+        )
+        for tool in expected_tools:
+            self.assertIn(tool, versions)
+        self.assertEqual(versions["CheckM"], "2015-01-16")
+        self.assertEqual(versions["GTDB-Tk"], "1.2.1")
 
 
 if __name__ == "__main__":
