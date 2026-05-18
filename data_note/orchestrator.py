@@ -24,6 +24,7 @@ from .services import (
     ChromosomeService,
     CurationService,
     FlowCytometryService,
+    MetagenomeService,
     NcbiDatasetsService,
     BoldResultService,
     OrganelleProvenanceService,
@@ -101,6 +102,7 @@ class DataNoteOrchestrator:
         self.chromosome_service = ChromosomeService()
         self.curation_service = CurationService()
         self.flow_cytometry_service = FlowCytometryService()
+        self.metagenome_service = MetagenomeService()
         self.ncbi_datasets_service = NcbiDatasetsService()
         self.render_context_builder = RenderContextBuilder()
         self.assembly_workflow_service = AssemblyWorkflowService(
@@ -259,6 +261,12 @@ class DataNoteOrchestrator:
         if organelle_provenance:
             note_data.extra_sections.append(organelle_provenance)
             context = self.render_context_builder.snapshot(note_data)
+
+        if self.profile.name == "asg":
+            metagenome_context = self.metagenome_service.build_context(tolid)
+            if metagenome_context:
+                note_data.extra_sections.append(metagenome_context)
+                context = self.render_context_builder.snapshot(note_data)
 
         corrections_file = os.getenv(
             "DATA_NOTE_CORRECTIONS_FILE",

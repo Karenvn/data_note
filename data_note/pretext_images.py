@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+import re
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -10,6 +11,7 @@ from .ncbi_sequence_report_client import NcbiSequenceReportClient
 _DEFAULT_SEQUENCE_REPORT_CLIENT = NcbiSequenceReportClient()
 _DEFAULT_CHROMOSOME_ANALYZER = ChromosomeAnalyzer()
 _MBP_TICK_INTERVALS = (10, 25, 50, 100, 200, 500, 1000, 2000, 5000, 10000)
+_SPLIT_CHROMOSOME_RE = re.compile(r"^(.+?)[_.-](\d+)$")
 
 
 def _extract_chromosomes_only(accession: str) -> list[dict]:
@@ -29,6 +31,46 @@ def _select_pretext_source(matches: list[Path]) -> Path:
     return sorted(matches, key=rank)[0]
 
 
+def _split_chromosome_base(molecule: object) -> str | None:
+    match = _SPLIT_CHROMOSOME_RE.match(str(molecule))
+    if not match:
+        return None
+    return match.group(1)
+
+
+def _group_split_chromosomes_for_labelling(chroms: list[dict]) -> list[dict]:
+    split_bases = [
+        base
+        for chrom in chroms
+        if (base := _split_chromosome_base(chrom.get("molecule")))
+    ]
+    if not split_bases or len(set(split_bases)) == len(split_bases):
+        return chroms
+
+    grouped: dict[str, dict] = {}
+    for chrom in chroms:
+        molecule = str(chrom.get("molecule"))
+        base = _split_chromosome_base(molecule)
+        label = base or molecule
+        entry = grouped.setdefault(
+            label,
+            {
+                "molecule": label,
+                "length": 0,
+                "INSDC": chrom.get("INSDC") if base is None else None,
+                "GC": chrom.get("GC") if base is None else None,
+                "_pretext_grouped_split": base is not None,
+            },
+        )
+        entry["length"] += chrom["length"]
+        if base is not None:
+            entry["INSDC"] = None
+            entry["GC"] = None
+            entry["_pretext_grouped_split"] = True
+
+    return list(grouped.values())
+
+
 def _filter_chromosomes_for_labelling(
     chroms: list[dict],
     *,
@@ -38,6 +80,7 @@ def _filter_chromosomes_for_labelling(
     if not chroms:
         return []
 
+    chroms = _group_split_chromosomes_for_labelling(chroms)
     max_len = max(c["length"] for c in chroms)
     excluded = set(exclude_molecules or [])
     filtered = [
@@ -76,6 +119,34 @@ def _choose_mbp_tick_interval(total_length: float, width: int, font) -> int:
             return candidate
 
     return _MBP_TICK_INTERVALS[-1]
+
+
+def _effective_vertical_label_field(chroms: list[dict], requested_field: str) -> str:
+    if requested_field == "INSDC" and any(chrom.get("_pretext_grouped_split") for chrom in chroms):
+        return "molecule"
+    return requested_field
+
+
+def draw_pretext_boundary(
+    draw,
+    left: int,
+    top: int,
+    width: int,
+    height: int,
+    *,
+    grid_colour: str = "#a9a9a9",
+    grid_width: int = 3,
+) -> None:
+    """Draw the measured Pretext image boundary on the labelled canvas."""
+
+    if grid_width <= 0:
+        return
+    if width <= 0 or height <= 0:
+        return
+
+    right = left + width - 1
+    bottom = top + height - 1
+    draw.rectangle((left, top, right, bottom), outline=grid_colour, width=grid_width)
 
 
 def add_mbp_scale(draw, font, left, top, w, h, total_length, font_size, text_colour):
@@ -181,6 +252,8 @@ def label_pretext_map(
     background_colour: str = "white",
     text_colour: str = "black",
     vertical_label_field: str = "INSDC",
+    grid_colour: str = "#a9a9a9",
+    grid_width: int = 3,
 ) -> tuple[Path, Path, Path]:
     """Label a pretext PNG and write PNG/TIFF/GIF outputs."""
 
@@ -234,6 +307,7 @@ def label_pretext_map(
     if not sorted_chroms:
         logging.error("[Pretext] No chromosomes available for %s after filtering", tolid)
         return None
+    effective_vertical_label_field = _effective_vertical_label_field(sorted_chroms, vertical_label_field)
 
     base_font_size = font_size
     chrom_count = len(sorted_chroms)
@@ -262,6 +336,15 @@ def label_pretext_map(
     acc = 0
     x_positions = []
     total = total_length or sum(c["length"] for c in sorted_chroms)
+    draw_pretext_boundary(
+        draw,
+        left,
+        top,
+        w,
+        h,
+        grid_colour=grid_colour,
+        grid_width=grid_width,
+    )
     for chrom in sorted_chroms:
         block = (chrom["length"] / total) * w
         x_positions.append(acc + block / 2)
@@ -310,7 +393,7 @@ def label_pretext_map(
         return any(top_edge - pad < box_bottom and bottom_edge + pad > box_top for box_top, box_bottom in boxes)
 
     for index, chrom in enumerate(sorted_chroms):
-        label = str(chrom.get(vertical_label_field) or chrom.get("molecule") or "?")
+        label = str(chrom.get(effective_vertical_label_field) or chrom.get("molecule") or "?")
         bbox = font.getbbox(label)
         text_height = bbox[3] - bbox[1]
         text_width = bbox[2] - bbox[0]

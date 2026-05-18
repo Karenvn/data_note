@@ -8,6 +8,7 @@ from data_note.models import AssemblyCoverageInput
 from data_note.ncbi_sequence_report_client import NcbiSequenceReportClient
 from data_note.pretext_images import (
     _choose_mbp_tick_interval,
+    _effective_vertical_label_field,
     _filter_chromosomes_for_labelling,
     _select_pretext_source,
 )
@@ -51,12 +52,11 @@ class ChromosomeAnalyzerTests(unittest.TestCase):
             ["1_1", "1_2", "2_1", "2_2", "5", "10", "X", "B1"],
         )
 
-    def test_pretext_labelling_always_uses_size_order(self) -> None:
+    def test_pretext_labelling_uses_size_order_for_unsplit_chromosomes(self) -> None:
         chroms = [
-            {"molecule": "4_1", "length": 2145.96},
-            {"molecule": "1_1", "length": 2144.89},
-            {"molecule": "2_1", "length": 2139.36},
-            {"molecule": "1_2", "length": 368.54},
+            {"molecule": "4", "length": 2145.96},
+            {"molecule": "1", "length": 2144.89},
+            {"molecule": "2", "length": 2139.36},
         ]
 
         self.assertEqual(
@@ -65,8 +65,49 @@ class ChromosomeAnalyzerTests(unittest.TestCase):
                 exclude_molecules=None,
                 min_fraction=0.0,
             )],
-            ["4_1", "1_1", "2_1", "1_2"],
+            ["4", "1", "2"],
         )
+
+    def test_pretext_labelling_groups_split_chromosomes_before_size_ordering(self) -> None:
+        chroms = [
+            {"molecule": "1_1", "INSDC": "OZ183349.1", "length": 2144.89},
+            {"molecule": "1_2", "INSDC": "OZ183350.1", "length": 368.54},
+            {"molecule": "2_1", "INSDC": "OZ183351.1", "length": 2139.36},
+            {"molecule": "2_2", "INSDC": "OZ183352.1", "length": 338.55},
+            {"molecule": "3_1", "INSDC": "OZ183353.1", "length": 2137.80},
+            {"molecule": "3_2", "INSDC": "OZ183354.1", "length": 330.26},
+            {"molecule": "4_1", "INSDC": "OZ183355.1", "length": 2145.96},
+            {"molecule": "4_2", "INSDC": "OZ183356.1", "length": 25.97},
+            {"molecule": "5", "INSDC": "OZ183357.1", "length": 2038.33},
+        ]
+
+        labelled = _filter_chromosomes_for_labelling(
+            chroms,
+            exclude_molecules=None,
+            min_fraction=0.0,
+        )
+
+        self.assertEqual([row["molecule"] for row in labelled], ["1", "2", "3", "4", "5"])
+        self.assertEqual(
+            [round(row["length"], 2) for row in labelled],
+            [2513.43, 2477.91, 2468.06, 2171.93, 2038.33],
+        )
+        self.assertIsNone(labelled[0]["INSDC"])
+        self.assertEqual(_effective_vertical_label_field(labelled, "INSDC"), "molecule")
+
+    def test_pretext_labelling_keeps_insdc_vertical_labels_for_unsplit_chromosomes(self) -> None:
+        chroms = [
+            {"molecule": "1", "INSDC": "OZ1", "length": 100},
+            {"molecule": "2", "INSDC": "OZ2", "length": 90},
+        ]
+
+        labelled = _filter_chromosomes_for_labelling(
+            chroms,
+            exclude_molecules=None,
+            min_fraction=0.0,
+        )
+
+        self.assertEqual(_effective_vertical_label_field(labelled, "INSDC"), "INSDC")
 
     def test_select_pretext_source_prefers_custom_order_image(self) -> None:
         self.assertEqual(

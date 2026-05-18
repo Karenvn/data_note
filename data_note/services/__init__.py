@@ -12,6 +12,7 @@ __all__ = [
     "FigureService",
     "FlowCytometryService",
     "LocalMetadataService",
+    "MetagenomeService",
     "NcbiDatasetsService",
     "OrganelleProvenanceService",
     "RenderContextBuilder",
@@ -79,6 +80,10 @@ def __getattr__(name: str):
         from .local_metadata_service import LocalMetadataService
 
         return LocalMetadataService
+    if name == "MetagenomeService":
+        from .metagenome_service import MetagenomeService
+
+        return MetagenomeService
     if name == "NcbiDatasetsService":
         from .ncbi_datasets_service import NcbiDatasetsService
 

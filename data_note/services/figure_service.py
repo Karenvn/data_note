@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from ..asset_images import copy_gscope_image, copy_merian_image, copy_merqury_image
 from ..btk_images import download_and_process_btk
+from ..image_utils import GN_ASSETS_ROOT, convert_png_to_tif_and_gif
 from ..models import FigureAsset, FigureBundle
 from ..pretext_images import label_pretext_map
 from ..profiles.base import FigureSpec, ProgrammeProfile
@@ -70,10 +71,60 @@ class FigureService:
             triple = self.merian_image_copier(tolid, output_dir, output_stem=spec.stem)
         elif spec.kind == "merqury":
             triple = self.merqury_image_copier(tolid, output_dir, output_stem=spec.stem)
+        elif spec.kind in {"metagenome_tree", "metagenome_blob"}:
+            triple = self._copy_metagenome_image(spec, tolid, output_dir)
         else:
             return None
 
         return self._build_asset(spec, triple)
+
+    def _copy_metagenome_image(
+        self,
+        spec: FigureSpec,
+        tolid: str,
+        output_dir: str,
+    ) -> tuple[Path, Path, Path] | None:
+        output_dir_path = Path(output_dir)
+        output_dir_path.mkdir(parents=True, exist_ok=True)
+
+        filename_candidates = self._metagenome_filename_candidates(spec)
+        search_dirs = [
+            output_dir_path,
+            Path(GN_ASSETS_ROOT) / "metagenome_figs" / tolid,
+        ]
+
+        src_path = None
+        for search_dir in search_dirs:
+            for filename in filename_candidates:
+                candidate = search_dir / filename
+                if candidate.is_file():
+                    src_path = candidate
+                    break
+            if src_path is not None:
+                break
+
+        if src_path is None:
+            return None
+
+        png_path = output_dir_path / f"{spec.stem}.png"
+        if src_path.resolve() != png_path.resolve():
+            png_path.write_bytes(src_path.read_bytes())
+        tif_path, gif_path = convert_png_to_tif_and_gif(str(png_path), dpi=(300, 300), max_width=1200)
+        return png_path, Path(tif_path), Path(gif_path)
+
+    @staticmethod
+    def _metagenome_filename_candidates(spec: FigureSpec) -> tuple[str, ...]:
+        if spec.kind == "metagenome_tree":
+            return (
+                f"{spec.stem}.png",
+                "metagenome_tree.png",
+                "Fig_8_Metagenome_tree.png",
+            )
+        return (
+            f"{spec.stem}.png",
+            "metagenome_blob.png",
+            "Fig_7_Metagenome_blob.png",
+        )
 
     def _build_asset(
         self,
