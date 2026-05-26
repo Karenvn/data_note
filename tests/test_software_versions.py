@@ -73,6 +73,17 @@ genomescope_version: 2.0.1
 
         self.assertIn("TreeVal,1.4.7", "\n".join(table["rows"]))
 
+    def test_table_displays_fastk_release_for_commit_hash(self) -> None:
+        table = make_table5_rows(
+            {
+                "species": "Example species",
+                "fastk_version": "427104ea91c78c3b8b8b49f1a7d6bbeaa869ba1c",
+            }
+        )
+
+        self.assertIn("FastK,1.1", "\n".join(table["rows"]))
+        self.assertNotIn("427104ea91c78c3b8b8b49f1a7d6bbeaa869ba1c", "\n".join(table["rows"]))
+
     def test_merquryfk_uses_manual_module_version_not_assembly_context(self) -> None:
         context = {"species": "Example species", "merquryfk_version": "assembly-derived-hash"}
 

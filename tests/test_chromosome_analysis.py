@@ -171,6 +171,33 @@ class ChromosomeAnalyzerTests(unittest.TestCase):
             ],
         )
 
+    def test_pretext_chromosome_extraction_preserves_exact_grouped_lengths(self) -> None:
+        analyzer = ChromosomeAnalyzer()
+        reports = [
+            {
+                "role": "assembled-molecule",
+                "assigned_molecule_location_type": "Chromosome",
+                "chr_name": "2",
+                "length": 18_077_717,
+                "genbank_accession": "OZ205344.1",
+                "gc_percent": 39.0,
+            },
+            {
+                "role": "unlocalized-scaffold",
+                "assigned_molecule_location_type": "Chromosome",
+                "chr_name": "2",
+                "length": 77_436,
+                "genbank_accession": "CAYFDR010000006.1",
+                "gc_percent": None,
+            },
+        ]
+
+        chromosomes = analyzer.extract_chromosomes_for_pretext_labelling(reports)
+
+        self.assertEqual(chromosomes[0]["molecule"], "2")
+        self.assertEqual(chromosomes[0]["length_bp"], 18_155_153)
+        self.assertEqual(chromosomes[0]["length"], 18.155153)
+
     def test_combine_haplotype_chromosome_tables_aligns_rows(self) -> None:
         analyzer = ChromosomeAnalyzer()
         hap1_reports = [

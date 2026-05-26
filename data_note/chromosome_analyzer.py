@@ -68,6 +68,22 @@ class ChromosomeAnalyzer:
         chrom_list.sort(key=lambda row: self.custom_sort_order(row["molecule"]))
         return chrom_list
 
+    def extract_chromosomes_for_pretext_labelling(self, reports: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        chrom_list = []
+        for name, info in self._collect_assigned_chromosome_data(reports).items():
+            length_bp = int(info["length_bp"])
+            chrom_list.append(
+                {
+                    "INSDC": info["INSDC"],
+                    "molecule": name,
+                    "length": length_bp / 1e6,
+                    "length_bp": length_bp,
+                    "GC": info["GC"],
+                }
+            )
+        chrom_list.sort(key=lambda row: self.custom_sort_order(row["molecule"]))
+        return chrom_list
+
     def combine_haplotype_chromosome_tables(
         self,
         hap1_reports: list[dict[str, Any]],

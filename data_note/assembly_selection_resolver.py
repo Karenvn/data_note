@@ -55,13 +55,18 @@ class AssemblySelectionResolver:
     ) -> AssemblySelection:
         if allowed_tax_ids is None:
             allowed_tax_ids = (self.taxonomy_mapper_module or taxonomy_mapper).get_allowed_tax_ids(tax_id)
+        assembly_candidates = self._candidate_filter().coerce_candidates(assembly_dicts)
         relevant_assemblies = self.filter_relevant_assemblies(
-            assembly_dicts,
+            assembly_candidates,
             tax_id,
             allowed_tax_ids=allowed_tax_ids,
         )
         if selection_input is not None and selection_input.has_any():
-            selection = self._build_selection_from_input(relevant_assemblies, selection_input)
+            selection_candidates = self._selection_input_candidates(
+                assembly_candidates,
+                relevant_assemblies,
+            )
+            selection = self._build_selection_from_input(selection_candidates, selection_input)
             selection.validate()
             return selection
 
@@ -158,6 +163,31 @@ class AssemblySelectionResolver:
         for candidate in relevant_assemblies:
             if candidate.accession == normalized:
                 return candidate
-        raise ValueError(f"Requested assembly {normalized} was not found among the relevant assemblies")
+        raise ValueError(f"Requested assembly {normalized} was not found among the available assemblies")
+
+    def _selection_input_candidates(
+        self,
+        assembly_candidates: list[AssemblyCandidate],
+        relevant_assemblies: list[AssemblyCandidate],
+    ) -> list[AssemblyCandidate]:
+        mapper = self.taxonomy_mapper_module or taxonomy_mapper
+        tax_agnostic_candidates = [
+            assembly
+            for assembly in assembly_candidates
+            if not mapper.should_exclude_by_name(assembly.assembly_name)
+        ]
+        return self._dedupe_candidates([*relevant_assemblies, *tax_agnostic_candidates])
+
+    @staticmethod
+    def _dedupe_candidates(candidates: list[AssemblyCandidate]) -> list[AssemblyCandidate]:
+        deduped: list[AssemblyCandidate] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            key = candidate.accession
+            if key in seen:
+                continue
+            deduped.append(candidate)
+            seen.add(key)
+        return deduped
 
 __all__ = ["AssemblySelectionResolver"]

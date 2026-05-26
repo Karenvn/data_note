@@ -123,6 +123,38 @@ class BioprojectClient:
             for assembly in assemblies
         ]
 
+    def fetch_assembly_details_for_accession(self, accession: str) -> AssemblyCandidate | None:
+        normalized = accession.strip()
+        if not normalized:
+            return None
+
+        assemblies = self._search(
+            result="assembly",
+            query=f'assembly_set_accession="{normalized}"',
+            fields="accession,assembly_name,assembly_set_accession,tax_id,study_accession",
+            error_message=f"Failed to get assembly details for accession {normalized}",
+        )
+        if not assemblies:
+            base_accession = normalized.split(".", 1)[0]
+            assemblies = self._search(
+                result="assembly",
+                query=f'accession="{base_accession}"',
+                fields="accession,assembly_name,assembly_set_accession,tax_id,study_accession",
+                error_message=f"Failed to get assembly details for accession {normalized}",
+            )
+        if not assemblies:
+            return None
+
+        assembly = self._select_assembly_for_accession(assemblies, normalized)
+        return AssemblyCandidate.from_mapping(
+            self._update_assembly_revision(
+                assembly,
+                accession_key="assembly_set_accession",
+                include_assembly_name=True,
+            ),
+            accession_key="assembly_set_accession",
+        )
+
     def fetch_assemblies_for_bioprojects(self, bioproject_ids: list[str]) -> list[AssemblyCandidate]:
         return [
             assembly
@@ -244,6 +276,21 @@ class BioprojectClient:
         if isinstance(result, str):
             return result, None
         return accession, None
+
+    @staticmethod
+    def _select_assembly_for_accession(
+        assemblies: list[dict[str, Any]],
+        accession: str,
+    ) -> dict[str, Any]:
+        normalized = accession.strip()
+        base_accession = normalized.split(".", 1)[0]
+        for assembly in assemblies:
+            if str(assembly.get("assembly_set_accession") or "").strip() == normalized:
+                return assembly
+        for assembly in assemblies:
+            if str(assembly.get("accession") or "").strip() == base_accession:
+                return assembly
+        return assemblies[0]
 
 
 EnaPortalClient = BioprojectClient

@@ -26,7 +26,13 @@ def software_version(context, key: str, fallback=None):
     value = context.get(key)
     if value in (None, ""):
         return fallback
+    if key == "fastk_version" and fallback is not None and _looks_like_commit_hash(value):
+        return fallback
     return value
+
+
+def _looks_like_commit_hash(value) -> bool:
+    return bool(re.fullmatch(r"[0-9a-fA-F]{7,40}", str(value).strip()))
 
 
 def flatten_cell(value, digits=2):

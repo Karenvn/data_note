@@ -28,6 +28,35 @@ class _BioprojectClientStub:
         ]
 
 
+class _BioprojectClientMissingRuntimeCandidates:
+    def __init__(self) -> None:
+        self.direct_accession_calls = []
+
+    def fetch_child_accessions(self, umbrella_data):
+        return ["PRJEB_CHILD1"]
+
+    def fetch_assemblies_for_bioprojects(self, bioproject_ids):
+        return []
+
+    def fetch_assembly_details_for_accession(self, accession):
+        self.direct_accession_calls.append(accession)
+        records = {
+            "GCA_H1.1": AssemblyCandidate(
+                accession="GCA_H1.1",
+                assembly_name="ixExample1.hap1.1",
+                tax_id="9606",
+                study_accession="PRJEB_HAP1",
+            ),
+            "GCA_H2.1": AssemblyCandidate(
+                accession="GCA_H2.1",
+                assembly_name="ixExample1.hap2.1",
+                tax_id="9606",
+                study_accession="PRJEB_HAP2",
+            ),
+        }
+        return records.get(accession)
+
+
 class _SelectionResolverStub:
     def __init__(self) -> None:
         self.taxonomy_mapper_module = None
@@ -152,6 +181,26 @@ class AssemblyServiceTests(unittest.TestCase):
 
         self.assertEqual(selection.primary.accession, "GCA_1.1")
         self.assertEqual(selection_resolver.calls[0][2].assembly_accession, "GCA_1.1")
+
+    def test_build_context_fetches_runtime_override_assemblies_missing_from_children(self) -> None:
+        bioproject_client = _BioprojectClientMissingRuntimeCandidates()
+        selection_resolver = _SelectionResolverStub()
+        mapper = _MapperStub()
+        service = AssemblyService(
+            bioproject_client=bioproject_client,
+            selection_resolver=selection_resolver,
+            taxonomy_mapper_module=mapper,
+            selection_input=AssemblySelectionInput(
+                hap1_accession="GCA_H1.1",
+                hap2_accession="GCA_H2.1",
+            ),
+        )
+
+        service.build_context({"study_accession": "PRJEB1"}, "9606")
+
+        passed_candidates = selection_resolver.calls[0][0]
+        self.assertEqual([candidate.accession for candidate in passed_candidates], ["GCA_H1.1", "GCA_H2.1"])
+        self.assertEqual(bioproject_client.direct_accession_calls, ["GCA_H1.1", "GCA_H2.1"])
 
 
 if __name__ == "__main__":

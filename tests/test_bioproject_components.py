@@ -114,6 +114,39 @@ class EnaPortalClientTests(unittest.TestCase):
         self.assertEqual(assemblies[0].accession, "GCA_000010.3")
         self.assertEqual(assemblies[0].assembly_name, "ixExample2.1")
 
+    def test_fetch_assembly_details_for_accession_queries_assembly_set_accession(self) -> None:
+        def fake_get(url, params):
+            self.assertEqual(params["result"], "assembly")
+            self.assertEqual(params["query"], 'assembly_set_accession="GCA_000020.1"')
+            self.assertEqual(
+                params["fields"],
+                "accession,assembly_name,assembly_set_accession,tax_id,study_accession",
+            )
+            return _Response(
+                200,
+                [
+                    {
+                        "accession": "GCA_000020",
+                        "assembly_set_accession": "GCA_000020.1",
+                        "assembly_name": "ixExample3.hap1.1",
+                        "tax_id": "1234",
+                        "study_accession": "PRJEB_ASM",
+                    }
+                ],
+            )
+
+        client = EnaPortalClient(
+            session_get=fake_get,
+            revision_fetcher=lambda accession: (accession, None),
+        )
+        assembly = client.fetch_assembly_details_for_accession("GCA_000020.1")
+
+        self.assertIsInstance(assembly, AssemblyCandidate)
+        self.assertEqual(assembly.accession, "GCA_000020.1")
+        self.assertEqual(assembly.assembly_name, "ixExample3.hap1.1")
+        self.assertEqual(assembly.tax_id, "1234")
+        self.assertEqual(assembly.study_accession, "PRJEB_ASM")
+
 
 class AssemblySelectionResolverTests(unittest.TestCase):
     def test_determine_assembly_type_uses_haplotype_name_heuristic(self) -> None:
@@ -337,6 +370,28 @@ class AssemblySelectionResolverTests(unittest.TestCase):
 
         self.assertEqual(selection.primary.accession, "GCA_PRIM_OLD.1")
         self.assertEqual(selection.alternate.accession, "GCA_ALT_OLD.1")
+
+    def test_build_selection_input_can_use_tax_id_filtered_haplotype_candidates(self) -> None:
+        resolver = AssemblySelectionResolver(
+            taxonomy_mapper_module=_MapperStub(),
+            contiguity_fetcher=lambda accession: {},
+        )
+        assembly_dicts = [
+            {"assembly_name": "ixExample1.hap1.1", "assembly_set_accession": "GCA_H1_WRONG.1", "tax_id": "wrong-tax"},
+            {"assembly_name": "ixExample1.hap2.1", "assembly_set_accession": "GCA_H2_WRONG.1", "tax_id": "wrong-tax"},
+        ]
+
+        selection = resolver.build_selection(
+            assembly_dicts,
+            "1234",
+            selection_input=AssemblySelectionInput(
+                hap1_accession="GCA_H1_WRONG.1",
+                hap2_accession="GCA_H2_WRONG.1",
+            ),
+        )
+
+        self.assertEqual(selection.hap1.accession, "GCA_H1_WRONG.1")
+        self.assertEqual(selection.hap2.accession, "GCA_H2_WRONG.1")
 
 
 class AssemblyModeDetectorTests(unittest.TestCase):

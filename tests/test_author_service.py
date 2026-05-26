@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import closing
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -344,6 +345,33 @@ class AuthorServiceTests(unittest.TestCase):
         self.assertEqual(
             parsed_yaml["author"][1]["roles"],
             [{"credit": "Resources"}, {"credit": "Investigation"}],
+        )
+
+    def test_raw_name_fallback_applies_multi_person_semicolon_expansions(self) -> None:
+        corrections_path = Path(self.tmpdir.name) / "name_corrections.json"
+        corrections_path.write_text(
+            json.dumps(
+                {
+                    "multi_person_expansions": {
+                        "Roger Vila, Joan Carles Hinojosa": "Roger Vila; Joan Carles Hinojosa"
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        service = AuthorService(self.db_path, corrections_path)
+        context = {
+            "technology_data": {
+                "pacbio": {"pacbio_sample_accession": "missing-accession"},
+            },
+            "pacbio_collector": "Roger Vila, Joan Carles Hinojosa",
+        }
+
+        result = service.build_context(context)
+
+        self.assertEqual(
+            [f"{author.given_names} {author.surname}" for author in result.people],
+            ["Roger Vila", "Joan Carles Hinojosa"],
         )
 
     def test_biosamples_raw_name_order_takes_precedence_over_partial_db_rows(self) -> None:

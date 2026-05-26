@@ -229,7 +229,7 @@ class AssemblyPairSelector:
         for candidate in candidates:
             if candidate.accession == normalized:
                 return candidate
-        raise ValueError(f"Requested {role} assembly {normalized} was not found among the relevant assemblies")
+        raise ValueError(f"Requested {role} assembly {normalized} was not found among the available assemblies")
 
     @staticmethod
     def _assembly_level_rank(level: str) -> int:

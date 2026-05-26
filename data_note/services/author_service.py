@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import json
 import logging
 import os
 from pathlib import Path
@@ -39,6 +40,12 @@ class _IndentedYamlDumper(yaml.SafeDumper):
 @dataclass(slots=True)
 class AuthorService:
     db_path: Path | None = None
+    name_corrections_path: Path | None = None
+    _name_corrections: dict[str, dict[str, str]] | None = field(
+        default=None,
+        init=False,
+        repr=False,
+    )
 
     def build_context(self, context: Mapping[str, Any]) -> AuthorInfo:
         db_path = self._resolved_db_path()
@@ -568,22 +575,82 @@ class AuthorService:
         parts = full_name.rsplit(" ", 1)
         return parts[0], parts[1]
 
-    @staticmethod
-    def _split_raw_names(value: Any) -> list[str]:
+    def _split_raw_names(self, value: Any) -> list[str]:
         if not value:
             return []
         text = str(value).strip()
         if not text:
             return []
-        parts = re.split(r"\s*\|\s*|\s*;\s*", text)
+        parts = re.split(r"\s*\|\s*|\s*;\s*|\n+", text)
         seen: set[str] = set()
         result: list[str] = []
         for part in parts:
-            cleaned = " ".join(part.split()).strip()
-            if cleaned and cleaned not in seen:
-                seen.add(cleaned)
-                result.append(cleaned)
+            for expanded_part in self._expand_corrected_raw_name(part):
+                cleaned = " ".join(expanded_part.split()).strip()
+                if cleaned and cleaned not in seen:
+                    seen.add(cleaned)
+                    result.append(cleaned)
         return result
+
+    def _expand_corrected_raw_name(self, raw_name: str) -> list[str]:
+        cleaned = " ".join(str(raw_name).split()).strip()
+        if not cleaned:
+            return []
+
+        corrections = self._load_name_corrections()
+        normalized = self._normalize_name(cleaned)
+        corrected = corrections["multi_person_expansions"].get(normalized)
+        if corrected is None:
+            return [cleaned]
+
+        corrected = str(corrected).strip()
+        if not corrected:
+            return []
+        return [
+            " ".join(part.split()).strip()
+            for part in re.split(r"\s*\|\s*|\s*;\s*|\n+", corrected)
+            if " ".join(part.split()).strip()
+        ]
+
+    def _load_name_corrections(self) -> dict[str, dict[str, str]]:
+        if self._name_corrections is not None:
+            return self._name_corrections
+
+        corrections = {"multi_person_expansions": {}}
+        path = self._resolved_name_corrections_path()
+        if path.exists():
+            try:
+                raw_data = json.loads(path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                logger.warning("Could not parse author name corrections at %s: %s", path, exc)
+            else:
+                if isinstance(raw_data, dict):
+                    for key, value in raw_data.items():
+                        if key == "multi_person_expansions" and isinstance(value, dict):
+                            corrections["multi_person_expansions"].update(
+                                {
+                                    self._normalize_name(str(expansion_key)): str(expansion_value)
+                                    for expansion_key, expansion_value in value.items()
+                                    if isinstance(expansion_value, str)
+                                }
+                            )
+        self._name_corrections = corrections
+        return corrections
+
+    def _resolved_name_corrections_path(self) -> Path:
+        if self.name_corrections_path is not None:
+            return self.name_corrections_path
+
+        configured = os.getenv("DATA_NOTE_AUTHOR_NAME_CORRECTIONS")
+        if configured:
+            return Path(configured).expanduser()
+
+        db_path = self._resolved_db_path()
+        sibling = db_path.with_name("name_corrections.json")
+        if sibling.exists():
+            return sibling
+
+        return Path.home() / "author_db" / "name_corrections.json"
 
     @staticmethod
     def _normalize_name(value: str) -> str:

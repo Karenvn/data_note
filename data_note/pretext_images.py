@@ -16,7 +16,14 @@ _SPLIT_CHROMOSOME_RE = re.compile(r"^(.+?)[_.-](\d+)$")
 
 def _extract_chromosomes_only(accession: str) -> list[dict]:
     reports = _DEFAULT_SEQUENCE_REPORT_CLIENT.fetch_reports(accession)
-    return _DEFAULT_CHROMOSOME_ANALYZER.extract_chromosomes_only(reports)
+    return _DEFAULT_CHROMOSOME_ANALYZER.extract_chromosomes_for_pretext_labelling(reports)
+
+
+def _chromosome_length_mb(chrom: dict) -> float:
+    length_bp = chrom.get("length_bp")
+    if length_bp is not None:
+        return int(length_bp) / 1e6
+    return float(chrom["length"])
 
 
 def _select_pretext_source(matches: list[Path]) -> Path:
@@ -62,7 +69,10 @@ def _group_split_chromosomes_for_labelling(chroms: list[dict]) -> list[dict]:
                 "_pretext_grouped_split": base is not None,
             },
         )
-        entry["length"] += chrom["length"]
+        entry["length"] += _chromosome_length_mb(chrom)
+        if chrom.get("length_bp") is not None:
+            entry["length_bp"] = int(entry.get("length_bp") or 0) + int(chrom["length_bp"])
+            entry["length"] = entry["length_bp"] / 1e6
         if base is not None:
             entry["INSDC"] = None
             entry["GC"] = None
@@ -81,14 +91,14 @@ def _filter_chromosomes_for_labelling(
         return []
 
     chroms = _group_split_chromosomes_for_labelling(chroms)
-    max_len = max(c["length"] for c in chroms)
+    max_len = max(_chromosome_length_mb(c) for c in chroms)
     excluded = set(exclude_molecules or [])
     filtered = [
         c
         for c in chroms
-        if c["molecule"] not in excluded and c["length"] >= min_fraction * max_len
+        if c["molecule"] not in excluded and _chromosome_length_mb(c) >= min_fraction * max_len
     ]
-    return sorted(filtered, key=lambda chrom: chrom["length"], reverse=True)
+    return sorted(filtered, key=_chromosome_length_mb, reverse=True)
 
 
 def _initial_mbp_tick_interval(total_length: float) -> int:
@@ -335,7 +345,7 @@ def label_pretext_map(
 
     acc = 0
     x_positions = []
-    total = total_length or sum(c["length"] for c in sorted_chroms)
+    total = total_length or sum(_chromosome_length_mb(c) for c in sorted_chroms)
     draw_pretext_boundary(
         draw,
         left,
@@ -346,7 +356,7 @@ def label_pretext_map(
         grid_width=grid_width,
     )
     for chrom in sorted_chroms:
-        block = (chrom["length"] / total) * w
+        block = (_chromosome_length_mb(chrom) / total) * w
         x_positions.append(acc + block / 2)
         acc += block
 
@@ -359,7 +369,7 @@ def label_pretext_map(
     drawn_boxes = []
     for index, chrom in enumerate(sorted_chroms):
         label = str(chrom["molecule"])
-        block = (chrom["length"] / total) * w
+        block = (_chromosome_length_mb(chrom) / total) * w
         bbox = font.getbbox(label)
         text_width = bbox[2] - bbox[0]
 
@@ -382,7 +392,7 @@ def label_pretext_map(
     y_positions = []
     acc_h = 0
     for chrom in sorted_chroms:
-        block_h = (chrom["length"] / total) * h
+        block_h = (_chromosome_length_mb(chrom) / total) * h
         y_positions.append(acc_h + block_h / 2)
         acc_h += block_h
 
@@ -398,7 +408,7 @@ def label_pretext_map(
         text_height = bbox[3] - bbox[1]
         text_width = bbox[2] - bbox[0]
 
-        block_h = (chrom["length"] / total) * h
+        block_h = (_chromosome_length_mb(chrom) / total) * h
         centre_y = top + y_positions[index]
         y_top = int(centre_y - text_height / 2 - font_size * 0.4)
         y_bottom = y_top + text_height
