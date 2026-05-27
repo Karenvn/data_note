@@ -120,6 +120,15 @@ def _get_extraction_by_sample_id(ds, sample_id):
     return _first_result(ds, "extraction", f)
 
 
+def _get_tissue_prep_by_uid(ds, tissue_prep_uid):
+    tissue_prep_uid = _normalize_identifier(tissue_prep_uid)
+    if not tissue_prep_uid:
+        return None
+    f = DataSourceFilter()
+    f.and_ = {"uid": {"eq": {"value": tissue_prep_uid, "negate": False}}}
+    return _first_result(ds, "tissue_prep", f)
+
+
 def _get_sequencing_request(ds, identifier):
     identifier = _normalize_identifier(identifier)
     if not identifier:
@@ -162,7 +171,14 @@ def _get_extraction_from_sequencing_request(ds, seq_request):
     return None
 
 
-def _extract_extraction_attrs(extraction):
+def _first_present(*values):
+    for value in values:
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _extract_extraction_attrs(extraction, ds=None):
     raw_attrs = extraction.attributes.copy()
 
     desired_fields = [
@@ -182,8 +198,22 @@ def _extract_extraction_attrs(extraction):
     # Tissue mass lives on the related tissue_prep object (not extraction itself).
     tissue_prep = extraction.to_one_relationships.get("benchling_tissue_prep")
     if tissue_prep:
-        tp_attrs = tissue_prep.attributes or {}
-        extraction_attrs["tissue_weight_mg"] = tp_attrs.get("benchling_weight_mg")
+        tp_attrs = dict(tissue_prep.attributes or {})
+        if ds is not None and getattr(tissue_prep, "id", None):
+            direct_tissue_prep = _get_tissue_prep_by_uid(ds, tissue_prep.id)
+            if direct_tissue_prep is not None:
+                tp_attrs.update(direct_tissue_prep.attributes or {})
+        tissue_weight = _first_present(
+            tp_attrs.get("benchling_weight_of_prep_for_dna"),
+            tp_attrs.get("benchling_weight_mg"),
+        )
+        extraction_attrs["tissue_weight_mg"] = tissue_weight
+        if tissue_weight is not None:
+            extraction_attrs["tissue_weight_mg_source"] = (
+                "benchling_weight_of_prep_for_dna"
+                if tissue_weight == tp_attrs.get("benchling_weight_of_prep_for_dna")
+                else "benchling_weight_mg"
+            )
         extraction_attrs["tissue_weight_mg_calc"] = tp_attrs.get("calc_benchling_weight_mg")
         extraction_attrs["tissue_prep_uid"] = tissue_prep.id
 
@@ -211,6 +241,7 @@ def _extract_extraction_attrs(extraction):
         "extraction_uid": extraction_attrs.get("extraction_uid"),
         "gqn": extraction_attrs.get("benchling_gqn_index"),
         "tissue_weight_mg": extraction_attrs.get("tissue_weight_mg"),
+        "tissue_weight_mg_source": extraction_attrs.get("tissue_weight_mg_source"),
         "tissue_weight_mg_calc": extraction_attrs.get("tissue_weight_mg_calc"),
         "tissue_prep_uid": extraction_attrs.get("tissue_prep_uid"),
         "tissue_size_in_tube": extraction_attrs.get("tissue_size_in_tube"),
@@ -238,7 +269,7 @@ def get_sequencing_and_extraction_metadata(sanger_sample_id):
     extraction = _get_extraction_by_uid(ds, sanger_sample_id)
     if extraction:
         logger.info("Input matches an extraction UID directly.")
-        extraction_attrs_renamed = _extract_extraction_attrs(extraction)
+        extraction_attrs_renamed = _extract_extraction_attrs(extraction, ds=ds)
         return seq_attrs_renamed, extraction_attrs_renamed
 
     # --- Step 2: Try sequencing_request ---
@@ -259,13 +290,13 @@ def get_sequencing_and_extraction_metadata(sanger_sample_id):
         }
         extraction = _get_extraction_from_sequencing_request(ds, seq_request)
         if extraction:
-            extraction_attrs_renamed = _extract_extraction_attrs(extraction)
+            extraction_attrs_renamed = _extract_extraction_attrs(extraction, ds=ds)
 
     # --- Step 3: Final fallback by ToLID ---
     if not extraction_attrs_renamed:
         extraction = _get_extraction_by_tolid(ds, sanger_sample_id)
         if extraction:
-            extraction_attrs_renamed = _extract_extraction_attrs(extraction)
+            extraction_attrs_renamed = _extract_extraction_attrs(extraction, ds=ds)
 
     return seq_attrs_renamed, extraction_attrs_renamed
 

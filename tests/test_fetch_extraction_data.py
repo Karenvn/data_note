@@ -7,10 +7,56 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from data_note.fetch_extraction_data import _resolve_lr_sample_prep_tsv, fallback_fetch_from_lr_sample_prep, fetch_barcoding_info
+from data_note.fetch_extraction_data import (
+    _extract_extraction_attrs,
+    _resolve_lr_sample_prep_tsv,
+    fallback_fetch_from_lr_sample_prep,
+    fetch_barcoding_info,
+)
 
 
 class ExtractionDataFallbackTests(unittest.TestCase):
+    def test_extract_extraction_attrs_prefers_direct_tissue_prep_weight_for_dna(self) -> None:
+        extraction = SimpleNamespace(
+            id="bfi_ext",
+            attributes={},
+            to_one_relationships={
+                "benchling_tissue_prep": SimpleNamespace(
+                    id="bfi_tp",
+                    attributes={"benchling_weight_mg": 0.0},
+                )
+            },
+        )
+        direct_tissue_prep = SimpleNamespace(
+            id="bfi_tp",
+            attributes={
+                "benchling_weight_mg": 0.0,
+                "benchling_weight_of_prep_for_dna": 51.0,
+            },
+        )
+
+        class DummyFilter:
+            def __init__(self) -> None:
+                self.and_ = None
+
+        class FakeDataSource:
+            def get_list(self, object_name, object_filters=None):
+                self.object_name = object_name
+                self.object_filters = object_filters
+                return [direct_tissue_prep]
+
+        ds = FakeDataSource()
+        with patch("data_note.fetch_extraction_data.DataSourceFilter", DummyFilter):
+            result = _extract_extraction_attrs(extraction, ds=ds)
+
+        self.assertEqual(ds.object_name, "tissue_prep")
+        self.assertEqual(
+            ds.object_filters.and_,
+            {"uid": {"eq": {"value": "bfi_tp", "negate": False}}},
+        )
+        self.assertEqual(result["tissue_weight_mg"], 51.0)
+        self.assertEqual(result["tissue_weight_mg_source"], "benchling_weight_of_prep_for_dna")
+
     def test_resolve_lr_sample_prep_tsv_prefers_gn_assets_default(self) -> None:
         with TemporaryDirectory() as tmpdir:
             assets_root = Path(tmpdir)
