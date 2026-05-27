@@ -23,6 +23,10 @@ READ_RUN_FIELDS = (
     "submitted_ftp,fastq_ftp"
 )
 
+ASSEMBLY_RUN_FIELDS = (
+    "assembly_set_accession,assembly_accession,accession,assembly_name,run_accession"
+)
+
 ENA_AUGMENT_FIELDS = (
     "run_alias",
     "experiment_accession",
@@ -248,6 +252,21 @@ class SequencingFetchService:
     def fetch_for_bioprojects(self, bioprojects: list[str]) -> pd.DataFrame:
         return self.fetch_for_bioprojects_with_sources(bioprojects).dataframe
 
+    def fetch_assembly_run_accessions(self, assembly_accessions: list[str]) -> set[str]:
+        run_accessions: set[str] = set()
+        for accession in assembly_accessions:
+            normalised = str(accession or "").strip()
+            if not normalised:
+                continue
+            for query in self._assembly_queries(normalised):
+                rows = self._fetch_assembly_rows(query)
+                if not rows:
+                    continue
+                for row in rows:
+                    run_accessions.update(self._split_accessions(row.get("run_accession")))
+                break
+        return run_accessions
+
     @staticmethod
     def _augment_rows_from_ena(
         primary_rows: list[dict[str, Any]],
@@ -301,6 +320,46 @@ class SequencingFetchService:
         except Exception as exc:
             logger.warning("Experiment protocol fetch failed for %s: %s", experiment_accession, exc)
         return ""
+
+    def _fetch_assembly_rows(self, query: str) -> list[dict[str, Any]]:
+        url = "https://www.ebi.ac.uk/ena/portal/api/search"
+        try:
+            response = self.session_get(
+                url,
+                params={
+                    "result": "assembly",
+                    "query": query,
+                    "fields": ASSEMBLY_RUN_FIELDS,
+                    "format": "json",
+                },
+                timeout=30,
+            )
+            if response.status_code != 200:
+                logger.warning("ENA assembly lookup failed for %s: HTTP %s", query, response.status_code)
+                return []
+            data = response.json()
+            if isinstance(data, list):
+                return data
+        except Exception as exc:
+            logger.warning("ENA assembly lookup failed for %s: %s", query, exc)
+        return []
+
+    @staticmethod
+    def _assembly_queries(accession: str) -> tuple[str, ...]:
+        base_accession = accession.split(".", 1)[0]
+        return (
+            f'assembly_set_accession="{accession}"',
+            f'accession="{base_accession}"',
+        )
+
+    @staticmethod
+    def _split_accessions(value: Any) -> set[str]:
+        text = str(value or "")
+        return {
+            part.strip()
+            for part in text.split(";")
+            if part.strip()
+        }
 
     @staticmethod
     def _ncbi_eutils_params(params: dict[str, Any] | None = None) -> dict[str, Any]:

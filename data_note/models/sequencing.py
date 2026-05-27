@@ -290,7 +290,9 @@ class SequencingSummary:
 
     def pacbio_library_name(self) -> str | None:
         pacbio = self.technology("pacbio")
-        library_name = pacbio.library_name if pacbio is not None else None
+        if pacbio is None:
+            return None
+        library_name = pacbio.extras.get("pacbio_mlwh_library_id") or pacbio.library_name
         if library_name in (None, ""):
             return None
         return str(library_name)

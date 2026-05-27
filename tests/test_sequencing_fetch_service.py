@@ -122,6 +122,30 @@ class SequencingFetchServiceTests(unittest.TestCase):
         self.assertEqual(result.dataframe["run_accession"].tolist(), ["ERR1"])
         self.assertEqual(mock_fetch.call_count, 3)
 
+    def test_fetch_assembly_run_accessions_parses_assembly_run_list(self) -> None:
+        mock_get = Mock(
+            return_value=Mock(
+                status_code=200,
+                json=Mock(
+                    return_value=[
+                        {
+                            "assembly_set_accession": "GCA_1.1",
+                            "run_accession": "ERR1;ERR2; ERR3",
+                        }
+                    ]
+                ),
+            )
+        )
+        service = SequencingFetchService(session_get=mock_get)
+
+        result = service.fetch_assembly_run_accessions(["GCA_1.1"])
+
+        self.assertEqual(result, {"ERR1", "ERR2", "ERR3"})
+        self.assertEqual(
+            mock_get.call_args.kwargs["params"]["query"],
+            'assembly_set_accession="GCA_1.1"',
+        )
+
     def test_fetch_rows_for_accession_logs_single_debug_message_when_all_sources_are_empty(self) -> None:
         service = SequencingFetchService()
 

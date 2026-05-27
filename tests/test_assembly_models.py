@@ -48,7 +48,10 @@ class AssemblyModelTests(unittest.TestCase):
         primary_selection = AssemblySelection(
             assemblies_type="prim_alt",
             primary=AssemblyRecord(accession="GCA_1.1", assembly_name="ixFooBar1.1", role="primary"),
+            alternate=AssemblyRecord(accession="GCA_2.1", assembly_name="ixFooBar1.alt.1", role="alternate"),
         )
+        self.assertEqual(primary_selection.assembly_accessions()["alt_accession"], "GCA_2.1")
+
         hap_selection = AssemblySelection(
             assemblies_type="hap_asm",
             hap1=AssemblyRecord(accession="GCA_3.1", assembly_name="ixFooBar1.hap1.1", role="hap1"),

@@ -84,6 +84,7 @@ class PortalEnrichmentResult:
     dataframe: pd.DataFrame
     matched_run_ids: list[str] = field(default_factory=list)
     excluded_run_ids: list[str] = field(default_factory=list)
+    dropped_public_run_accessions: list[str] = field(default_factory=list)
     unmatched_run_ids: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     portal_run_data: list[dict[str, Any]] = field(default_factory=list)
@@ -156,6 +157,9 @@ class PortalSequencingService:
             if self._has_mismatched_portal_sample(portal_row, tolid, biosample_tolid_map, result):
                 if portal_id:
                     result.excluded_run_ids.append(portal_id)
+                result.dropped_public_run_accessions.extend(
+                    self._drop_mismatched_public_rows(enriched, portal_row)
+                )
                 continue
 
             row_index = self._match_public_row(enriched, portal_row)
@@ -254,6 +258,45 @@ class PortalSequencingService:
             return candidates[0]
 
         return None
+
+    def _drop_mismatched_public_rows(self, dataframe: pd.DataFrame, portal_row: dict[str, Any]) -> list[str]:
+        dropped: list[str] = []
+        for index, row in list(dataframe.iterrows()):
+            if self._row_technology(row) != self._portal_technology(portal_row):
+                continue
+            if not self._mismatched_public_row_match(row, portal_row):
+                continue
+            read_accession = _string_value(row.get("run_accession"))
+            if read_accession:
+                dropped.append(read_accession)
+            dataframe.drop(index=index, inplace=True)
+        if dropped:
+            dataframe.reset_index(drop=True, inplace=True)
+        return dropped
+
+    @staticmethod
+    def _mismatched_public_row_match(row: pd.Series, portal_row: dict[str, Any]) -> bool:
+        library_name = _string_value(row.get("library_name"))
+        portal_libraries = {
+            _string_value(portal_row.get("mlwh_library_id")),
+            _string_value(portal_row.get("mlwh_pac_bio_library_tube_name")),
+        }
+        if library_name and library_name in {value for value in portal_libraries if value}:
+            return True
+
+        public_text = " ".join(
+            _string_value(row.get(field_name))
+            for field_name in (
+                "run_alias",
+                "experiment_alias",
+                "submitted_ftp",
+                "fastq_ftp",
+                "library_name",
+            )
+        )
+        run_id = _string_value(portal_row.get("mlwh_run_id")) or _string_value(portal_row.get("tolqc_run"))
+        barcode = _string_value(portal_row.get("mlwh_tag1_id")) or _string_value(portal_row.get("tolqc_tag_sequence"))
+        return bool(run_id and run_id in public_text and (not barcode or barcode in public_text))
 
     @staticmethod
     def _file_match(row: pd.Series, portal_row: dict[str, Any]) -> bool:

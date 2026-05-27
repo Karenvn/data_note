@@ -42,8 +42,8 @@ class _SequencingServiceStub:
         self.summary = summary
         self.calls: list[tuple[object, object]] = []
 
-    def build_context(self, bioprojects, tolid):
-        self.calls.append((bioprojects, tolid))
+    def build_context(self, bioprojects, tolid, *, assembly_selection=None):
+        self.calls.append((bioprojects, tolid, assembly_selection))
         return self.summary
 
 
@@ -124,7 +124,7 @@ class SequencingWorkflowServiceTests(unittest.TestCase):
             tolid="ixExample1",
         )
 
-        self.assertEqual(sequencing_service.calls, [(["PRJEB1A", "PRJEB1B"], "ixExample1")])
+        self.assertEqual(sequencing_service.calls, [(["PRJEB1A", "PRJEB1B"], "ixExample1", assembly_selection)])
         self.assertEqual(curation_service.calls[0]["extraction_lookup_id"], "LIB1")
         self.assertIs(note_data.sequencing, sequencing_summary)
         self.assertIsInstance(note_data.sampling, SamplingInfo)

@@ -110,6 +110,7 @@ class AssemblySelection:
     def assembly_accessions(self) -> dict[str, str | None]:
         return {
             "prim_accession": self.primary.accession if self.primary is not None else None,
+            "alt_accession": self.alternate.accession if self.alternate is not None else None,
             "hap1_accession": self.hap1.accession if self.hap1 is not None else None,
             "hap2_accession": self.hap2.accession if self.hap2 is not None else None,
         }

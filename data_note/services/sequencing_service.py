@@ -12,7 +12,7 @@ import pandas as pd
 from ..fetch_biosample_info import get_biosample_tolid_map
 from ..formatting_utils import format_with_nbsp
 from ..formatting_utils import bytes_to_gb, format_scientific
-from ..models import RunGroup, RunRecord, SequencingSummary, SequencingTotals, TechnologyRecord
+from ..models import AssemblySelection, RunGroup, RunRecord, SequencingSummary, SequencingTotals, TechnologyRecord
 from .sequencing_portal_service import PortalEnrichmentResult, PortalSequencingService
 from .sequencing_fetch_service import SequencingFetchService
 
@@ -131,6 +131,7 @@ class SequencingService:
     fetch_service: SequencingFetchService = field(default_factory=SequencingFetchService)
     portal_service: PortalSequencingService = field(default_factory=PortalSequencingService)
     biosample_tolid_getter: Callable[[list[str]], dict[str, str | None]] = get_biosample_tolid_map
+    assembly_run_accession_fetcher: Callable[[list[str]], set[str]] | None = None
     sequencing_source: str = field(default_factory=_sequencing_source_from_env)
     illumina_count_unit: str = field(default_factory=_illumina_count_unit_from_env)
 
@@ -148,7 +149,13 @@ class SequencingService:
             multiplexing=[],
         )
 
-    def build_context(self, bioprojects: Any, tolid: str) -> SequencingSummary:
+    def build_context(
+        self,
+        bioprojects: Any,
+        tolid: str,
+        *,
+        assembly_selection: AssemblySelection | None = None,
+    ) -> SequencingSummary:
         bioproject_list = self._normalise_bioprojects(bioprojects)
         logger.info(
             "Scanning sequencing BioProject candidate(s): %s.",
@@ -169,6 +176,12 @@ class SequencingService:
             raise RuntimeError(
                 f"Missing sample_accession for BioProjects: {', '.join(bioproject_list)}"
             )
+
+        assembly_run_accessions = self._assembly_run_accessions(assembly_selection)
+        read_study_df, assembly_filter_excluded_runs = self._filter_rows_by_assembly_run_accessions(
+            read_study_df,
+            assembly_run_accessions,
+        )
 
         biosample_ids = read_study_df["sample_accession"].dropna().unique().tolist()
         biosample_tolid_map = self.biosample_tolid_getter(biosample_ids)
@@ -199,6 +212,8 @@ class SequencingService:
                 portal_result=portal_result,
                 sequencing_source=self._normalise_sequencing_source(),
                 illumina_count_unit=self._normalise_illumina_count_unit(),
+                assembly_run_accessions=assembly_run_accessions,
+                assembly_filter_excluded_runs=assembly_filter_excluded_runs,
             ),
             pacbio_protocols=pacbio_protocols,
             run_accessions=run_accessions,
@@ -525,6 +540,46 @@ class SequencingService:
 
         return read_study_df[read_study_df.apply(keep_row, axis=1)]
 
+    def _assembly_run_accessions(self, assembly_selection: AssemblySelection | None) -> set[str]:
+        if assembly_selection is None:
+            return set()
+        accessions = [
+            accession
+            for accession in assembly_selection.assembly_accessions().values()
+            if accession
+        ]
+        if not accessions:
+            return set()
+        fetcher = self.assembly_run_accession_fetcher or self.fetch_service.fetch_assembly_run_accessions
+        try:
+            return set(fetcher(accessions))
+        except Exception as exc:
+            logger.warning("Assembly run-accession lookup failed for %s: %s", ", ".join(accessions), exc)
+            return set()
+
+    @staticmethod
+    def _filter_rows_by_assembly_run_accessions(
+        read_study_df: pd.DataFrame,
+        assembly_run_accessions: set[str],
+    ) -> tuple[pd.DataFrame, list[str]]:
+        if read_study_df.empty or not assembly_run_accessions:
+            return read_study_df, []
+
+        excluded: list[str] = []
+
+        def keep_row(row: pd.Series) -> bool:
+            match = SequencingService._match_technology(row)
+            if match is None or match[0] not in {"pacbio", "hic", "chromium"}:
+                return True
+            run_accession = SequencingService._string_value(row.get("run_accession"))
+            if not run_accession or run_accession in assembly_run_accessions:
+                return True
+            excluded.append(run_accession)
+            return False
+
+        filtered = read_study_df[read_study_df.apply(keep_row, axis=1)]
+        return filtered, excluded
+
     @staticmethod
     def _build_technology_records(df: pd.DataFrame) -> dict[str, TechnologyRecord]:
         records = {name: TechnologyRecord(name=name) for name in TECHNOLOGY_NAMES}
@@ -632,6 +687,8 @@ class SequencingService:
         portal_result: PortalEnrichmentResult | None = None,
         sequencing_source: str = "public-with-portal",
         illumina_count_unit: str = "read_pairs",
+        assembly_run_accessions: set[str] | None = None,
+        assembly_filter_excluded_runs: list[str] | None = None,
     ) -> SequencingTotals:
         totals = {
             "pacbio_total_reads": 0,
@@ -664,6 +721,10 @@ class SequencingService:
             "illumina_read_count_unit": illumina_count_unit,
             "sequencing_public_source_accessions": "; ".join(source_accessions or []),
         }
+        if assembly_run_accessions:
+            extras["sequencing_assembly_run_accession_filter"] = True
+            extras["sequencing_assembly_run_accessions"] = "; ".join(sorted(assembly_run_accessions))
+            extras["sequencing_assembly_excluded_runs"] = "; ".join(assembly_filter_excluded_runs or [])
         for tech_name in ("pacbio", "hic", "rna"):
             unit = SequencingService._first_technology_value(df, tech_name, "read_count_unit")
             read_source = SequencingService._first_technology_value(df, tech_name, "read_count_source")
@@ -682,6 +743,9 @@ class SequencingService:
             extras["sequencing_portal_enrichment_applied"] = portal_result.applied
             extras["sequencing_portal_matched_runs"] = "; ".join(portal_result.matched_run_ids)
             extras["sequencing_portal_excluded_runs"] = "; ".join(portal_result.excluded_run_ids)
+            extras["sequencing_portal_dropped_public_runs"] = "; ".join(
+                portal_result.dropped_public_run_accessions
+            )
             extras["sequencing_portal_unmatched_runs"] = "; ".join(portal_result.unmatched_run_ids)
             extras["sequencing_portal_warnings"] = " | ".join(portal_result.warnings)
 

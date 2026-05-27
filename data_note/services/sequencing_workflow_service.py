@@ -45,7 +45,11 @@ class SequencingWorkflowService:
         tolid: str | None,
     ) -> NoteContext:
         sequencing_projects = child_accessions or [bioproject]
-        sequencing_summary = self.sequencing_service.build_context(sequencing_projects, tolid)
+        sequencing_summary = self.sequencing_service.build_context(
+            sequencing_projects,
+            tolid,
+            assembly_selection=assembly_selection,
+        )
         note_data.sequencing = sequencing_summary
 
         extraction_lookup_id = sequencing_summary.pacbio_library_name() or tolid

@@ -86,6 +86,7 @@ class NoteContext(MutableMapping[str, Any]):
     def assembly_accessions(self) -> dict[str, Any]:
         return {
             "prim_accession": self.get("prim_accession"),
+            "alt_accession": self.get("alt_accession"),
             "hap1_accession": self.get("hap1_accession"),
             "hap2_accession": self.get("hap2_accession"),
         }

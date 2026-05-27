@@ -4,19 +4,31 @@ import unittest
 
 import pandas as pd
 
-from data_note.models import RunGroup, RunRecord, SequencingSummary, SequencingTotals, TechnologyRecord
+from data_note.models import (
+    AssemblyRecord,
+    AssemblySelection,
+    RunGroup,
+    RunRecord,
+    SequencingSummary,
+    SequencingTotals,
+    TechnologyRecord,
+)
 from data_note.services.sequencing_fetch_service import SequencingFetchResult, SequencingFetchService
 from data_note.services.sequencing_portal_service import PortalSequencingService
 from data_note.services.sequencing_service import SequencingService
 
 
 class StubSequencingFetchService(SequencingFetchService):
-    def __init__(self, dataframe: pd.DataFrame) -> None:
+    def __init__(self, dataframe: pd.DataFrame, assembly_run_accessions: set[str] | None = None) -> None:
         super().__init__(session_get=lambda *args, **kwargs: None)
         self._dataframe = dataframe
+        self._assembly_run_accessions = assembly_run_accessions or set()
 
     def fetch_for_bioprojects_with_sources(self, bioprojects: list[str]) -> SequencingFetchResult:
         return SequencingFetchResult(dataframe=self._dataframe, source_accessions=bioprojects)
+
+    def fetch_assembly_run_accessions(self, assembly_accessions: list[str]) -> set[str]:
+        return self._assembly_run_accessions
 
 
 class _PortalObject:
@@ -169,6 +181,173 @@ class SequencingServiceTests(unittest.TestCase):
             [run.read_accession for run in summary.run_group("Hi-C").runs],
             ["ERR_HIC"],
         )
+
+    def test_build_context_filters_assembly_reads_to_selected_assembly_run_accessions(self) -> None:
+        runinfo_df = pd.DataFrame(
+            [
+                {
+                    "study_accession": "PRJEB1",
+                    "run_accession": "ERR_KEEP",
+                    "sample_accession": "SAMEA1",
+                    "fastq_bytes": 100,
+                    "submitted_bytes": 100,
+                    "read_count": 1000,
+                    "instrument_model": "REVIO",
+                    "base_count": 2000,
+                    "instrument_platform": "PACBIO_SMRT",
+                    "library_strategy": "WGS",
+                    "library_name": "LIB_KEEP",
+                    "library_construction_protocol": "PROTO_KEEP",
+                },
+                {
+                    "study_accession": "PRJEB1",
+                    "run_accession": "ERR_DROP",
+                    "sample_accession": "SAMEA1",
+                    "fastq_bytes": 100,
+                    "submitted_bytes": 100,
+                    "read_count": 1000,
+                    "instrument_model": "REVIO",
+                    "base_count": 2000,
+                    "instrument_platform": "PACBIO_SMRT",
+                    "library_strategy": "WGS",
+                    "library_name": "LIB_DROP",
+                    "library_construction_protocol": "PROTO_DROP",
+                },
+                {
+                    "study_accession": "PRJEB1",
+                    "run_accession": "ERR_RNA",
+                    "sample_accession": "SAMEA1",
+                    "fastq_bytes": 100,
+                    "submitted_bytes": 100,
+                    "read_count": 1000,
+                    "instrument_model": "NovaSeq",
+                    "base_count": 2000,
+                    "instrument_platform": "ILLUMINA",
+                    "library_strategy": "RNA-Seq",
+                    "library_layout": "PAIRED",
+                    "library_name": "",
+                    "library_construction_protocol": "RNA PolyA",
+                },
+            ]
+        )
+        assembly_selection = AssemblySelection(
+            assemblies_type="prim_alt",
+            primary=AssemblyRecord(
+                accession="GCA_1.1",
+                assembly_name="ixFooBar1.1",
+                role="primary",
+            ),
+        )
+        service = SequencingService(
+            fetch_service=StubSequencingFetchService(runinfo_df, {"ERR_KEEP"}),
+            biosample_tolid_getter=lambda biosamples: {"SAMEA1": "ixFooBar1"},
+            sequencing_source="public",
+        )
+
+        summary = service.build_context(["PRJEB1"], "ixFooBar1", assembly_selection=assembly_selection)
+        context = summary.to_context_dict()
+
+        self.assertEqual(
+            [run.read_accession for run in summary.run_group("PacBio").runs],
+            ["ERR_KEEP"],
+        )
+        self.assertEqual(
+            [run.read_accession for run in summary.run_group("RNA").runs],
+            ["ERR_RNA"],
+        )
+        self.assertEqual(summary.pacbio_library_name(), "LIB_KEEP")
+        self.assertTrue(context["sequencing_assembly_run_accession_filter"])
+        self.assertEqual(context["sequencing_assembly_run_accessions"], "ERR_KEEP")
+        self.assertEqual(context["sequencing_assembly_excluded_runs"], "ERR_DROP")
+
+    def test_build_context_drops_public_row_when_portal_marks_run_as_wrong_tolid(self) -> None:
+        runinfo_df = pd.DataFrame(
+            [
+                {
+                    "study_accession": "PRJEB1",
+                    "run_accession": "ERR_GOOD",
+                    "sample_accession": "SAMEA_TARGET",
+                    "fastq_bytes": 100,
+                    "submitted_bytes": 100,
+                    "read_count": 1000,
+                    "instrument_model": "Revio",
+                    "base_count": 2000,
+                    "instrument_platform": "PACBIO_SMRT",
+                    "library_strategy": "WGS",
+                    "library_name": "LIB_GOOD",
+                    "library_construction_protocol": "PacBio - HiFi",
+                    "submitted_ftp": "ftp://example/m84001_240101_120000_s1.hifi_reads.bc2001.bam",
+                    "metadata_source": "ena",
+                    "read_count_basis": "reads",
+                },
+                {
+                    "study_accession": "PRJEB1",
+                    "run_accession": "ERR_BAD",
+                    "sample_accession": "SAMEA_TARGET",
+                    "fastq_bytes": 100,
+                    "submitted_bytes": 100,
+                    "read_count": 1000,
+                    "instrument_model": "Sequel IIe",
+                    "base_count": 2000,
+                    "instrument_platform": "PACBIO_SMRT",
+                    "library_strategy": "WGS",
+                    "library_name": "LIB_BAD",
+                    "library_construction_protocol": "PacBio - HiFi",
+                    "submitted_ftp": "ftp://example/m64016e_230423_044942.ccs.bc2038--bc2038.bam",
+                    "metadata_source": "ena",
+                    "read_count_basis": "reads",
+                },
+            ]
+        )
+        portal_runs = [
+            _PortalObject(
+                "m84001_240101_120000_s1#2001",
+                {
+                    "tolqc_reporting_category": "pacbio",
+                    "tolqc_reads": 1000,
+                    "tolqc_bases": 2000,
+                    "mlwh_biosample_accession": "SAMEA_TARGET",
+                    "mlwh_irods_file": "m84001_240101_120000_s1.hifi_reads.bc2001.bam",
+                    "mlwh_library_id": "LIB_GOOD",
+                    "mlwh_pac_bio_library_tube_name": "LIB_GOOD",
+                    "mlwh_run_id": "m84001_240101_120000_s1",
+                },
+            ),
+            _PortalObject(
+                "m64016e_230423_044942#2038",
+                {
+                    "tolqc_reporting_category": "pacbio",
+                    "tolqc_reads": 1000,
+                    "tolqc_bases": 2000,
+                    "mlwh_biosample_accession": "SAMEA_OTHER",
+                    "mlwh_biospecimen_accession": "SAMEA_OTHER_SPECIMEN",
+                    "mlwh_library_id": "LIB_BAD",
+                    "mlwh_pac_bio_library_tube_name": "LIB_BAD",
+                    "mlwh_run_id": "m64016e_230423_044942",
+                    "mlwh_tag1_id": "bc2038",
+                },
+            ),
+        ]
+        portal_service = PortalSequencingService(datasource_factory=lambda: _PortalDatasource(portal_runs))
+        service = SequencingService(
+            fetch_service=StubSequencingFetchService(runinfo_df),
+            portal_service=portal_service,
+            biosample_tolid_getter=lambda biosamples: {
+                "SAMEA_TARGET": "ixFooBar1",
+                "SAMEA_OTHER": "ixOtherBar1",
+                "SAMEA_OTHER_SPECIMEN": "ixOtherBar1",
+            },
+            sequencing_source="public-with-portal",
+        )
+
+        summary = service.build_context(["PRJEB1"], "ixFooBar1")
+        context = summary.to_context_dict()
+
+        self.assertEqual(context["pacbio_run_accessions"], "ERR_GOOD")
+        self.assertEqual(context["sequencing_portal_excluded_runs"], "m64016e_230423_044942#2038")
+        self.assertEqual(context["sequencing_portal_dropped_public_runs"], "ERR_BAD")
+        self.assertEqual(summary.pacbio_library_name(), "LIB_GOOD")
+        self.assertEqual(context["technology_data"]["pacbio"]["pacbio_library_name"], "LIB_GOOD")
 
     def test_build_context_processes_only_projects_with_read_data(self) -> None:
         runinfo_df = pd.DataFrame(
