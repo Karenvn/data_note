@@ -80,14 +80,17 @@ class ChromosomeService:
         if assembly_selection.hap1 is None:
             return
 
-        if context.get("hap2_assembly_level") == "scaffold" and context.get("hap1_assembly_level") == "chromosome":
-            chromosome_summary.hap1_chromosome_data = self.primary_table_fetcher(
-                assembly_selection.hap1.accession
-            )
-        elif context.get("hap2_assembly_level") != "scaffold" and assembly_selection.hap2 is not None:
+        hap1_chrom = context.get("hap1_assembly_level") == "chromosome"
+        hap2_chrom = context.get("hap2_assembly_level") == "chromosome"
+
+        if hap1_chrom and hap2_chrom and assembly_selection.hap2 is not None:
             chromosome_summary.chromosome_data = self.haplotype_table_combiner(
                 assembly_selection.hap1.accession,
                 assembly_selection.hap2.accession,
+            )
+        elif hap1_chrom:
+            chromosome_summary.hap1_chromosome_data = self.primary_table_fetcher(
+                assembly_selection.hap1.accession
             )
 
         hap1_sex_chromosomes = self.sex_chromosome_identifier(

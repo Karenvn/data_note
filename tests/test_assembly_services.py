@@ -123,6 +123,32 @@ class ChromosomeServiceTests(unittest.TestCase):
         self.assertEqual(context["hap2_supernumerary_chromosomes"], "B1")
         self.assertEqual(context["all_supernumerary_chromosomes"], "B1,B2")
 
+    def test_build_context_uses_hap1_rows_when_hap2_level_is_unavailable(self) -> None:
+        combiner_calls = []
+
+        def combine_haplotypes(hap1: str, hap2: str):
+            combiner_calls.append((hap1, hap2))
+            return []
+
+        service = ChromosomeService(
+            primary_table_fetcher=lambda accession: [{"molecule": "X", "INSDC": accession}],
+            haplotype_table_combiner=combine_haplotypes,
+            sex_chromosome_formatter=lambda labels: ",".join(labels) if labels else None,
+        )
+        selection = AssemblySelection(
+            assemblies_type="hap_asm",
+            hap1=AssemblyRecord(accession="GCA_h1", assembly_name="ixFooBar1.hap1.1", role="hap1"),
+            hap2=AssemblyRecord(accession="GCA_h2", assembly_name="ixFooBar1.hap2.1", role="hap2"),
+        )
+
+        summary = service.build_context(selection, {"hap1_assembly_level": "chromosome"})
+        context = summary.to_context_dict()
+
+        self.assertEqual(context["hap1_chromosome_data"], [{"molecule": "X", "INSDC": "GCA_h1"}])
+        self.assertEqual(context["hap1_sex_chromosomes"], "X")
+        self.assertNotIn("chromosome_data", context)
+        self.assertEqual(combiner_calls, [])
+
 
 class BtkServiceTests(unittest.TestCase):
     def test_build_context_uses_manual_btk_accession_override(self) -> None:
