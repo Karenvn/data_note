@@ -217,7 +217,10 @@ def _extract_extraction_attrs(extraction, ds=None, extraction_container_id=None,
     raw_attrs = dict(getattr(extraction, "attributes", {}) or {})
 
     desired_fields = [
+        "benchling_extraction_name",
         "benchling_extraction_protocol",
+        "benchling_extraction_type",
+        "benchling_extraction_qc_result",
         "benchling_yield_ng",
         "benchling_volume_ul",
         "benchling_qubit_concentration_ngul",
@@ -226,6 +229,9 @@ def _extract_extraction_attrs(extraction, ds=None, extraction_container_id=None,
         "benchling_completion_date",
         "benchling_manual_vs_automatic",
         "benchling_gqn_index",
+        "benchling_rna_qc_passfail",
+        "benchling_rna_yield",
+        "benchling_fluidx_id",
     ]
     extraction_attrs = {k: raw_attrs[k] for k in desired_fields if k in raw_attrs}
     extraction_attrs["extraction_uid"] = extraction.id
@@ -253,6 +259,15 @@ def _extract_extraction_attrs(extraction, ds=None, extraction_container_id=None,
         extraction_attrs["tissue_weight_mg_calc"] = tp_attrs.get("calc_benchling_weight_mg")
         extraction_attrs["tissue_prep_uid"] = tissue_prep.id
         extraction_attrs["disruption_method"] = tp_attrs.get("benchling_disruption_method")
+        extraction_attrs["tissue_prep_name"] = tp_attrs.get("benchling_tissue_prep_name")
+        extraction_attrs["tissue_prep_date"] = tp_attrs.get("benchling_sampleprep_date")
+        extraction_attrs["tissue_prep_type"] = tp_attrs.get("benchling_tissue_prep_type")
+        extraction_attrs["tissue_prep_fluidx_id"] = tp_attrs.get("benchling_tissue_prep_fluidx_id")
+        extraction_attrs["tissue_prep_fluidx_container_id"] = tp_attrs.get("benchling_fluidx_container_id")
+        extraction_attrs["tissue_prep_downstream_protocol"] = tp_attrs.get("benchling_downstream_protocol")
+        extraction_attrs["tissue_prep_sciops_protocol_required"] = tp_attrs.get(
+            "benchling_sciops_protocol_required"
+        )
 
     selected_container = _select_extraction_container(
         extraction,
@@ -293,7 +308,12 @@ def _extract_extraction_attrs(extraction, ds=None, extraction_container_id=None,
     return {
         "extraction_protocol": extraction_attrs.get("benchling_extraction_protocol"),
         "protocol": extraction_attrs.get("benchling_extraction_protocol"),
+        "extraction_name": extraction_attrs.get("benchling_extraction_name"),
+        "extraction_type": extraction_attrs.get("benchling_extraction_type"),
+        "extraction_qc_result": extraction_attrs.get("benchling_extraction_qc_result"),
         "dna_yield_ng": format_with_nbsp(extraction_attrs.get("benchling_yield_ng")),
+        "rna_yield": format_with_nbsp(extraction_attrs.get("benchling_rna_yield")),
+        "rna_qc_passfail": extraction_attrs.get("benchling_rna_qc_passfail"),
         "volume_ul": extraction_attrs.get("benchling_volume_ul"),
         "qubit_ngul": extraction_attrs.get("benchling_qubit_concentration_ngul"),
         "ratio_260_280": extraction_attrs.get("benchling_dna_260_280_ratio"),
@@ -301,12 +321,22 @@ def _extract_extraction_attrs(extraction, ds=None, extraction_container_id=None,
         "extraction_date": extraction_attrs.get("benchling_completion_date"),
         "extraction_mode": extraction_attrs.get("benchling_manual_vs_automatic"),
         "extraction_uid": extraction_attrs.get("extraction_uid"),
+        "extraction_fluidx_id": extraction_attrs.get("benchling_fluidx_id"),
         "gqn": extraction_attrs.get("benchling_gqn_index"),
         "disruption_method": extraction_attrs.get("disruption_method"),
         "tissue_weight_mg": extraction_attrs.get("tissue_weight_mg"),
         "tissue_weight_mg_source": extraction_attrs.get("tissue_weight_mg_source"),
         "tissue_weight_mg_calc": extraction_attrs.get("tissue_weight_mg_calc"),
         "tissue_prep_uid": extraction_attrs.get("tissue_prep_uid"),
+        "tissue_prep_name": extraction_attrs.get("tissue_prep_name"),
+        "tissue_prep_date": extraction_attrs.get("tissue_prep_date"),
+        "tissue_prep_type": extraction_attrs.get("tissue_prep_type"),
+        "tissue_prep_fluidx_id": extraction_attrs.get("tissue_prep_fluidx_id"),
+        "tissue_prep_fluidx_container_id": extraction_attrs.get("tissue_prep_fluidx_container_id"),
+        "tissue_prep_downstream_protocol": extraction_attrs.get("tissue_prep_downstream_protocol"),
+        "tissue_prep_sciops_protocol_required": extraction_attrs.get(
+            "tissue_prep_sciops_protocol_required"
+        ),
         "extraction_container_uid": extraction_attrs.get("extraction_container_uid"),
         "extraction_container_yield_ng": (
             format_with_nbsp(container_yield) if container_yield is not None else None

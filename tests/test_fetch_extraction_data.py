@@ -77,6 +77,13 @@ class ExtractionDataFallbackTests(unittest.TestCase):
                 "benchling_weight_mg": 0.0,
                 "benchling_weight_of_prep_for_dna": 51.0,
                 "benchling_disruption_method": "Powermash",
+                "benchling_tissue_prep_name": "TissuePrep_1",
+                "benchling_sampleprep_date": "2026-01-02",
+                "benchling_tissue_prep_type": "Whole Dry Frozen Tissue",
+                "benchling_tissue_prep_fluidx_id": "FS1",
+                "benchling_fluidx_container_id": "con_tp",
+                "benchling_downstream_protocol": "Hi-C",
+                "benchling_sciops_protocol_required": "Metazoa",
             },
         )
 
@@ -102,6 +109,49 @@ class ExtractionDataFallbackTests(unittest.TestCase):
         self.assertEqual(result["tissue_weight_mg"], 51.0)
         self.assertEqual(result["tissue_weight_mg_source"], "benchling_weight_of_prep_for_dna")
         self.assertEqual(result["disruption_method"], "Powermash")
+        self.assertEqual(result["tissue_prep_name"], "TissuePrep_1")
+        self.assertEqual(result["tissue_prep_date"], "2026-01-02")
+        self.assertEqual(result["tissue_prep_type"], "Whole Dry Frozen Tissue")
+        self.assertEqual(result["tissue_prep_fluidx_id"], "FS1")
+        self.assertEqual(result["tissue_prep_fluidx_container_id"], "con_tp")
+        self.assertEqual(result["tissue_prep_downstream_protocol"], "Hi-C")
+        self.assertEqual(result["tissue_prep_sciops_protocol_required"], "Metazoa")
+
+    def test_extract_extraction_attrs_exposes_rna_extraction_fields(self) -> None:
+        extraction = SimpleNamespace(
+            id="bfi_rna",
+            attributes={
+                "benchling_extraction_name": "RNAExt_idTetArro2_1730",
+                "benchling_extraction_type": "rna",
+                "benchling_completion_date": "2023-08-11",
+                "benchling_fluidx_id": "FD31035779",
+                "benchling_rna_yield": 1503.0,
+                "benchling_rna_qc_passfail": "Yes",
+                "benchling_volume_ul": 45.0,
+            },
+            to_one_relationships={
+                "benchling_tissue_prep": SimpleNamespace(
+                    id="bfi_tp",
+                    attributes={
+                        "benchling_tissue_prep_name": "TissuePrep_idTetArro2_15015",
+                        "benchling_tissue_prep_type": "Whole Dry Frozen Tissue",
+                        "benchling_weight_mg": 0.0,
+                    },
+                )
+            },
+        )
+
+        result = _extract_extraction_attrs(extraction)
+
+        self.assertEqual(result["extraction_name"], "RNAExt_idTetArro2_1730")
+        self.assertEqual(result["extraction_type"], "rna")
+        self.assertEqual(result["extraction_fluidx_id"], "FD31035779")
+        self.assertEqual(result["rna_yield"], "1\u202f503.00")
+        self.assertEqual(result["rna_qc_passfail"], "Yes")
+        self.assertEqual(result["volume_ul"], 45.0)
+        self.assertEqual(result["tissue_prep_uid"], "bfi_tp")
+        self.assertEqual(result["tissue_prep_name"], "TissuePrep_idTetArro2_15015")
+        self.assertEqual(result["tissue_prep_type"], "Whole Dry Frozen Tissue")
 
     def test_extract_extraction_attrs_keeps_container_qc_separate_from_final_dna_yield(self) -> None:
         extraction = SimpleNamespace(

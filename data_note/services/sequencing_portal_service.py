@@ -48,6 +48,39 @@ MLWH_RUN_FIELDS: tuple[str, ...] = (
     "mlwh_qc_date",
 )
 
+PORTAL_PREP_FIELDS: tuple[str, ...] = (
+    "portal_sample_uid",
+    "portal_sample_organism_part",
+    "portal_sample_tissue_size_in_tube",
+    "portal_sample_tissue_fluidx_id",
+    "portal_sample_tissue_remaining_weight",
+    "portal_sample_tissue_depleted",
+    "portal_tissue_prep_uid",
+    "portal_tissue_prep_name",
+    "portal_tissue_prep_date",
+    "portal_tissue_prep_type",
+    "portal_tissue_prep_fluidx_id",
+    "portal_tissue_prep_fluidx_container_id",
+    "portal_tissue_prep_weight_mg",
+    "portal_tissue_prep_weight_of_prep_for_dna",
+    "portal_tissue_prep_weight_mg_calc",
+    "portal_tissue_prep_disruption_method",
+    "portal_tissue_prep_downstream_protocol",
+    "portal_tissue_prep_sciops_protocol_required",
+    "portal_extraction_uid",
+    "portal_extraction_name",
+    "portal_extraction_type",
+    "portal_extraction_protocol",
+    "portal_extraction_mode",
+    "portal_extraction_date",
+    "portal_extraction_fluidx_id",
+    "portal_extraction_volume_ul",
+    "portal_extraction_dna_yield_ng",
+    "portal_extraction_qc_result",
+    "portal_rna_yield",
+    "portal_rna_qc_passfail",
+)
+
 PORTAL_TEXT_FIELDS: tuple[str, ...] = (
     "portal_run_id",
     "portal_reported_read_count_unit",
@@ -56,6 +89,7 @@ PORTAL_TEXT_FIELDS: tuple[str, ...] = (
     "portal_manual_qc",
     "portal_qc",
     *MLWH_RUN_FIELDS,
+    *PORTAL_PREP_FIELDS,
 )
 
 
@@ -133,6 +167,7 @@ class PortalSequencingService:
         for run_object in run_objects:
             attrs = dict(getattr(run_object, "attributes", {}) or {})
             attrs["portal_run_id"] = getattr(run_object, "id", None) or attrs.get("tolqc_run")
+            self._add_related_metadata(datasource, run_object, attrs)
             rows.append(attrs)
         return rows
 
@@ -247,7 +282,7 @@ class PortalSequencingService:
                     f"Portal run {portal_id or '<unknown>'} has {field_name}={accession} "
                     f"with BioSamples ToLID {sample_tolid}, not {tolid}."
                 )
-                if field_name == "mlwh_biosample_accession":
+                if field_name == "mlwh_biosample_accession" and self._portal_technology(portal_row) == "pacbio":
                     exclude = True
         return exclude
 
@@ -373,6 +408,8 @@ class PortalSequencingService:
 
         for field_name in MLWH_RUN_FIELDS:
             dataframe.at[row_index, field_name] = portal_row.get(field_name, "")
+        for field_name in PORTAL_PREP_FIELDS:
+            dataframe.at[row_index, field_name] = portal_row.get(field_name, "")
 
         prefer_portal = mode == "portal"
         if portal_reads > 0 and (prefer_portal or public_reads <= 0):
@@ -391,3 +428,123 @@ class PortalSequencingService:
             dataframe.at[row_index, "base_count_source"] = _string_value(
                 dataframe.at[row_index, "metadata_source"] if "metadata_source" in dataframe else "public"
             )
+
+    @classmethod
+    def _add_related_metadata(cls, datasource: Any, run_object: Any, attrs: dict[str, Any]) -> None:
+        to_one = getattr(run_object, "to_one_relationships", {}) or {}
+        sample = cls._resolve_related(datasource, "sample", to_one.get("benchling_sample"))
+        sequencing_request = cls._resolve_related(
+            datasource,
+            "sequencing_request",
+            to_one.get("mlwh_sequencing_request") or to_one.get("tolqc_sequencing_request"),
+        )
+        extraction = cls._resolve_related(datasource, "extraction", to_one.get("benchling_extraction"))
+
+        if extraction is None and sequencing_request is not None:
+            extraction = cls._resolve_related(
+                datasource,
+                "extraction",
+                (getattr(sequencing_request, "to_one_relationships", {}) or {}).get("benchling_extraction"),
+            )
+
+        tissue_prep = None
+        if sequencing_request is not None:
+            tissue_prep = cls._resolve_related(
+                datasource,
+                "tissue_prep",
+                (getattr(sequencing_request, "to_one_relationships", {}) or {}).get("benchling_tissue_prep"),
+            )
+        if tissue_prep is None and extraction is not None:
+            tissue_prep = cls._resolve_related(
+                datasource,
+                "tissue_prep",
+                (getattr(extraction, "to_one_relationships", {}) or {}).get("benchling_tissue_prep"),
+            )
+        if tissue_prep is None and sample is not None:
+            tissue_prep = cls._single_to_many_relation(sample, "benchling_tissue_preps")
+            tissue_prep = cls._resolve_related(datasource, "tissue_prep", tissue_prep)
+
+        cls._copy_sample_metadata(attrs, sample)
+        cls._copy_tissue_prep_metadata(attrs, tissue_prep)
+        cls._copy_extraction_metadata(attrs, extraction)
+
+    @staticmethod
+    def _resolve_related(datasource: Any, object_name: str, related: Any) -> Any | None:
+        if related is None:
+            return None
+        identifier = getattr(related, "id", None)
+        if not identifier:
+            return related
+
+        try:
+            fetched = [obj for obj in datasource.get_by_id(object_name, [identifier]) if obj is not None]
+        except Exception:
+            fetched = []
+        if fetched:
+            return fetched[0]
+        return related
+
+    @staticmethod
+    def _single_to_many_relation(obj: Any, relation_name: str) -> Any | None:
+        to_many = getattr(obj, "to_many_relationships", {}) or {}
+        relation = to_many.get(relation_name)
+        if relation is None:
+            return None
+        if isinstance(relation, dict):
+            items = [item for item in relation.values() if item is not None]
+        else:
+            try:
+                items = [item for item in relation if item is not None]
+            except TypeError:
+                items = [relation]
+        return items[0] if len(items) == 1 else None
+
+    @staticmethod
+    def _copy_sample_metadata(attrs: dict[str, Any], sample: Any | None) -> None:
+        if sample is None:
+            return
+        sample_attrs = dict(getattr(sample, "attributes", {}) or {})
+        attrs["portal_sample_uid"] = getattr(sample, "id", None)
+        attrs["portal_sample_organism_part"] = sample_attrs.get("benchling_organism_part")
+        attrs["portal_sample_tissue_size_in_tube"] = sample_attrs.get("benchling_size_of_tissue_in_tube")
+        attrs["portal_sample_tissue_fluidx_id"] = sample_attrs.get("benchling_tissue_fluidx_id")
+        attrs["portal_sample_tissue_remaining_weight"] = sample_attrs.get("benchling_remaining_weight")
+        attrs["portal_sample_tissue_depleted"] = sample_attrs.get("sts_tissue_depleted")
+
+    @staticmethod
+    def _copy_tissue_prep_metadata(attrs: dict[str, Any], tissue_prep: Any | None) -> None:
+        if tissue_prep is None:
+            return
+        prep_attrs = dict(getattr(tissue_prep, "attributes", {}) or {})
+        attrs["portal_tissue_prep_uid"] = getattr(tissue_prep, "id", None)
+        attrs["portal_tissue_prep_name"] = prep_attrs.get("benchling_tissue_prep_name")
+        attrs["portal_tissue_prep_date"] = prep_attrs.get("benchling_sampleprep_date")
+        attrs["portal_tissue_prep_type"] = prep_attrs.get("benchling_tissue_prep_type")
+        attrs["portal_tissue_prep_fluidx_id"] = prep_attrs.get("benchling_tissue_prep_fluidx_id")
+        attrs["portal_tissue_prep_fluidx_container_id"] = prep_attrs.get("benchling_fluidx_container_id")
+        attrs["portal_tissue_prep_weight_mg"] = prep_attrs.get("benchling_weight_mg")
+        attrs["portal_tissue_prep_weight_of_prep_for_dna"] = prep_attrs.get("benchling_weight_of_prep_for_dna")
+        attrs["portal_tissue_prep_weight_mg_calc"] = prep_attrs.get("calc_benchling_weight_mg")
+        attrs["portal_tissue_prep_disruption_method"] = prep_attrs.get("benchling_disruption_method")
+        attrs["portal_tissue_prep_downstream_protocol"] = prep_attrs.get("benchling_downstream_protocol")
+        attrs["portal_tissue_prep_sciops_protocol_required"] = prep_attrs.get(
+            "benchling_sciops_protocol_required"
+        )
+
+    @staticmethod
+    def _copy_extraction_metadata(attrs: dict[str, Any], extraction: Any | None) -> None:
+        if extraction is None:
+            return
+        extraction_attrs = dict(getattr(extraction, "attributes", {}) or {})
+        attrs["portal_extraction_uid"] = getattr(extraction, "id", None)
+        attrs["portal_extraction_name"] = extraction_attrs.get("benchling_extraction_name")
+        attrs["portal_extraction_type"] = extraction_attrs.get("benchling_extraction_type")
+        attrs["portal_extraction_protocol"] = extraction_attrs.get("benchling_extraction_protocol")
+        attrs["portal_extraction_mode"] = extraction_attrs.get("benchling_manual_vs_automatic")
+        attrs["portal_extraction_date"] = extraction_attrs.get("benchling_completion_date")
+        attrs["portal_extraction_fluidx_id"] = extraction_attrs.get("benchling_fluidx_id")
+        attrs["portal_extraction_volume_ul"] = extraction_attrs.get("benchling_volume_ul")
+        attrs["portal_extraction_dna_yield_ng"] = extraction_attrs.get("benchling_yield_ng")
+        attrs["portal_extraction_qc_result"] = extraction_attrs.get("benchling_extraction_qc_result")
+        attrs["portal_rna_yield"] = extraction_attrs.get("benchling_rna_yield")
+        attrs["portal_rna_qc_passfail"] = extraction_attrs.get("benchling_rna_qc_passfail")

@@ -13,7 +13,11 @@ from ..fetch_biosample_info import get_biosample_tolid_map
 from ..formatting_utils import format_with_nbsp
 from ..formatting_utils import bytes_to_gb, format_scientific
 from ..models import AssemblySelection, RunGroup, RunRecord, SequencingSummary, SequencingTotals, TechnologyRecord
-from .sequencing_portal_service import PortalEnrichmentResult, PortalSequencingService
+from .sequencing_portal_service import (
+    PORTAL_PREP_FIELDS,
+    PortalEnrichmentResult,
+    PortalSequencingService,
+)
 from .sequencing_fetch_service import SequencingFetchService
 
 
@@ -98,6 +102,7 @@ TEXT_COLUMNS: tuple[str, ...] = (
     "mlwh_qc_seq_state",
     "mlwh_qc_seq_state_is_final",
     "mlwh_qc_date",
+    *PORTAL_PREP_FIELDS,
     "multiplex_identifier",
     "multiplex_identifier_type",
     "multiplex_label",
@@ -276,7 +281,7 @@ class SequencingService:
         if sequencing_source == "public" or not tolid:
             return empty_result
 
-        portal_rows = self.portal_service.fetch_run_data(tolid)
+        portal_rows = self._portal_rows_for_sequencing_samples(read_study_df, tolid, biosample_tolid_map)
         if not portal_rows:
             return PortalEnrichmentResult(dataframe=read_study_df.copy(), portal_run_data=[])
 
@@ -295,6 +300,50 @@ class SequencingService:
             biosample_tolid_map=biosample_tolid_map,
             mode=sequencing_source,
         )
+
+    def _portal_rows_for_sequencing_samples(
+        self,
+        read_study_df: pd.DataFrame,
+        tolid: str,
+        biosample_tolid_map: dict[str, str | None],
+    ) -> list[dict[str, Any]]:
+        portal_rows = self.portal_service.fetch_run_data(tolid)
+        seen_run_ids = {
+            self._string_value(row.get("portal_run_id"))
+            for row in portal_rows
+            if self._string_value(row.get("portal_run_id"))
+        }
+
+        wanted_related_pairs: set[tuple[str, str]] = set()
+        related_tolids: set[str] = set()
+        for _, row in read_study_df.iterrows():
+            match = self._match_technology(row)
+            if match is None:
+                continue
+            tech_name, _ = match
+            if tech_name == "pacbio":
+                continue
+            sample_accession = self._string_value(row.get("sample_accession"))
+            sample_tolid = biosample_tolid_map.get(sample_accession)
+            if not sample_accession or not sample_tolid or sample_tolid == tolid:
+                continue
+            wanted_related_pairs.add((tech_name, sample_accession))
+            related_tolids.add(sample_tolid)
+
+        for related_tolid in sorted(related_tolids):
+            for row in self.portal_service.fetch_run_data(related_tolid):
+                portal_run_id = self._string_value(row.get("portal_run_id"))
+                if portal_run_id and portal_run_id in seen_run_ids:
+                    continue
+                portal_tech = self.portal_service._portal_technology(row)
+                portal_sample = self._string_value(row.get("mlwh_biosample_accession"))
+                if (portal_tech, portal_sample) not in wanted_related_pairs:
+                    continue
+                portal_rows.append(row)
+                if portal_run_id:
+                    seen_run_ids.add(portal_run_id)
+
+        return portal_rows
 
     def _normalise_read_count_units(self, df: pd.DataFrame) -> pd.DataFrame:
         normalised = df.copy()
@@ -663,6 +712,7 @@ class SequencingService:
                     "mlwh_library_id",
                     "mlwh_pipeline_id_lims",
                     "mlwh_plex_count",
+                    *PORTAL_PREP_FIELDS,
                 )
                 if SequencingService._string_value(row.get(key))
             }
@@ -797,6 +847,10 @@ class SequencingService:
                 extras[f"{tech_name}_base_count_source"] = base_source
             if metadata_source:
                 extras[f"{tech_name}_metadata_source"] = metadata_source
+            for column in ("mlwh_library_id", "mlwh_pipeline_id_lims", *PORTAL_PREP_FIELDS):
+                value = SequencingService._first_technology_value(df, tech_name, column)
+                if value:
+                    extras[f"{tech_name}_{column}"] = value
 
         if portal_result is not None:
             extras["sequencing_portal_enrichment_applied"] = portal_result.applied

@@ -33,20 +33,40 @@ class StubSequencingFetchService(SequencingFetchService):
 
 
 class _PortalObject:
-    def __init__(self, identifier: str, attributes: dict | None = None) -> None:
+    def __init__(
+        self,
+        identifier: str,
+        attributes: dict | None = None,
+        *,
+        to_one_relationships: dict | None = None,
+        to_many_relationships: dict | None = None,
+    ) -> None:
         self.id = identifier
         self.attributes = attributes or {}
+        self.to_one_relationships = to_one_relationships or {}
+        self.to_many_relationships = to_many_relationships or {}
 
 
 class _PortalDatasource:
-    def __init__(self, runs: list[_PortalObject]) -> None:
-        self.runs = runs
+    def __init__(
+        self,
+        runs: list[_PortalObject] | None = None,
+        *,
+        runs_by_tolid: dict[str, list[_PortalObject]] | None = None,
+        objects_by_type: dict[str, dict[str, _PortalObject]] | None = None,
+    ) -> None:
+        self.runs = runs or []
+        self.runs_by_tolid = runs_by_tolid or {}
+        self.objects_by_type = objects_by_type or {}
 
     def get_by_id(self, object_type: str, identifiers: list[str]):
+        if object_type != "tolid":
+            objects = self.objects_by_type.get(object_type, {})
+            return [objects.get(identifier, _PortalObject(identifier)) for identifier in identifiers]
         return [_PortalObject(identifiers[0])]
 
     def get_to_many_relations(self, object_object, relation: str):
-        return self.runs
+        return self.runs_by_tolid.get(object_object.id, self.runs)
 
 
 class SequencingServiceTests(unittest.TestCase):
@@ -451,6 +471,149 @@ class SequencingServiceTests(unittest.TestCase):
         )
         self.assertEqual(context["pacbio_multiplexing"], "barcode bc2039")
         self.assertNotIn("LIB_FAIL", str(context["technology_data"]["pacbio"]))
+
+    def test_build_context_enriches_rna_from_related_sample_tolid_portal_run(self) -> None:
+        runinfo_df = pd.DataFrame(
+            [
+                {
+                    "study_accession": "PRJEB1",
+                    "run_accession": "ERR_DNA",
+                    "sample_accession": "SAMEA_DNA",
+                    "fastq_bytes": 0,
+                    "submitted_bytes": 0,
+                    "read_count": 1000,
+                    "instrument_model": "Revio",
+                    "base_count": 2000,
+                    "instrument_platform": "PACBIO_SMRT",
+                    "library_strategy": "WGS",
+                    "library_layout": "SINGLE",
+                    "library_name": "LIB_DNA",
+                    "library_construction_protocol": "PacBio - HiFi",
+                    "metadata_source": "ena",
+                    "read_count_basis": "reads",
+                },
+                {
+                    "study_accession": "PRJEB1",
+                    "run_accession": "ERR_RNA",
+                    "sample_accession": "SAMEA_RNA",
+                    "fastq_bytes": 0,
+                    "submitted_bytes": 0,
+                    "read_count": 55_356_992,
+                    "instrument_model": "Illumina NovaSeq 6000",
+                    "base_count": 8_358_905_792,
+                    "instrument_platform": "ILLUMINA",
+                    "library_strategy": "RNA-Seq",
+                    "library_layout": "PAIRED",
+                    "library_name": "",
+                    "library_construction_protocol": "RNA PolyA",
+                    "run_alias": "SC_RUN_48017_1#78",
+                    "metadata_source": "ena",
+                    "read_count_basis": "reads",
+                },
+            ]
+        )
+        rna_run = _PortalObject(
+            "48017_1#78",
+            {
+                "tolqc_reporting_category": "rnaseq",
+                "tolqc_reads": 55_356_992,
+                "tolqc_bases": 8_358_905_792,
+                "mlwh_biosample_accession": "SAMEA_RNA",
+                "mlwh_biospecimen_accession": "SAMEA_SPECIMEN",
+                "mlwh_irods_file": "48017_1#78.cram",
+                "mlwh_library_id": "SQPP-7472-W:F10",
+                "mlwh_pipeline_id_lims": "RNA PolyA",
+                "mlwh_run_id": "48017_1",
+                "mlwh_tag_index": "78",
+            },
+            to_one_relationships={
+                "benchling_sample": _PortalObject("63763"),
+                "benchling_extraction": _PortalObject("bfi_Z8oUWKtu"),
+                "mlwh_sequencing_request": _PortalObject("DTOLRNA13949196"),
+            },
+        )
+        portal_service = PortalSequencingService(
+            datasource_factory=lambda: _PortalDatasource(
+                runs_by_tolid={"idTetArro1": [], "idTetArro2": [rna_run]},
+                objects_by_type={
+                    "sample": {
+                        "63763": _PortalObject(
+                            "63763",
+                            {
+                                "benchling_organism_part": "HEAD, THORAX",
+                                "benchling_size_of_tissue_in_tube": "M",
+                                "benchling_tissue_fluidx_id": "FD33650455",
+                            },
+                        )
+                    },
+                    "sequencing_request": {
+                        "DTOLRNA13949196": _PortalObject(
+                            "DTOLRNA13949196",
+                            to_one_relationships={
+                                "benchling_tissue_prep": _PortalObject("bfi_YDfmy058"),
+                                "benchling_extraction": _PortalObject("bfi_Z8oUWKtu"),
+                            },
+                        )
+                    },
+                    "tissue_prep": {
+                        "bfi_YDfmy058": _PortalObject(
+                            "bfi_YDfmy058",
+                            {
+                                "benchling_tissue_prep_name": "TissuePrep_idTetArro2_15015",
+                                "benchling_sampleprep_date": "2023-08-08",
+                                "benchling_tissue_prep_type": "Whole Dry Frozen Tissue",
+                                "benchling_tissue_prep_fluidx_id": "FS71949939",
+                                "benchling_weight_mg": 0.0,
+                                "benchling_sciops_protocol_required": "Metazoa",
+                            },
+                        )
+                    },
+                    "extraction": {
+                        "bfi_Z8oUWKtu": _PortalObject(
+                            "bfi_Z8oUWKtu",
+                            {
+                                "benchling_extraction_name": "RNAExt_idTetArro2_1730",
+                                "benchling_extraction_type": "rna",
+                                "benchling_completion_date": "2023-08-11",
+                                "benchling_volume_ul": 45.0,
+                                "benchling_rna_yield": 1503.0,
+                                "benchling_rna_qc_passfail": "Yes",
+                            },
+                        )
+                    },
+                },
+            )
+        )
+        service = SequencingService(
+            fetch_service=StubSequencingFetchService(runinfo_df),
+            portal_service=portal_service,
+            biosample_tolid_getter=lambda biosamples: {
+                "SAMEA_DNA": "idTetArro1",
+                "SAMEA_RNA": "idTetArro2",
+                "SAMEA_SPECIMEN": "idTetArro2",
+            },
+            sequencing_source="public-with-portal",
+            illumina_count_unit="read_pairs",
+        )
+
+        summary = service.build_context(["PRJEB1"], "idTetArro1")
+        context = summary.to_context_dict()
+
+        self.assertEqual(context["rna_run_accessions"], "ERR_RNA")
+        self.assertEqual(context["rna_reads_millions"], "27.68")
+        self.assertEqual(context["sequencing_portal_matched_runs"], "48017_1#78")
+        self.assertEqual(context["rna_mlwh_library_id"], "SQPP-7472-W:F10")
+        self.assertEqual(context["rna_portal_sample_uid"], "63763")
+        self.assertEqual(context["rna_portal_sample_organism_part"], "HEAD, THORAX")
+        self.assertEqual(context["rna_portal_tissue_prep_uid"], "bfi_YDfmy058")
+        self.assertEqual(context["rna_portal_tissue_prep_name"], "TissuePrep_idTetArro2_15015")
+        self.assertEqual(context["rna_portal_tissue_prep_type"], "Whole Dry Frozen Tissue")
+        self.assertEqual(context["rna_portal_tissue_prep_sciops_protocol_required"], "Metazoa")
+        self.assertEqual(context["rna_portal_extraction_uid"], "bfi_Z8oUWKtu")
+        self.assertEqual(context["rna_portal_extraction_name"], "RNAExt_idTetArro2_1730")
+        self.assertEqual(context["rna_portal_extraction_volume_ul"], "45")
+        self.assertEqual(context["rna_portal_rna_yield"], "1503")
+        self.assertEqual(context["rna_portal_rna_qc_passfail"], "Yes")
 
     def test_build_context_processes_only_projects_with_read_data(self) -> None:
         runinfo_df = pd.DataFrame(
