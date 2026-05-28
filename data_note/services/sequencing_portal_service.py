@@ -42,6 +42,10 @@ MLWH_RUN_FIELDS: tuple[str, ...] = (
     "mlwh_pac_bio_run_name",
     "mlwh_pac_bio_library_tube_name",
     "mlwh_run_complete",
+    "mlwh_lims_qc",
+    "mlwh_qc_seq_state",
+    "mlwh_qc_seq_state_is_final",
+    "mlwh_qc_date",
 )
 
 PORTAL_TEXT_FIELDS: tuple[str, ...] = (
@@ -50,6 +54,7 @@ PORTAL_TEXT_FIELDS: tuple[str, ...] = (
     "portal_read_length_mean",
     "portal_lims_qc",
     "portal_manual_qc",
+    "portal_qc",
     *MLWH_RUN_FIELDS,
 )
 
@@ -364,6 +369,7 @@ class PortalSequencingService:
         dataframe.at[row_index, "portal_read_length_mean"] = portal_row.get("tolqc_read_length_mean", "")
         dataframe.at[row_index, "portal_lims_qc"] = portal_row.get("tolqc_lims_qc", "")
         dataframe.at[row_index, "portal_manual_qc"] = portal_row.get("tolqc_manual_qc", "")
+        dataframe.at[row_index, "portal_qc"] = portal_row.get("tolqc_qc", "")
 
         for field_name in MLWH_RUN_FIELDS:
             dataframe.at[row_index, field_name] = portal_row.get(field_name, "")

@@ -350,6 +350,108 @@ class SequencingServiceTests(unittest.TestCase):
         self.assertEqual(summary.pacbio_library_name(), "LIB_GOOD")
         self.assertEqual(context["technology_data"]["pacbio"]["pacbio_library_name"], "LIB_GOOD")
 
+    def test_build_context_excludes_failed_qc_runs_before_methods_and_totals(self) -> None:
+        runinfo_df = pd.DataFrame(
+            [
+                {
+                    "study_accession": "PRJEB1",
+                    "run_accession": "ERR_PASS",
+                    "sample_accession": "SAMEA1",
+                    "fastq_bytes": 100,
+                    "submitted_bytes": 100,
+                    "read_count": 2_000,
+                    "instrument_model": "Revio",
+                    "base_count": 4_000,
+                    "instrument_platform": "PACBIO_SMRT",
+                    "library_strategy": "WGS",
+                    "library_name": "LIB_PASS",
+                    "library_construction_protocol": "PacBio - HiFi (ULI)",
+                    "submitted_ftp": "ftp://example/m84098_240821_121240_s4.hifi_reads.bc2039.bam",
+                    "metadata_source": "ena",
+                    "read_count_basis": "reads",
+                },
+                {
+                    "study_accession": "PRJEB1",
+                    "run_accession": "ERR_FAIL",
+                    "sample_accession": "SAMEA1",
+                    "fastq_bytes": 100,
+                    "submitted_bytes": 100,
+                    "read_count": 1_000,
+                    "instrument_model": "Sequel IIe",
+                    "base_count": 2_000,
+                    "instrument_platform": "PACBIO_SMRT",
+                    "library_strategy": "WGS",
+                    "library_name": "LIB_FAIL",
+                    "library_construction_protocol": "PacBio - HiFi",
+                    "submitted_ftp": "ftp://example/m64097e_221010_045249.ccs.bc1008.bam",
+                    "metadata_source": "ena",
+                    "read_count_basis": "reads",
+                },
+            ]
+        )
+        portal_runs = [
+            _PortalObject(
+                "m84098_240821_121240_s4#2039",
+                {
+                    "tolqc_reporting_category": "pacbio",
+                    "tolqc_reads": 2_000,
+                    "tolqc_bases": 4_000,
+                    "tolqc_manual_qc": "pass",
+                    "mlwh_lims_qc": "pass",
+                    "mlwh_biosample_accession": "SAMEA1",
+                    "mlwh_irods_file": "m84098_240821_121240_s4.hifi_reads.bc2039.bam",
+                    "mlwh_library_id": "LIB_PASS",
+                    "mlwh_pac_bio_library_tube_name": "LIB_PASS",
+                    "mlwh_run_id": "m84098_240821_121240_s4",
+                    "mlwh_tag1_id": "bc2039",
+                },
+            ),
+            _PortalObject(
+                "m64097e_221010_045249#1008",
+                {
+                    "tolqc_reporting_category": "pacbio",
+                    "tolqc_reads": 1_000,
+                    "tolqc_bases": 2_000,
+                    "mlwh_lims_qc": "fail",
+                    "mlwh_qc_seq_state": "Failed",
+                    "mlwh_biosample_accession": "SAMEA1",
+                    "mlwh_irods_file": "m64097e_221010_045249.ccs.bc1008.bam",
+                    "mlwh_library_id": "LIB_FAIL",
+                    "mlwh_pac_bio_library_tube_name": "LIB_FAIL",
+                    "mlwh_run_id": "m64097e_221010_045249",
+                    "mlwh_tag1_id": "bc1008",
+                },
+            ),
+        ]
+        portal_service = PortalSequencingService(datasource_factory=lambda: _PortalDatasource(portal_runs))
+        service = SequencingService(
+            fetch_service=StubSequencingFetchService(runinfo_df),
+            portal_service=portal_service,
+            biosample_tolid_getter=lambda biosamples: {"SAMEA1": "idTetArro1"},
+            sequencing_source="public-with-portal",
+        )
+
+        summary = service.build_context(["PRJEB1"], "idTetArro1")
+        context = summary.to_context_dict()
+
+        self.assertEqual(context["pacbio_run_accessions"], "ERR_PASS")
+        self.assertEqual(context["pacbio_protocols"], ["PacBio - HiFi (ULI)"])
+        self.assertEqual(context["pacbio_reads_millions"], "0.00")
+        self.assertEqual(context["pacbio_total_reads"], "2\u202f000.00")
+        self.assertEqual(context["sequencing_qc_excluded_runs"], "ERR_FAIL")
+        self.assertEqual(
+            context["sequencing_qc_excluded_portal_runs"],
+            "m64097e_221010_045249#1008",
+        )
+        self.assertEqual(summary.pacbio_library_name(), "LIB_PASS")
+        self.assertEqual(context["technology_data"]["pacbio"]["pacbio_library_name"], "LIB_PASS")
+        self.assertEqual(
+            [run["read_accession"] for run in context["seq_data"]["PacBio"]],
+            ["ERR_PASS"],
+        )
+        self.assertEqual(context["pacbio_multiplexing"], "barcode bc2039")
+        self.assertNotIn("LIB_FAIL", str(context["technology_data"]["pacbio"]))
+
     def test_build_context_processes_only_projects_with_read_data(self) -> None:
         runinfo_df = pd.DataFrame(
             [

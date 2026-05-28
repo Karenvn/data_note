@@ -74,6 +74,7 @@ TEXT_COLUMNS: tuple[str, ...] = (
     "portal_read_length_mean",
     "portal_lims_qc",
     "portal_manual_qc",
+    "portal_qc",
     "mlwh_pipeline_id_lims",
     "mlwh_instrument_model",
     "mlwh_instrument_name",
@@ -93,6 +94,10 @@ TEXT_COLUMNS: tuple[str, ...] = (
     "mlwh_pac_bio_run_name",
     "mlwh_pac_bio_library_tube_name",
     "mlwh_run_complete",
+    "mlwh_lims_qc",
+    "mlwh_qc_seq_state",
+    "mlwh_qc_seq_state_is_final",
+    "mlwh_qc_date",
     "multiplex_identifier",
     "multiplex_identifier_type",
     "multiplex_label",
@@ -192,6 +197,9 @@ class SequencingService:
             biosample_tolid_map=biosample_tolid_map,
         )
         read_study_df = portal_result.dataframe
+        read_study_df, qc_excluded_runs, qc_excluded_portal_runs = self._filter_failed_qc_rows(
+            read_study_df
+        )
         technology_df = self._select_columns(read_study_df)
         technology_df = self._normalise_read_count_units(technology_df)
         technology_df = self._add_multiplexing_columns(technology_df)
@@ -214,6 +222,8 @@ class SequencingService:
                 illumina_count_unit=self._normalise_illumina_count_unit(),
                 assembly_run_accessions=assembly_run_accessions,
                 assembly_filter_excluded_runs=assembly_filter_excluded_runs,
+                qc_filter_excluded_runs=qc_excluded_runs,
+                qc_filter_excluded_portal_runs=qc_excluded_portal_runs,
             ),
             pacbio_protocols=pacbio_protocols,
             run_accessions=run_accessions,
@@ -581,6 +591,49 @@ class SequencingService:
         return filtered, excluded
 
     @staticmethod
+    def _filter_failed_qc_rows(read_study_df: pd.DataFrame) -> tuple[pd.DataFrame, list[str], list[str]]:
+        if read_study_df.empty:
+            return read_study_df, [], []
+
+        excluded_runs: list[str] = []
+        excluded_portal_runs: list[str] = []
+
+        def keep_row(row: pd.Series) -> bool:
+            if not SequencingService._row_has_failed_qc(row):
+                return True
+            run_accession = SequencingService._string_value(row.get("run_accession"))
+            portal_run = SequencingService._string_value(row.get("portal_run_id"))
+            if run_accession:
+                excluded_runs.append(run_accession)
+            if portal_run:
+                excluded_portal_runs.append(portal_run)
+            return False
+
+        filtered = read_study_df[read_study_df.apply(keep_row, axis=1)].reset_index(drop=True)
+        return filtered, excluded_runs, excluded_portal_runs
+
+    @staticmethod
+    def _row_has_failed_qc(row: pd.Series) -> bool:
+        return any(
+            SequencingService._is_failed_qc_value(row.get(field_name))
+            for field_name in (
+                "portal_manual_qc",
+                "portal_lims_qc",
+                "portal_qc",
+                "mlwh_lims_qc",
+                "mlwh_qc_seq_state",
+            )
+        )
+
+    @staticmethod
+    def _is_failed_qc_value(value: Any) -> bool:
+        text = SequencingService._string_value(value).lower()
+        if not text:
+            return False
+        text = re.sub(r"[^a-z0-9]+", " ", text).strip()
+        return text in {"fail", "failed", "qc fail", "qc failed"} or text.startswith("failed ")
+
+    @staticmethod
     def _build_technology_records(df: pd.DataFrame) -> dict[str, TechnologyRecord]:
         records = {name: TechnologyRecord(name=name) for name in TECHNOLOGY_NAMES}
         for _, row in df.iterrows():
@@ -689,6 +742,8 @@ class SequencingService:
         illumina_count_unit: str = "read_pairs",
         assembly_run_accessions: set[str] | None = None,
         assembly_filter_excluded_runs: list[str] | None = None,
+        qc_filter_excluded_runs: list[str] | None = None,
+        qc_filter_excluded_portal_runs: list[str] | None = None,
     ) -> SequencingTotals:
         totals = {
             "pacbio_total_reads": 0,
@@ -725,6 +780,10 @@ class SequencingService:
             extras["sequencing_assembly_run_accession_filter"] = True
             extras["sequencing_assembly_run_accessions"] = "; ".join(sorted(assembly_run_accessions))
             extras["sequencing_assembly_excluded_runs"] = "; ".join(assembly_filter_excluded_runs or [])
+        if qc_filter_excluded_runs or qc_filter_excluded_portal_runs:
+            extras["sequencing_qc_filter_applied"] = True
+            extras["sequencing_qc_excluded_runs"] = "; ".join(qc_filter_excluded_runs or [])
+            extras["sequencing_qc_excluded_portal_runs"] = "; ".join(qc_filter_excluded_portal_runs or [])
         for tech_name in ("pacbio", "hic", "rna"):
             unit = SequencingService._first_technology_value(df, tech_name, "read_count_unit")
             read_source = SequencingService._first_technology_value(df, tech_name, "read_count_source")
