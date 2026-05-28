@@ -129,16 +129,25 @@ class BoldResultService:
         return self._render_compact_distribution(match_name, summary)
 
     def _load_workflow_runner(self) -> Callable[[str], Any]:
-        try:
-            module = importlib.import_module("bold_coi_pipeline")
-            return module.process_gca_accession
-        except ImportError:
-            repo_path = os.environ.get("DATA_NOTE_BOLD_REPO", "").strip()
-            if not repo_path:
-                raise RuntimeError(
-                    "BOLD workflow is not available. Install bold_coi_pipeline or set DATA_NOTE_BOLD_REPO."
-                )
+        repo_path = os.environ.get("DATA_NOTE_BOLD_REPO", "").strip()
+        if repo_path:
+            return self._load_workflow_runner_from_path(repo_path)
 
+        try:
+            from . import bold_coi_pipeline
+
+            return bold_coi_pipeline.process_gca_accession
+        except ImportError:
+            try:
+                module = importlib.import_module("bold_coi_pipeline")
+                return module.process_gca_accession
+            except ImportError as external_exc:
+                raise RuntimeError(
+                    "BOLD workflow is not available. The bundled data_note workflow could not be imported, "
+                    "and no external bold_coi_pipeline package was found."
+                ) from external_exc
+
+    def _load_workflow_runner_from_path(self, repo_path: str) -> Callable[[str], Any]:
         module_path = Path(repo_path).expanduser() / "bold_coi_pipeline.py"
         if not module_path.is_file():
             raise RuntimeError(

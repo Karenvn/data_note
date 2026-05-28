@@ -111,7 +111,7 @@ Depending on the taxon and the assemblies currently available at NCBI, this para
 Optional additions (separate from `auto_text`):
 
 - the flag `--include-gbif-distribution` adds a `distribution_text` paragraph based on GBIF occurrence data when a matching GBIF usage key can be resolved (slow)
-- the flag `--include-bold-barcode` adds a `barcode_text` paragraph from the external BOLD barcode workflow for a single BioProject run (very slow)
+- the flag `--include-bold-barcode` adds a `barcode_text` paragraph from the bundled BOLD barcode workflow for a single BioProject run (very slow)
 
 ### Wet lab protocol notes
 

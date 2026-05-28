@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from datetime import date
+import os
+from pathlib import Path
+import tempfile
+from unittest.mock import patch
 import unittest
 
 from data_note.gbif_occurrence_client import GbifOccurrenceClient
@@ -61,3 +65,33 @@ class BoldResultServiceTests(unittest.TestCase):
 
         with self.assertRaises(RuntimeError):
             service.build_text("GCA_123456789.1", "Orthosia cerasi")
+
+    def test_load_workflow_runner_uses_bundled_workflow_by_default(self) -> None:
+        with patch.dict(os.environ, {"DATA_NOTE_BOLD_REPO": ""}):
+            runner = BoldResultService()._load_workflow_runner()
+
+        self.assertEqual(runner.__module__, "data_note.services.bold_coi_pipeline")
+
+    def test_load_workflow_runner_from_env_registers_module_for_dataclasses(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            module_path = Path(tmpdir) / "bold_coi_pipeline.py"
+            module_path.write_text(
+                "\n".join(
+                    [
+                        "from dataclasses import dataclass",
+                        "",
+                        "@dataclass",
+                        "class WorkflowResult:",
+                        "    success: bool = True",
+                        "",
+                        "def process_gca_accession(accession):",
+                        "    return WorkflowResult()",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {"DATA_NOTE_BOLD_REPO": tmpdir}):
+                runner = BoldResultService()._load_workflow_runner()
+
+        self.assertTrue(runner("GCA_123456789.1").success)
