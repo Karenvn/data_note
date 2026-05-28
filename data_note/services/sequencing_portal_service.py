@@ -157,11 +157,11 @@ class PortalSequencingService:
         mode: str,
     ) -> PortalEnrichmentResult:
         enriched = dataframe.copy()
-        self._ensure_text_columns(enriched, PORTAL_TEXT_FIELDS)
         result = PortalEnrichmentResult(dataframe=enriched, portal_run_data=portal_rows)
         if enriched.empty or self._normalise_mode(mode) == "public" or not portal_rows:
             return result
 
+        self._ensure_text_columns(enriched, PORTAL_TEXT_FIELDS)
         for portal_row in portal_rows:
             portal_id = _string_value(portal_row.get("portal_run_id"))
             if self._has_mismatched_portal_sample(portal_row, tolid, biosample_tolid_map, result):
@@ -189,6 +189,8 @@ class PortalSequencingService:
         for column in columns:
             if column in dataframe.columns:
                 dataframe[column] = dataframe[column].astype("object")
+            else:
+                dataframe[column] = pd.Series("", index=dataframe.index, dtype="object")
 
     def _datasource(self):
         if self.datasource_factory is not None:

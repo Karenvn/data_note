@@ -7,6 +7,7 @@ import importlib.util
 import os
 from pathlib import Path
 import re
+import sys
 from typing import Any, Callable, Mapping
 
 from ..gbif_occurrence_client import GbifOccurrenceClient
@@ -149,6 +150,7 @@ class BoldResultService:
             raise RuntimeError(f"Could not load BOLD workflow module from {module_path}")
 
         module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
         spec.loader.exec_module(module)
         return module.process_gca_accession
 

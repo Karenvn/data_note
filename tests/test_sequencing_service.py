@@ -583,6 +583,76 @@ class SequencingServiceTests(unittest.TestCase):
         self.assertEqual(result.dataframe.loc[0, "mlwh_tag_index"], "")
         self.assertEqual(result.matched_run_ids, ["m84047_250808_174518_s3#2020"])
 
+    def test_portal_enrichment_creates_missing_mlwh_text_columns_before_assignment(self) -> None:
+        runinfo_df = pd.DataFrame(
+            [
+                {
+                    "study_accession": "PRJEB1",
+                    "run_accession": "ERR1",
+                    "sample_accession": "SAMEA1",
+                    "fastq_bytes": 0,
+                    "submitted_bytes": 0,
+                    "read_count": 10,
+                    "instrument_model": "Revio",
+                    "base_count": 100,
+                    "instrument_platform": "PACBIO_SMRT",
+                    "library_strategy": "WGS",
+                    "library_name": "LIB1",
+                    "submitted_ftp": "m84047_250808_174518_s3.hifi_reads.bc2020.bam",
+                },
+                {
+                    "study_accession": "PRJEB1",
+                    "run_accession": "ERR2",
+                    "sample_accession": "SAMEA1",
+                    "fastq_bytes": 0,
+                    "submitted_bytes": 0,
+                    "read_count": 20,
+                    "instrument_model": "Revio",
+                    "base_count": 200,
+                    "instrument_platform": "PACBIO_SMRT",
+                    "library_strategy": "WGS",
+                    "library_name": "LIB1",
+                    "submitted_ftp": "m84047_250808_174518_s3.hifi_reads.bc2021.bam",
+                },
+            ]
+        )
+        portal_rows = [
+            {
+                "portal_run_id": "m84047_250808_174518_s3#2020",
+                "tolqc_reporting_category": "pacbio",
+                "tolqc_reads": 10,
+                "tolqc_bases": 100,
+                "mlwh_biosample_accession": "SAMEA1",
+                "mlwh_irods_file": "m84047_250808_174518_s3.hifi_reads.bc2020.bam",
+                "mlwh_library_id": "LIB1",
+                "mlwh_tag_index": 2020,
+            },
+            {
+                "portal_run_id": "m84047_250808_174518_s3#2021",
+                "tolqc_reporting_category": "pacbio",
+                "tolqc_reads": 20,
+                "tolqc_bases": 200,
+                "mlwh_biosample_accession": "SAMEA1",
+                "mlwh_irods_file": "m84047_250808_174518_s3.hifi_reads.bc2021.bam",
+                "mlwh_library_id": "LIB1",
+            },
+        ]
+        portal_service = PortalSequencingService()
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", FutureWarning)
+            result = portal_service.enrich_dataframe(
+                runinfo_df,
+                tolid="ilBupPini2",
+                portal_rows=portal_rows,
+                biosample_tolid_map={"SAMEA1": "ilBupPini2"},
+                mode="public-with-portal",
+            )
+
+        self.assertEqual(result.dataframe["mlwh_tag_index"].dtype, "object")
+        self.assertEqual(result.dataframe.loc[0, "mlwh_tag_index"], 2020)
+        self.assertEqual(result.dataframe.loc[1, "mlwh_tag_index"], "")
+
     def test_ena_paired_illumina_read_counts_are_normalised_to_pairs(self) -> None:
         runinfo_df = pd.DataFrame(
             [
