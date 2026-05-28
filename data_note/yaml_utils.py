@@ -17,10 +17,14 @@ def fetch_or_copy_yaml(local_base: str,
                        ssh_user: str,
                        ssh_host: str) -> Path | None:
     """
-    Refresh the cached YAML from the authoritative remote path and return the
-    local cache path under local_base/<tolid>.yaml.
+    Return the cached YAML under local_base/<tolid>.yaml, fetching it from the
+    authoritative remote path only when the local cache is missing.
     """
     local_yaml = Path(local_base) / f"{tolid}.yaml"
+    if local_yaml.is_file():
+        logger.info("Using cached YAML: %s", local_yaml)
+        return local_yaml
+
     local_yaml.parent.mkdir(parents=True, exist_ok=True)
     remote = f"{ssh_user}@{ssh_host}:{remote_path}"
     logger.info("Refreshing cached YAML via SCP: %s -> %s", remote, local_yaml)

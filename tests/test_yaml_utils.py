@@ -10,10 +10,26 @@ from data_note.yaml_utils import fetch_or_copy_yaml
 
 class YamlUtilsTests(unittest.TestCase):
     @patch("data_note.yaml_utils.subprocess.run")
-    def test_fetch_or_copy_yaml_refreshes_existing_cache(self, mock_run) -> None:
+    def test_fetch_or_copy_yaml_reuses_existing_cache(self, mock_run) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             local_yaml = Path(tmpdir) / "GRIT-1124.yaml"
             local_yaml.write_text("stale")
+
+            result = fetch_or_copy_yaml(
+                local_base=tmpdir,
+                tolid="GRIT-1124",
+                remote_path="/nfs/path/run.yaml",
+                ssh_user="ssh-user",
+                ssh_host="tol22",
+            )
+
+        self.assertEqual(result, local_yaml)
+        mock_run.assert_not_called()
+
+    @patch("data_note.yaml_utils.subprocess.run")
+    def test_fetch_or_copy_yaml_fetches_missing_cache(self, mock_run) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            local_yaml = Path(tmpdir) / "GRIT-1124.yaml"
 
             result = fetch_or_copy_yaml(
                 local_base=tmpdir,

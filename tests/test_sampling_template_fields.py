@@ -112,6 +112,21 @@ class SamplingTemplateFieldsTests(unittest.TestCase):
         self.assertTrue(context["hic_collection_same_as_pacbio"])
         self.assertFalse(context["rna_collection_same_as_hic"])
 
+    def test_formats_organism_part_as_tissue_phrase(self) -> None:
+        context = {
+            "pacbio_organism_part": "leaf",
+            "hic_organism_part": "head and thorax",
+            "rna_organism_part": "muscle tissue",
+            "isoseq_organism_part": "NOT_COLLECTED",
+        }
+
+        populate_sampling_template_fields(context)
+
+        self.assertEqual(context["pacbio_tissue_phrase"], "leaf tissue")
+        self.assertEqual(context["hic_tissue_phrase"], "head and thorax tissue")
+        self.assertEqual(context["rna_tissue_phrase"], "muscle tissue")
+        self.assertEqual(context["isoseq_tissue_phrase"], "tissue")
+
 
 if __name__ == "__main__":
     unittest.main()

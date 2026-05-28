@@ -11,6 +11,14 @@ _IDENTITY_FIELDS: tuple[str, ...] = (
     "sample_derived_from",
     "sample_accession",
 )
+_MISSING_ORGANISM_PARTS = {
+    "na",
+    "n/a",
+    "not applicable",
+    "not collected",
+    "not provided",
+    "unknown",
+}
 
 
 def populate_sampling_template_fields(context: MutableMapping[str, Any]) -> None:
@@ -33,6 +41,7 @@ def _populate_display_fields(context: MutableMapping[str, Any], tech: str) -> No
     context[f"{tech}_identifier_affiliation_text"] = _format_pipe_text(identifier_affiliation)
     context[f"{tech}_identifier_display"] = _format_people_with_affiliations(identifier, identifier_affiliation)
     context[f"{tech}_specimen_label"] = _format_specimen_label(context, tech)
+    context[f"{tech}_tissue_phrase"] = _format_tissue_phrase(context.get(f"{tech}_organism_part"))
     _set_short_specimen_reference_fields(
         context,
         tech,
@@ -223,6 +232,19 @@ def _format_coordinate(value: Any) -> str:
     if text.startswith("-"):
         return "\u2212" + text[1:]
     return text
+
+
+def _format_tissue_phrase(organism_part: Any) -> str:
+    part = _clean_string(organism_part)
+    if not part:
+        return "tissue"
+
+    normalised_part = part.replace("_", " ").casefold()
+    if normalised_part in _MISSING_ORGANISM_PARTS:
+        return "tissue"
+    if normalised_part == "tissue" or normalised_part.endswith(" tissue"):
+        return part
+    return f"{part} tissue"
 
 
 def _normalise_coordinate_text(value: str) -> str:

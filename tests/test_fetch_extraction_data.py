@@ -12,10 +12,54 @@ from data_note.fetch_extraction_data import (
     _resolve_lr_sample_prep_tsv,
     fallback_fetch_from_lr_sample_prep,
     fetch_barcoding_info,
+    get_sequencing_and_extraction_metadata,
 )
 
 
 class ExtractionDataFallbackTests(unittest.TestCase):
+    def test_get_metadata_maps_sequencing_request_wet_lab_fields(self) -> None:
+        seq_request = SimpleNamespace(
+            id="DTOL1",
+            attributes={
+                "benchling_completion_date": "2026-01-05",
+                "benchling_sequencing_platform": "pacbio",
+                "benchling_submission_sample_id": "SUB1",
+                "benchling_submission_sample_name": "SubSam_example",
+                "benchling_spri_type": "Apex",
+                "benchling_bead_type": "Ampure PB",
+                "benchling_post_spri_concentration_ngul": 33.0,
+                "benchling_nanodrop_concentration_ngul": 28.9,
+                "benchling_nanodrop_260280": 2.34,
+                "benchling_nanodrop_260230": 1.82,
+                "benchling_sheared_femto_fragment_size_bp": 17797.0,
+            },
+            to_one_relationships={},
+        )
+
+        with patch("data_note.fetch_extraction_data._portal_datasource", return_value=object()), patch(
+            "data_note.fetch_extraction_data._get_extraction_by_uid",
+            return_value=None,
+        ), patch(
+            "data_note.fetch_extraction_data._get_sequencing_request",
+            return_value=seq_request,
+        ), patch(
+            "data_note.fetch_extraction_data._get_extraction_from_sequencing_request",
+            return_value=None,
+        ), patch(
+            "data_note.fetch_extraction_data._get_extraction_by_tolid",
+            return_value=None,
+        ):
+            seq_attrs, extraction_attrs = get_sequencing_and_extraction_metadata("DTOL1")
+
+        self.assertEqual(extraction_attrs, {})
+        self.assertEqual(seq_attrs["spri_type"], "Apex")
+        self.assertEqual(seq_attrs["bead_type"], "Ampure PB")
+        self.assertEqual(seq_attrs["qubit_ngul"], 33.0)
+        self.assertEqual(seq_attrs["nanodrop_concentration_ngul"], 28.9)
+        self.assertEqual(seq_attrs["ratio_260_280"], 2.34)
+        self.assertEqual(seq_attrs["ratio_260_230"], 1.82)
+        self.assertEqual(seq_attrs["fragment_size_kb"], "17.8")
+
     def test_extract_extraction_attrs_prefers_direct_tissue_prep_weight_for_dna(self) -> None:
         extraction = SimpleNamespace(
             id="bfi_ext",

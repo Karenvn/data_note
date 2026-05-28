@@ -10,11 +10,18 @@ class CurationProcessingTests(unittest.TestCase):
     def test_process_extraction_info_returns_typed_extraction_info(self) -> None:
         service = CurationService(
             sequencing_extraction_fetcher=lambda lookup_id: (
-                {"sequencing_date": "2026-01-05", "submission_id": "SUB1"},
+                {
+                    "sequencing_date": "2026-01-05",
+                    "submission_id": "SUB1",
+                    "spri_type": "Apex",
+                    "bead_type": "Ampure PB",
+                    "fragment_size_kb": "17.8",
+                },
                 {
                     "dna_yield_ng": "8,000",
                     "qubit_ngul": "10.5",
                     "protocol": "MagAttract",
+                    "fragment_size_kb": None,
                 },
             ),
             extraction_fallback_fetcher=lambda lookup_id: {"gqn": "40", "tissue_weight_mg": 84, "tissue_type": "Plant"},
@@ -29,6 +36,9 @@ class CurationProcessingTests(unittest.TestCase):
         self.assertEqual(context["submission_id"], "SUB1")
         self.assertEqual(context["dna_yield_ng"], "8,000")
         self.assertEqual(context["protocol"], "MagAttract")
+        self.assertEqual(context["spri_type"], "Apex")
+        self.assertEqual(context["bead_type"], "Ampure PB")
+        self.assertEqual(context["fragment_size_kb"], "17.8")
         self.assertEqual(context["gqn"], "40")
         self.assertEqual(context["tissue_weight_mg"], 84)
         self.assertEqual(context["tissue_type"], "Plant")

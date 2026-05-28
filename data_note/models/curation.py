@@ -57,6 +57,7 @@ class ExtractionInfo:
     extraction_protocol: Any = None
     protocol: Any = None
     spri_type: Any = None
+    bead_type: Any = None
     disruption_method: Any = None
     tissue_type: Any = None
     lysis: Any = None

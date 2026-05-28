@@ -58,6 +58,11 @@ class WetLabProtocolMappingTests(unittest.TestCase):
         self.assertEqual(context["cleanup_protocol"]["key"], "cleanup_automated_spri")
         self.assertEqual(context["fragmentation_protocol"]["key"], "fragmentation_megaruptor_li_pacbio")
 
+    def test_maps_apex_spri_type_to_automated_cleanup(self) -> None:
+        context = build_wet_lab_protocol_context({"spri_type": "Apex"})
+
+        self.assertEqual(context["cleanup_protocol"]["key"], "cleanup_automated_spri")
+
     def test_keeps_unknown_protocols_for_manual_review_without_guessing(self) -> None:
         context = build_wet_lab_protocol_context({"extraction_protocol": "Unpublished bench protocol"})
 

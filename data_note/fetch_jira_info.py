@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from .yaml_utils import fetch_or_copy_yaml
 from num2words import num2words
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 try:
     from tol.sources.defaults import Defaults
@@ -66,6 +66,16 @@ def _yaml_ssh_target() -> tuple[str, str]:
 class JiraRequestError(requests.exceptions.RequestException):
     """Raised when Jira returns an HTTP or transport failure."""
 
+    def __init__(self, *args, retryable: bool = False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.retryable = retryable
+
+
+def _is_retryable_jira_exception(exc: BaseException) -> bool:
+    if isinstance(exc, JiraRequestError):
+        return exc.retryable
+    return isinstance(exc, requests.exceptions.RequestException)
+
 
 def _extract_jira_error_details(response_text: str) -> str | None:
     if not response_text:
@@ -100,11 +110,40 @@ def _format_jira_error(response: requests.Response) -> str:
     return response.reason or "Unknown Jira error"
 
 
+def _format_jira_redirect(response: requests.Response) -> str:
+    location = response.headers.get("Location") or response.headers.get("location") or "unknown redirect target"
+    return (
+        f"HTTP {response.status_code} redirected to {location}; Jira REST API access appears to be routed "
+        "through SSO/Portal rather than returning JSON"
+    )
+
+
+def _is_json_response(response: requests.Response) -> bool:
+    content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if content_type == "application/json" or content_type.endswith("+json"):
+        return True
+    if not content_type:
+        return response.text.lstrip().startswith(("{", "["))
+    return False
+
+
+def _format_non_json_response(response: requests.Response) -> str:
+    content_type = response.headers.get("content-type") or "unknown content type"
+    final_url = getattr(response, "url", "") or "unknown URL"
+    snippet = response.text.strip().replace("\n", " ")
+    details = f"content-type {content_type}; response URL {final_url}"
+    if "portal.sanger.ac.uk" in final_url or "portal.sanger.ac.uk" in snippet:
+        details += "; response looks like a Sanger Portal/SSO page"
+    if snippet:
+        details += f"; first response text: {snippet[:160]}"
+    return details
+
+
 @retry(
     reraise=True,
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=1, max=8),
-    retry=retry_if_exception_type((requests.exceptions.RequestException,)),
+    retry=retry_if_exception(_is_retryable_jira_exception),
 )
 def _jira_get(url: str, *, auth, timeout: int = JIRA_TIMEOUT_SECONDS) -> requests.Response:
     response = requests.get(
@@ -112,16 +151,20 @@ def _jira_get(url: str, *, auth, timeout: int = JIRA_TIMEOUT_SECONDS) -> request
         auth=auth,
         timeout=timeout,
         headers={"Accept": "application/json"},
+        allow_redirects=False,
     )
+
+    if 300 <= response.status_code < 400:
+        raise JiraRequestError(_format_jira_redirect(response), response=response)
 
     if response.status_code in JIRA_RETRY_STATUS_CODES:
         details = _format_jira_error(response)
         logger.warning("Retryable JIRA HTTP error %s: %s", response.status_code, details)
-        raise JiraRequestError(f"HTTP {response.status_code}: {details}")
+        raise JiraRequestError(f"HTTP {response.status_code}: {details}", response=response, retryable=True)
 
     if response.status_code >= 400:
         details = _format_jira_error(response)
-        raise JiraRequestError(f"HTTP {response.status_code}: {details}")
+        raise JiraRequestError(f"HTTP {response.status_code}: {details}", response=response)
 
     return response
 
@@ -177,9 +220,14 @@ def get_yaml_for_ticket(ticket, auth=None):
     """
     Return a Path to the authoritative YAML cache for the given JIRA ticket.
 
-    The YAML is always refreshed via SCP into YAML_CACHE_DIR so it remains
-    available for manual inspection without polluting rendered output folders.
+    The YAML is cached in YAML_CACHE_DIR so it remains available for manual
+    inspection without polluting rendered output folders.
     """
+    cached_yaml = _yaml_cache_dir() / f"{ticket}.yaml"
+    if cached_yaml.is_file():
+        logger.info("Using cached YAML for %s at %s", ticket, cached_yaml)
+        return cached_yaml
+
     issue = fetch_jira_issue(ticket)
     if not issue:
         return None
@@ -239,10 +287,18 @@ def fetch_jira_issue(jira_ticket_id):
         logger.warning("Failed to fetch JIRA issue %s: %s", jira_ticket_id, exc)
         return None
 
+    if not _is_json_response(response):
+        logger.warning(
+            "JIRA REST API did not return JSON for issue %s: %s",
+            jira_ticket_id,
+            _format_non_json_response(response),
+        )
+        return None
+
     try:
         return response.json()
     except requests.exceptions.JSONDecodeError as e:
-        logger.warning("Error parsing JSON for JIRA issue %s: %s", jira_ticket_id, e)
+        logger.warning("JIRA REST API returned invalid JSON for issue %s: %s", jira_ticket_id, e)
         logger.debug("JIRA response content for %s: %s", jira_ticket_id, response.text)
         return None
 
@@ -430,7 +486,7 @@ def download_jira_attachment(jira_ticket_id, directory):
     Legacy wrapper that keeps YAML out of the note output folder.
 
     The directory argument is retained for compatibility but ignored; the file
-    is refreshed into YAML_CACHE_DIR instead.
+    is cached in YAML_CACHE_DIR instead.
     """
     if directory:
         logger.info(

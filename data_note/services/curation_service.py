@@ -84,6 +84,14 @@ class CurationService:
         if seq_attrs:
             extraction_context.update({key: value for key, value in seq_attrs.items()})
 
+        def _is_missing(value: Any) -> bool:
+            if value is None or value == "":
+                return True
+            try:
+                return value != value
+            except Exception:
+                return False
+
         important_fields = [
             "dna_yield_ng",
             "qubit_ngul",
@@ -103,15 +111,9 @@ class CurationService:
                 needs_fallback = True
 
         if extraction_attrs:
-            extraction_context.update({key: value for key, value in extraction_attrs.items()})
-
-        def _is_missing(value: Any) -> bool:
-            if value is None or value == "":
-                return True
-            try:
-                return value != value
-            except Exception:
-                return False
+            for key, value in extraction_attrs.items():
+                if not _is_missing(value) or key not in extraction_context:
+                    extraction_context[key] = value
 
         def _should_backfill(key: str, current_value: Any, fallback_value: Any) -> bool:
             if _is_missing(current_value):

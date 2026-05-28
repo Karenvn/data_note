@@ -12,6 +12,20 @@ from .formatting_utils import format_with_nbsp
 logger = logging.getLogger(__name__)
 
 
+def _is_secondary_btk_summary(prefix):
+    return prefix in {"alt_", "alternate_", "hap2_"}
+
+
+def _btk_role_label(prefix):
+    if prefix == "hap2_":
+        return "haplotype 2"
+    if prefix in {"alt_", "alternate_"}:
+        return "alternate haplotype"
+    if prefix == "hap1_":
+        return "haplotype 1"
+    return "primary assembly"
+
+
 def build_btk_urls(assembly_accession, prefix=""):
     """
     Generate correct view and download URLs for BlobToolKit.
@@ -50,13 +64,31 @@ def fetch_and_parse_summary(assembly_accession, prefix=''):
         resp = requests.get(url, timeout=20)
         resp.raise_for_status()
         data = resp.json()
+    except requests.exceptions.HTTPError as e:
+        status_code = e.response.status_code if e.response is not None else None
+        if status_code == 404 and _is_secondary_btk_summary(prefix):
+            logger.info(
+                "Optional BTK summary is not available for %s %s; continuing with the primary/haplotype 1 BTK metrics.",
+                _btk_role_label(prefix),
+                assembly_accession,
+            )
+        else:
+            logger.warning("Failed to fetch BTK summary for %s: %s", assembly_accession, e)
+        return {}
     except requests.exceptions.RequestException as e:
         logger.warning("Failed to fetch BTK summary for %s: %s", assembly_accession, e)
         return {}
 
     busco_data = data.get("summaryStats", {}).get("busco", {})
     if not busco_data:
-        logger.warning("No BUSCO data for %s", assembly_accession)
+        if _is_secondary_btk_summary(prefix):
+            logger.info(
+                "Optional BTK BUSCO data is not available for %s %s; continuing with the primary/haplotype 1 BTK metrics.",
+                _btk_role_label(prefix),
+                assembly_accession,
+            )
+        else:
+            logger.warning("No BUSCO data for %s", assembly_accession)
         return {}
 
     # Use the first lineage returned by the API — BTK returns the most granular lineage first

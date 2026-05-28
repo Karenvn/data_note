@@ -637,7 +637,7 @@ def _select_cleanup(context: Mapping[str, Any]) -> tuple[WetLabProtocolMatch | N
     pacbio_norm = _normalise(_joined_context(context, "pacbio_protocols"))
     if _contains_any(norm, "manual", "pronex manual"):
         return _match("cleanup_manual_spri", source="spri_type", matched_value=matched_value), []
-    if _contains_any(norm, "automated", "automatic", "auto", "kingfisher", "kf"):
+    if _contains_any(norm, "automated", "automatic", "auto", "kingfisher", "kf", "apex"):
         return _match("cleanup_automated_spri", source="spri_type", matched_value=matched_value), []
     if _contains_any(pacbio_norm, "uli", "ultra low"):
         return _candidate(
