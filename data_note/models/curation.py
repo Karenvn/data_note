@@ -70,8 +70,16 @@ class ExtractionInfo:
     extraction_mode: Any = None
     extraction_uid: Any = None
     tissue_weight_mg: Any = None
+    tissue_weight_mg_source: Any = None
     tissue_weight_mg_calc: Any = None
     tissue_prep_uid: Any = None
+    extraction_container_uid: Any = None
+    extraction_container_yield_ng: Any = None
+    extraction_container_volume_ul: Any = None
+    extraction_container_qubit_ngul: Any = None
+    extraction_container_nanodrop_concentration_ngul: Any = None
+    extraction_container_ratio_260_280: Any = None
+    extraction_container_ratio_260_230: Any = None
     tissue_size_in_tube: Any = None
     tissue_remaining_weight: Any = None
     tissue_remaining_weight_calc: Any = None

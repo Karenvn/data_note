@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+import warnings
 
 import pandas as pd
 
@@ -531,6 +532,56 @@ class SequencingServiceTests(unittest.TestCase):
         self.assertEqual(context["pacbio_multiplex_identifiers"], "bc2020")
         self.assertEqual(context["technology_data"]["pacbio"]["pacbio_plex_level"], "2-plex")
         self.assertEqual(context["seq_data"]["PacBio"][0]["mlwh_plex_count"], "2")
+
+    def test_portal_enrichment_allows_blank_mlwh_fields_in_numeric_source_columns(self) -> None:
+        runinfo_df = pd.DataFrame(
+            [
+                {
+                    "study_accession": "PRJEB1",
+                    "run_accession": "ERR15996643",
+                    "sample_accession": "SAMEA118260618",
+                    "fastq_bytes": 0,
+                    "submitted_bytes": 26_424_128_708,
+                    "read_count": 7_241_360,
+                    "instrument_model": "Revio",
+                    "base_count": 56_049_164_578,
+                    "instrument_platform": "PACBIO_SMRT",
+                    "library_strategy": "WGS",
+                    "library_layout": "SINGLE",
+                    "library_name": "PSYCHE15752215",
+                    "submitted_ftp": (
+                        "ftp.sra.ebi.ac.uk/vol1/run/ERR159/ERR15996643/"
+                        "m84047_250808_174518_s3.hifi_reads.bc2020.bam"
+                    ),
+                    "mlwh_tag_index": float("nan"),
+                }
+            ]
+        )
+        portal_rows = [
+            {
+                "portal_run_id": "m84047_250808_174518_s3#2020",
+                "tolqc_reporting_category": "pacbio",
+                "tolqc_reads": 7_241_360,
+                "tolqc_bases": 56_049_164_578,
+                "mlwh_biosample_accession": "SAMEA118260618",
+                "mlwh_irods_file": "m84047_250808_174518_s3.hifi_reads.bc2020.bam",
+                "mlwh_library_id": "PSYCHE15752215",
+            }
+        ]
+        portal_service = PortalSequencingService()
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", FutureWarning)
+            result = portal_service.enrich_dataframe(
+                runinfo_df,
+                tolid="ilBupPini2",
+                portal_rows=portal_rows,
+                biosample_tolid_map={"SAMEA118260618": "ilBupPini2"},
+                mode="public-with-portal",
+            )
+
+        self.assertEqual(result.dataframe.loc[0, "mlwh_tag_index"], "")
+        self.assertEqual(result.matched_run_ids, ["m84047_250808_174518_s3#2020"])
 
     def test_ena_paired_illumina_read_counts_are_normalised_to_pairs(self) -> None:
         runinfo_df = pd.DataFrame(

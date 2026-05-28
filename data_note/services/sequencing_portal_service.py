@@ -44,6 +44,15 @@ MLWH_RUN_FIELDS: tuple[str, ...] = (
     "mlwh_run_complete",
 )
 
+PORTAL_TEXT_FIELDS: tuple[str, ...] = (
+    "portal_run_id",
+    "portal_reported_read_count_unit",
+    "portal_read_length_mean",
+    "portal_lims_qc",
+    "portal_manual_qc",
+    *MLWH_RUN_FIELDS,
+)
+
 
 def _safe_int(value: Any, default: int = 0) -> int:
     try:
@@ -148,6 +157,7 @@ class PortalSequencingService:
         mode: str,
     ) -> PortalEnrichmentResult:
         enriched = dataframe.copy()
+        self._ensure_text_columns(enriched, PORTAL_TEXT_FIELDS)
         result = PortalEnrichmentResult(dataframe=enriched, portal_run_data=portal_rows)
         if enriched.empty or self._normalise_mode(mode) == "public" or not portal_rows:
             return result
@@ -173,6 +183,12 @@ class PortalSequencingService:
                 result.matched_run_ids.append(portal_id)
 
         return result
+
+    @staticmethod
+    def _ensure_text_columns(dataframe: pd.DataFrame, columns: tuple[str, ...]) -> None:
+        for column in columns:
+            if column in dataframe.columns:
+                dataframe[column] = dataframe[column].astype("object")
 
     def _datasource(self):
         if self.datasource_factory is not None:

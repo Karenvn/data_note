@@ -76,6 +76,7 @@ class ExtractionDataFallbackTests(unittest.TestCase):
             attributes={
                 "benchling_weight_mg": 0.0,
                 "benchling_weight_of_prep_for_dna": 51.0,
+                "benchling_disruption_method": "Powermash",
             },
         )
 
@@ -100,6 +101,101 @@ class ExtractionDataFallbackTests(unittest.TestCase):
         )
         self.assertEqual(result["tissue_weight_mg"], 51.0)
         self.assertEqual(result["tissue_weight_mg_source"], "benchling_weight_of_prep_for_dna")
+        self.assertEqual(result["disruption_method"], "Powermash")
+
+    def test_extract_extraction_attrs_keeps_container_qc_separate_from_final_dna_yield(self) -> None:
+        extraction = SimpleNamespace(
+            id="bfi_ext",
+            attributes={},
+            to_one_relationships={},
+            to_many_relationships={
+                "benchling_extraction_containers": [
+                    SimpleNamespace(
+                        id="con_other",
+                        attributes={
+                            "benchling_yield_ng": 100.0,
+                            "benchling_volume_ul": 5.0,
+                        },
+                    ),
+                    SimpleNamespace(
+                        id="con_selected",
+                        attributes={
+                            "benchling_yield_ng": 3690.0,
+                            "benchling_volume_ul": 20.0,
+                            "benchling_qubit_concentration_ngul": 41.0,
+                            "benchling_nanodrop_concentration_ngul": 90.2,
+                            "benchling_dna_260_280_ratio": 1.86,
+                            "benchling_dna_260_230_ratio": 1.76,
+                        },
+                    ),
+                ]
+            },
+        )
+
+        result = _extract_extraction_attrs(extraction, extraction_container_id="con_selected")
+
+        self.assertEqual(result["extraction_container_uid"], "con_selected")
+        self.assertEqual(result["extraction_container_yield_ng"], "3\u202f690.00")
+        self.assertEqual(result["extraction_container_volume_ul"], 20.0)
+        self.assertEqual(result["extraction_container_qubit_ngul"], 41.0)
+        self.assertEqual(result["extraction_container_nanodrop_concentration_ngul"], 90.2)
+        self.assertEqual(result["extraction_container_ratio_260_280"], 1.86)
+        self.assertEqual(result["extraction_container_ratio_260_230"], 1.76)
+        self.assertEqual(result["dna_yield_ng"], "")
+        self.assertIsNone(result["volume_ul"])
+
+    def test_get_metadata_uses_sequencing_request_extraction_container_identity(self) -> None:
+        seq_request = SimpleNamespace(
+            id="DTOL1",
+            attributes={
+                "uid": "DTOL1",
+                "benchling_post_spri_concentration_ngul": 26.6,
+            },
+            to_one_relationships={
+                "benchling_extraction_container": SimpleNamespace(
+                    id="con_selected",
+                    attributes={"benchling_volume_ul": 99.0},
+                )
+            },
+        )
+        extraction = SimpleNamespace(
+            id="bfi_ext",
+            attributes={},
+            to_one_relationships={},
+            to_many_relationships={
+                "benchling_extraction_containers": [
+                    SimpleNamespace(id="con_other", attributes={"benchling_yield_ng": 100.0}),
+                    SimpleNamespace(
+                        id="con_selected",
+                        attributes={
+                            "benchling_yield_ng": 3690.0,
+                            "benchling_volume_ul": 20.0,
+                        },
+                    ),
+                ]
+            },
+        )
+
+        with patch("data_note.fetch_extraction_data._portal_datasource", return_value=object()), patch(
+            "data_note.fetch_extraction_data._get_extraction_by_uid",
+            return_value=None,
+        ), patch(
+            "data_note.fetch_extraction_data._get_sequencing_request",
+            return_value=seq_request,
+        ), patch(
+            "data_note.fetch_extraction_data._get_extraction_from_sequencing_request",
+            return_value=extraction,
+        ), patch(
+            "data_note.fetch_extraction_data._get_extraction_by_tolid",
+            return_value=None,
+        ):
+            seq_attrs, extraction_attrs = get_sequencing_and_extraction_metadata("DTOL1")
+
+        self.assertEqual(seq_attrs["sanger_sample_id"], "DTOL1")
+        self.assertEqual(seq_attrs["qubit_ngul"], 26.6)
+        self.assertEqual(extraction_attrs["extraction_container_uid"], "con_selected")
+        self.assertEqual(extraction_attrs["extraction_container_yield_ng"], "3\u202f690.00")
+        self.assertEqual(extraction_attrs["extraction_container_volume_ul"], 20.0)
 
     def test_resolve_lr_sample_prep_tsv_prefers_gn_assets_default(self) -> None:
         with TemporaryDirectory() as tmpdir:

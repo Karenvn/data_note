@@ -178,8 +178,43 @@ def _first_present(*values):
     return None
 
 
-def _extract_extraction_attrs(extraction, ds=None):
-    raw_attrs = extraction.attributes.copy()
+def _relationship_items(value):
+    if value is None:
+        return []
+    if hasattr(value, "attributes") or hasattr(value, "id"):
+        return [value]
+    if isinstance(value, dict):
+        return [item for item in value.values() if item is not None]
+    try:
+        return [item for item in value if item is not None]
+    except TypeError:
+        return [value]
+
+
+def _select_extraction_container(extraction, extraction_container_id=None, fallback_container=None):
+    target_id = _normalize_identifier(extraction_container_id)
+    to_many = getattr(extraction, "to_many_relationships", {}) or {}
+    candidates = []
+    for key in ("benchling_extraction_containers", "benchling_extraction_container"):
+        candidates.extend(_relationship_items(to_many.get(key)))
+
+    if target_id:
+        for candidate in candidates:
+            if _normalize_identifier(getattr(candidate, "id", None)) == target_id:
+                return candidate
+        if fallback_container and _normalize_identifier(getattr(fallback_container, "id", None)) == target_id:
+            return fallback_container
+        return None
+
+    if len(candidates) == 1:
+        return candidates[0]
+    if fallback_container and not candidates:
+        return fallback_container
+    return None
+
+
+def _extract_extraction_attrs(extraction, ds=None, extraction_container_id=None, extraction_container=None):
+    raw_attrs = dict(getattr(extraction, "attributes", {}) or {})
 
     desired_fields = [
         "benchling_extraction_protocol",
@@ -196,7 +231,8 @@ def _extract_extraction_attrs(extraction, ds=None):
     extraction_attrs["extraction_uid"] = extraction.id
 
     # Tissue mass lives on the related tissue_prep object (not extraction itself).
-    tissue_prep = extraction.to_one_relationships.get("benchling_tissue_prep")
+    to_one = getattr(extraction, "to_one_relationships", {}) or {}
+    tissue_prep = to_one.get("benchling_tissue_prep")
     if tissue_prep:
         tp_attrs = dict(tissue_prep.attributes or {})
         if ds is not None and getattr(tissue_prep, "id", None):
@@ -216,9 +252,33 @@ def _extract_extraction_attrs(extraction, ds=None):
             )
         extraction_attrs["tissue_weight_mg_calc"] = tp_attrs.get("calc_benchling_weight_mg")
         extraction_attrs["tissue_prep_uid"] = tissue_prep.id
+        extraction_attrs["disruption_method"] = tp_attrs.get("benchling_disruption_method")
+
+    selected_container = _select_extraction_container(
+        extraction,
+        extraction_container_id=extraction_container_id,
+        fallback_container=extraction_container,
+    )
+    if selected_container:
+        container_attrs = dict(selected_container.attributes or {})
+        extraction_attrs["extraction_container_uid"] = selected_container.id
+        extraction_attrs["extraction_container_yield_ng"] = container_attrs.get("benchling_yield_ng")
+        extraction_attrs["extraction_container_volume_ul"] = container_attrs.get("benchling_volume_ul")
+        extraction_attrs["extraction_container_qubit_ngul"] = container_attrs.get(
+            "benchling_qubit_concentration_ngul"
+        )
+        extraction_attrs["extraction_container_nanodrop_concentration_ngul"] = container_attrs.get(
+            "benchling_nanodrop_concentration_ngul"
+        )
+        extraction_attrs["extraction_container_ratio_260_280"] = container_attrs.get(
+            "benchling_dna_260_280_ratio"
+        )
+        extraction_attrs["extraction_container_ratio_260_230"] = container_attrs.get(
+            "benchling_dna_260_230_ratio"
+        )
 
     # Optional context from sample (not extraction-specific).
-    sample = extraction.to_one_relationships.get("benchling_sample")
+    sample = to_one.get("benchling_sample")
     if sample:
         s_attrs = sample.attributes or {}
         extraction_attrs["tissue_size_in_tube"] = s_attrs.get("benchling_size_of_tissue_in_tube")
@@ -227,6 +287,8 @@ def _extract_extraction_attrs(extraction, ds=None):
         extraction_attrs["tissue_size"] = s_attrs.get("sts_tissue_size")
         extraction_attrs["tissue_remaining"] = s_attrs.get("sts_tissue_remaining")
         extraction_attrs["tissue_depleted"] = s_attrs.get("sts_tissue_depleted")
+
+    container_yield = extraction_attrs.get("extraction_container_yield_ng")
 
     return {
         "extraction_protocol": extraction_attrs.get("benchling_extraction_protocol"),
@@ -240,10 +302,22 @@ def _extract_extraction_attrs(extraction, ds=None):
         "extraction_mode": extraction_attrs.get("benchling_manual_vs_automatic"),
         "extraction_uid": extraction_attrs.get("extraction_uid"),
         "gqn": extraction_attrs.get("benchling_gqn_index"),
+        "disruption_method": extraction_attrs.get("disruption_method"),
         "tissue_weight_mg": extraction_attrs.get("tissue_weight_mg"),
         "tissue_weight_mg_source": extraction_attrs.get("tissue_weight_mg_source"),
         "tissue_weight_mg_calc": extraction_attrs.get("tissue_weight_mg_calc"),
         "tissue_prep_uid": extraction_attrs.get("tissue_prep_uid"),
+        "extraction_container_uid": extraction_attrs.get("extraction_container_uid"),
+        "extraction_container_yield_ng": (
+            format_with_nbsp(container_yield) if container_yield is not None else None
+        ),
+        "extraction_container_volume_ul": extraction_attrs.get("extraction_container_volume_ul"),
+        "extraction_container_qubit_ngul": extraction_attrs.get("extraction_container_qubit_ngul"),
+        "extraction_container_nanodrop_concentration_ngul": extraction_attrs.get(
+            "extraction_container_nanodrop_concentration_ngul"
+        ),
+        "extraction_container_ratio_260_280": extraction_attrs.get("extraction_container_ratio_260_280"),
+        "extraction_container_ratio_260_230": extraction_attrs.get("extraction_container_ratio_260_230"),
         "tissue_size_in_tube": extraction_attrs.get("tissue_size_in_tube"),
         "tissue_remaining_weight": extraction_attrs.get("tissue_remaining_weight"),
         "tissue_remaining_weight_calc": extraction_attrs.get("tissue_remaining_weight_calc"),
@@ -276,6 +350,8 @@ def get_sequencing_and_extraction_metadata(sanger_sample_id):
     seq_request = _get_sequencing_request(ds, sanger_sample_id)
     if seq_request:
         seq_attrs = seq_request.attributes.copy() if seq_request.attributes else {}
+        seq_to_one = getattr(seq_request, "to_one_relationships", {}) or {}
+        extraction_container_rel = seq_to_one.get("benchling_extraction_container")
         seq_attrs_renamed = {
             "sequencing_date": seq_attrs.get("benchling_completion_date"),
             "platform": seq_attrs.get("benchling_sequencing_platform"),
@@ -297,7 +373,12 @@ def get_sequencing_and_extraction_metadata(sanger_sample_id):
         }
         extraction = _get_extraction_from_sequencing_request(ds, seq_request)
         if extraction:
-            extraction_attrs_renamed = _extract_extraction_attrs(extraction, ds=ds)
+            extraction_attrs_renamed = _extract_extraction_attrs(
+                extraction,
+                ds=ds,
+                extraction_container_id=getattr(extraction_container_rel, "id", None),
+                extraction_container=extraction_container_rel,
+            )
 
     # --- Step 3: Final fallback by ToLID ---
     if not extraction_attrs_renamed:
