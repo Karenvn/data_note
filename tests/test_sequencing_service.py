@@ -510,6 +510,24 @@ class SequencingServiceTests(unittest.TestCase):
                     "metadata_source": "ena",
                     "read_count_basis": "reads",
                 },
+                {
+                    "study_accession": "PRJEB1",
+                    "run_accession": "ERR_HIC",
+                    "sample_accession": "SAMEA_RNA",
+                    "fastq_bytes": 0,
+                    "submitted_bytes": 0,
+                    "read_count": 932_986_066,
+                    "instrument_model": "Illumina NovaSeq 6000",
+                    "base_count": 140_880_895_966,
+                    "instrument_platform": "ILLUMINA",
+                    "library_strategy": "Hi-C",
+                    "library_layout": "PAIRED",
+                    "library_name": "",
+                    "library_construction_protocol": "Hi-C - Arima v2",
+                    "run_alias": "SC_RUN_48375_4#1",
+                    "metadata_source": "ena",
+                    "read_count_basis": "reads",
+                },
             ]
         )
         rna_run = _PortalObject(
@@ -532,9 +550,28 @@ class SequencingServiceTests(unittest.TestCase):
                 "mlwh_sequencing_request": _PortalObject("DTOLRNA13949196"),
             },
         )
+        hic_run = _PortalObject(
+            "48375_4#1",
+            {
+                "tolqc_reporting_category": "hic",
+                "tolqc_reads": 932_986_066,
+                "tolqc_bases": 140_880_895_966,
+                "mlwh_biosample_accession": "SAMEA_RNA",
+                "mlwh_biospecimen_accession": "SAMEA_SPECIMEN",
+                "mlwh_irods_file": "48375_4#1.cram",
+                "mlwh_library_id": "SQPP-46946-Q:A1",
+                "mlwh_pipeline_id_lims": "Hi-C - Arima v2",
+                "mlwh_run_id": "48375_4",
+                "mlwh_tag_index": "1",
+            },
+            to_one_relationships={
+                "benchling_sample": _PortalObject("63763"),
+                "mlwh_sequencing_request": _PortalObject("DTOL14058388"),
+            },
+        )
         portal_service = PortalSequencingService(
             datasource_factory=lambda: _PortalDatasource(
-                runs_by_tolid={"idTetArro1": [], "idTetArro2": [rna_run]},
+                runs_by_tolid={"idTetArro1": [], "idTetArro2": [rna_run, hic_run]},
                 objects_by_type={
                     "sample": {
                         "63763": _PortalObject(
@@ -553,7 +590,13 @@ class SequencingServiceTests(unittest.TestCase):
                                 "benchling_tissue_prep": _PortalObject("bfi_YDfmy058"),
                                 "benchling_extraction": _PortalObject("bfi_Z8oUWKtu"),
                             },
-                        )
+                        ),
+                        "DTOL14058388": _PortalObject(
+                            "DTOL14058388",
+                            to_one_relationships={
+                                "benchling_tissue_prep": _PortalObject("bfi_YDfmy058"),
+                            },
+                        ),
                     },
                     "tissue_prep": {
                         "bfi_YDfmy058": _PortalObject(
@@ -601,7 +644,9 @@ class SequencingServiceTests(unittest.TestCase):
 
         self.assertEqual(context["rna_run_accessions"], "ERR_RNA")
         self.assertEqual(context["rna_reads_millions"], "27.68")
-        self.assertEqual(context["sequencing_portal_matched_runs"], "48017_1#78")
+        self.assertEqual(context["hic_run_accessions"], "ERR_HIC")
+        self.assertEqual(context["hic_reads_millions"], "466.49")
+        self.assertEqual(context["sequencing_portal_matched_runs"], "48017_1#78; 48375_4#1")
         self.assertEqual(context["rna_mlwh_library_id"], "SQPP-7472-W:F10")
         self.assertEqual(context["rna_portal_sample_uid"], "63763")
         self.assertEqual(context["rna_portal_sample_organism_part"], "HEAD, THORAX")
@@ -614,6 +659,12 @@ class SequencingServiceTests(unittest.TestCase):
         self.assertEqual(context["rna_portal_extraction_volume_ul"], "45")
         self.assertEqual(context["rna_portal_rna_yield"], "1503")
         self.assertEqual(context["rna_portal_rna_qc_passfail"], "Yes")
+        self.assertEqual(context["hic_mlwh_library_id"], "SQPP-46946-Q:A1")
+        self.assertEqual(context["hic_mlwh_pipeline_id_lims"], "Hi-C - Arima v2")
+        self.assertEqual(context["hic_portal_sample_uid"], "63763")
+        self.assertEqual(context["hic_portal_tissue_prep_uid"], "bfi_YDfmy058")
+        self.assertEqual(context["hic_portal_tissue_prep_name"], "TissuePrep_idTetArro2_15015")
+        self.assertNotIn("hic_portal_extraction_uid", context)
 
     def test_build_context_processes_only_projects_with_read_data(self) -> None:
         runinfo_df = pd.DataFrame(
