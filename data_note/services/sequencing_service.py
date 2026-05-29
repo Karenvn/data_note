@@ -203,7 +203,8 @@ class SequencingService:
         )
         read_study_df = portal_result.dataframe
         read_study_df, qc_excluded_runs, qc_excluded_portal_runs = self._filter_failed_qc_rows(
-            read_study_df
+            read_study_df,
+            protected_run_accessions=assembly_run_accessions,
         )
         technology_df = self._select_columns(read_study_df)
         technology_df = self._normalise_read_count_units(technology_df)
@@ -640,17 +641,24 @@ class SequencingService:
         return filtered, excluded
 
     @staticmethod
-    def _filter_failed_qc_rows(read_study_df: pd.DataFrame) -> tuple[pd.DataFrame, list[str], list[str]]:
+    def _filter_failed_qc_rows(
+        read_study_df: pd.DataFrame,
+        *,
+        protected_run_accessions: set[str] | None = None,
+    ) -> tuple[pd.DataFrame, list[str], list[str]]:
         if read_study_df.empty:
             return read_study_df, [], []
 
         excluded_runs: list[str] = []
         excluded_portal_runs: list[str] = []
+        protected = protected_run_accessions or set()
 
         def keep_row(row: pd.Series) -> bool:
             if not SequencingService._row_has_failed_qc(row):
                 return True
             run_accession = SequencingService._string_value(row.get("run_accession"))
+            if run_accession and run_accession in protected:
+                return True
             portal_run = SequencingService._string_value(row.get("portal_run_id"))
             if run_accession:
                 excluded_runs.append(run_accession)

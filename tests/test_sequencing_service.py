@@ -472,6 +472,80 @@ class SequencingServiceTests(unittest.TestCase):
         self.assertEqual(context["pacbio_multiplexing"], "barcode bc2039")
         self.assertNotIn("LIB_FAIL", str(context["technology_data"]["pacbio"]))
 
+    def test_build_context_keeps_assembly_linked_run_with_failed_portal_qc(self) -> None:
+        runinfo_df = pd.DataFrame(
+            [
+                {
+                    "study_accession": "PRJEB1",
+                    "run_accession": "ERR_ASSEMBLY",
+                    "sample_accession": "SAMEA1",
+                    "fastq_bytes": 100,
+                    "submitted_bytes": 100,
+                    "read_count": 1_000,
+                    "instrument_model": "Revio",
+                    "base_count": 2_000,
+                    "instrument_platform": "PACBIO_SMRT",
+                    "library_strategy": "WGS",
+                    "library_name": "LIB_ASSEMBLY",
+                    "library_construction_protocol": "PacBio - HiFi",
+                    "submitted_ftp": "ftp://example/m64097e_221010_045249.ccs.bc1008.bam",
+                    "metadata_source": "ena",
+                    "read_count_basis": "reads",
+                }
+            ]
+        )
+        assembly_selection = AssemblySelection(
+            assemblies_type="prim_alt",
+            primary=AssemblyRecord(
+                accession="GCA_1.1",
+                assembly_name="ixFooBar1.1",
+                role="primary",
+            ),
+        )
+        portal_runs = [
+            _PortalObject(
+                "m64097e_221010_045249#1008",
+                {
+                    "tolqc_reporting_category": "pacbio",
+                    "tolqc_reads": 1_000,
+                    "tolqc_bases": 2_000,
+                    "mlwh_lims_qc": "fail",
+                    "mlwh_qc_seq_state": "Failed",
+                    "mlwh_biosample_accession": "SAMEA1",
+                    "mlwh_irods_file": "m64097e_221010_045249.ccs.bc1008.bam",
+                    "mlwh_library_id": "LIB_ASSEMBLY",
+                    "mlwh_pac_bio_library_tube_name": "LIB_ASSEMBLY",
+                    "mlwh_run_id": "m64097e_221010_045249",
+                    "mlwh_tag1_id": "bc1008",
+                },
+            ),
+        ]
+        portal_service = PortalSequencingService(datasource_factory=lambda: _PortalDatasource(portal_runs))
+        service = SequencingService(
+            fetch_service=StubSequencingFetchService(runinfo_df, {"ERR_ASSEMBLY"}),
+            portal_service=portal_service,
+            biosample_tolid_getter=lambda biosamples: {"SAMEA1": "ixFooBar1"},
+            sequencing_source="public-with-portal",
+        )
+
+        summary = service.build_context(
+            ["PRJEB1"],
+            "ixFooBar1",
+            assembly_selection=assembly_selection,
+        )
+        context = summary.to_context_dict()
+
+        self.assertEqual(context["pacbio_run_accessions"], "ERR_ASSEMBLY")
+        self.assertEqual(context["pacbio_protocols"], ["PacBio - HiFi"])
+        self.assertEqual(context["pacbio_sample_accession"], "SAMEA1")
+        self.assertEqual(context["technology_data"]["pacbio"]["pacbio_sample_accession"], "SAMEA1")
+        self.assertEqual(context.get("sequencing_qc_excluded_runs", ""), "")
+        self.assertEqual(context.get("sequencing_qc_excluded_portal_runs", ""), "")
+        self.assertEqual(
+            [run["read_accession"] for run in context["seq_data"]["PacBio"]],
+            ["ERR_ASSEMBLY"],
+        )
+
     def test_build_context_enriches_rna_from_related_sample_tolid_portal_run(self) -> None:
         runinfo_df = pd.DataFrame(
             [

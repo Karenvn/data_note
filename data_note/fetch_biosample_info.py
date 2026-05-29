@@ -63,6 +63,15 @@ def normalize_collection_date(value):
         return match.group("date")
     return stripped
 
+
+def title_preserving_possessives(value):
+    """
+    Title-case BioSamples text without turning possessives into ``'S``.
+    """
+    titled = str(value or "").title()
+    return re.sub(r"(?<=[A-Za-z])'S(?![a-z])", "'s", titled)
+
+
 def fetch_biosample_info(biosample_acc):
     """
     Fetch biosample information for a given biosample_acc from BioSamples.
@@ -136,17 +145,21 @@ def process_biosamples_sample_dict(row, tech_prefix):
     source_sample = row.get('sample_derived_from') or row.get('sample_same_as') or ''
 
     processed_dict = {
-        f'{tech_prefix}_collector': row.get('collected_by', '').title(),
-        f'{tech_prefix}_collector_institute': row.get('collecting_institution', '').title(),
-        f'{tech_prefix}_gal_name': row.get('gal', '').title(),
+        f'{tech_prefix}_collector': title_preserving_possessives(row.get('collected_by', '')),
+        f'{tech_prefix}_collector_institute': title_preserving_possessives(row.get('collecting_institution', '')),
+        f'{tech_prefix}_gal_name': title_preserving_possessives(row.get('gal', '')),
         f'{tech_prefix}_coll_date': normalize_collection_date(row.get('collection_date', '')),
-        f'{tech_prefix}_coll_location': format_location(
+        f'{tech_prefix}_coll_location': title_preserving_possessives(format_location(
             row.get('geographic_location_(region_and_locality)', ''),
-            row.get('geographic_location_(country_and/or_sea)', '')).title(),
+            row.get('geographic_location_(country_and/or_sea)', ''))),
         f'{tech_prefix}_coll_lat': round(safe_convert(row.get('geographic_location_(latitude)', 0), float, 0.0), 4),
         f'{tech_prefix}_coll_long': round(safe_convert(row.get('geographic_location_(longitude)', 0), float, 0.0), 4),
-        f'{tech_prefix}_identifier': normalize_pipe_delimited_values(row.get('identified_by', '')).title(),
-        f'{tech_prefix}_identifier_affiliation': normalize_pipe_delimited_values(row.get('identifier_affiliation', '')).title(),
+        f'{tech_prefix}_identifier': title_preserving_possessives(
+            normalize_pipe_delimited_values(row.get('identified_by', ''))
+        ),
+        f'{tech_prefix}_identifier_affiliation': title_preserving_possessives(
+            normalize_pipe_delimited_values(row.get('identifier_affiliation', ''))
+        ),
         f'{tech_prefix}_identified_how': row.get('identified_how', '').lower(),
         f'{tech_prefix}_sample_derived_from': source_sample,
         f'{tech_prefix}_sex': row.get('sex', '').lower(),

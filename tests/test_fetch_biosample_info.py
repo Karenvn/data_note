@@ -6,6 +6,7 @@ from data_note.fetch_biosample_info import (
     normalize_collection_date,
     normalize_pipe_delimited_values,
     process_biosamples_sample_dict,
+    title_preserving_possessives,
 )
 
 
@@ -49,6 +50,26 @@ class FetchBiosampleInfoTests(unittest.TestCase):
         processed = process_biosamples_sample_dict(row, "pacbio")
 
         self.assertEqual(processed["pacbio_coll_date"], "2022-11-01")
+
+    def test_title_preserving_possessives_keeps_lowercase_possessive_s(self) -> None:
+        self.assertEqual(
+            title_preserving_possessives("Wytham Woods | Bert's Pheasant Pen"),
+            "Wytham Woods | Bert's Pheasant Pen",
+        )
+        self.assertEqual(title_preserving_possessives("O'SULLIVAN"), "O'Sullivan")
+
+    def test_process_biosamples_sample_dict_preserves_possessive_locality(self) -> None:
+        row = {
+            "geographic_location_(region_and_locality)": "Wytham Woods | Bert's Pheasant Pen",
+            "geographic_location_(country_and/or_sea)": "United Kingdom",
+        }
+
+        processed = process_biosamples_sample_dict(row, "pacbio")
+
+        self.assertEqual(
+            processed["pacbio_coll_location"],
+            "Bert's Pheasant Pen, Wytham Woods, United Kingdom",
+        )
 
     def test_process_biosamples_sample_dict_deduplicates_identifier_and_affiliation(self) -> None:
         row = {
