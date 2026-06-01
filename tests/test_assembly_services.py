@@ -161,7 +161,10 @@ class BtkServiceTests(unittest.TestCase):
 
         service = BtkService(
             summary_fetcher=lambda accession, prefix="": {f"{prefix}summary_accession": accession},
-            software_versions_fetcher=lambda accession: {"software_accession": accession},
+            software_versions_fetcher=lambda accession: {
+                "software_accession": accession,
+                "busco_version": "5.8.0",
+            },
             url_builder=lambda accession, prefix="": (
                 {f"{prefix}view_url": f"view:{accession}"},
                 {f"{prefix}download_url": f"download:{accession}"},
@@ -207,7 +210,10 @@ class BtkServiceTests(unittest.TestCase):
     def test_build_context_uses_primary_record_from_selection(self) -> None:
         service = BtkService(
             summary_fetcher=lambda accession, prefix="": {f"{prefix}summary_accession": accession},
-            software_versions_fetcher=lambda accession: {"software_accession": accession},
+            software_versions_fetcher=lambda accession: {
+                "software_accession": accession,
+                "busco_version": "5.8.0",
+            },
             url_builder=lambda accession, prefix="": (
                 {f"{prefix}view_url": f"view:{accession}"},
                 {f"{prefix}download_url": f"download:{accession}"},
@@ -224,6 +230,7 @@ class BtkServiceTests(unittest.TestCase):
         self.assertIsInstance(summary, BtkSummary)
         self.assertEqual(context["summary_accession"], "GCA_1.1")
         self.assertEqual(context["software_accession"], "GCA_1.1")
+        self.assertEqual(context["btk_busco_version"], "5.8.0")
         self.assertEqual(context["view_url"], "view:GCA_1.1")
         self.assertEqual(context["download_url"], "download:GCA_1.1")
 

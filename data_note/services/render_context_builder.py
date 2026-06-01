@@ -63,6 +63,7 @@ class RenderContextBuilder:
         note_context = self.derive_note_fields(note_data)
         if corrections_file:
             self.correction_loader(note_context, corrections_file)
+        self._prefer_btk_busco_version(note_context)
         self._apply_assembly_rendering_context(note_context)
         populate_sampling_template_fields(note_context)
         note_context.update(self.wet_lab_protocol_builder(note_context))
@@ -102,3 +103,9 @@ class RenderContextBuilder:
         if not note_context["has_alternate_assembly"]:
             for key in ("alt_accession", "alt_assembly_name", "alt_QV", "alt_kmer_completeness"):
                 note_context.pop(key, None)
+
+    @staticmethod
+    def _prefer_btk_busco_version(note_context: NoteContext) -> None:
+        btk_busco_version = note_context.get("btk_busco_version")
+        if btk_busco_version not in (None, ""):
+            note_context["busco_version"] = btk_busco_version

@@ -48,7 +48,7 @@ class BtkService:
 
         try:
             btk_summary.primary = self._build_record(btk_accession)
-            btk_summary.shared_fields.update(self.software_versions_fetcher(btk_accession) or {})
+            btk_summary.shared_fields.update(self._software_version_context(btk_accession))
         except Exception as exc:
             logger.warning("BTK data missing or failed for %s: %s", btk_accession, exc)
 
@@ -59,7 +59,7 @@ class BtkService:
             hap1_btk_accession = self._resolve_accession(hap1_accession)
             try:
                 btk_summary.hap1 = self._build_record(hap1_btk_accession, prefix="hap1_")
-                btk_summary.shared_fields.update(self.software_versions_fetcher(hap1_btk_accession) or {})
+                btk_summary.shared_fields.update(self._software_version_context(hap1_btk_accession))
             except Exception as exc:
                 logger.warning("BTK data missing or failed for hap1 %s: %s", hap1_btk_accession, exc)
         else:
@@ -84,6 +84,14 @@ class BtkService:
             view_urls=view_urls or {},
             download_urls=download_urls or {},
         )
+
+    def _software_version_context(self, accession: str) -> dict[str, Any]:
+        versions = dict(self.software_versions_fetcher(accession) or {})
+        busco_version = versions.get("btk_busco_version") or versions.get("busco_version")
+        if busco_version not in (None, ""):
+            versions["busco_version"] = busco_version
+            versions.setdefault("btk_busco_version", busco_version)
+        return versions
 
     def _resolve_accession(self, accession: str) -> str:
         resolver = self.accession_resolver

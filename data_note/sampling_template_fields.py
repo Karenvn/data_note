@@ -5,12 +5,25 @@ from typing import Any
 
 
 _TECHNOLOGIES: tuple[str, ...] = ("pacbio", "hic", "rna", "isoseq")
+_SAMPLING_PARAGRAPH_TECHNOLOGIES: tuple[str, ...] = ("pacbio", "hic", "rna")
 _IDENTITY_FIELDS: tuple[str, ...] = (
     "specimen_id",
     "tolid",
     "sample_derived_from",
     "sample_accession",
 )
+_TECHNOLOGY_USE_LABELS = {
+    "pacbio": "genome sequencing",
+    "hic": "Hi-C sequencing",
+    "rna": "RNA sequencing",
+    "isoseq": "Iso-Seq sequencing",
+}
+_TECHNOLOGY_SPECIMEN_LABELS = {
+    "pacbio": "genome-sequencing",
+    "hic": "Hi-C",
+    "rna": "RNA",
+    "isoseq": "Iso-Seq",
+}
 _MISSING_ORGANISM_PARTS = {
     "na",
     "n/a",
@@ -18,6 +31,11 @@ _MISSING_ORGANISM_PARTS = {
     "not collected",
     "not provided",
     "unknown",
+}
+_MISSING_TEXT_VALUES = _MISSING_ORGANISM_PARTS | {
+    "missing",
+    "none",
+    "null",
 }
 
 
@@ -108,6 +126,333 @@ def _populate_relationship_fields(context: MutableMapping[str, Any]) -> None:
 
     isoseq_label = _clean_string(context.get("isoseq_specimen_label"))
     context["isoseq_specimen_reference"] = _with_label("the Iso-Seq specimen", isoseq_label)
+    context["sampling_specimen_paragraph"] = _format_sampling_specimen_paragraph(context)
+
+
+def _format_sampling_specimen_paragraph(context: MutableMapping[str, Any]) -> str:
+    groups = _build_specimen_groups(context)
+    if not groups:
+        return ""
+    if len(groups) == 1:
+        return _format_single_specimen_paragraph(context, groups[0])
+    return _format_multiple_specimen_paragraph(context, groups)
+
+
+def _build_specimen_groups(context: MutableMapping[str, Any]) -> list[dict[str, Any]]:
+    groups: list[dict[str, Any]] = []
+    for tech in _SAMPLING_PARAGRAPH_TECHNOLOGIES:
+        if not _has_specimen_context(context, tech):
+            continue
+
+        for group in groups:
+            if _relationship(context, tech, group["representative"]) == "same":
+                group["technologies"].append(tech)
+                break
+        else:
+            groups.append({"representative": tech, "technologies": [tech]})
+
+    return groups
+
+
+def _has_specimen_context(context: MutableMapping[str, Any], tech: str) -> bool:
+    if tech == "pacbio" and _metadata_text(context.get("species")):
+        return True
+    return any(
+        _metadata_text(context.get(f"{tech}_{field_name}"))
+        for field_name in _IDENTITY_FIELDS
+    )
+
+
+def _format_single_specimen_paragraph(context: MutableMapping[str, Any], group: dict[str, Any]) -> str:
+    techs = group["technologies"]
+    representative = group["representative"]
+    label = _format_parenthetical_specimen_label(
+        context,
+        representative,
+        include_figure="pacbio" in techs,
+    )
+    specimen_description = _format_singular_specimen_description(context, representative)
+
+    if "pacbio" in techs:
+        sentences = [f"The specimen used for genome sequencing was {specimen_description}{label}."]
+        additional_techs = [tech for tech in techs if tech != "pacbio"]
+        if additional_techs:
+            sentences.append(
+                f"The same specimen was also used for {_format_technology_use_phrase(additional_techs)}."
+            )
+    else:
+        sentences = [
+            f"The {_format_group_specimen_noun(techs)} was {specimen_description}{label}."
+        ]
+
+    collection_sentence = _format_collection_sentence(
+        context,
+        representative,
+        subject="It",
+        be_verb="was",
+        object_pronoun="it",
+    )
+    if collection_sentence:
+        sentences.append(collection_sentence)
+    return " ".join(sentences)
+
+
+def _format_multiple_specimen_paragraph(
+    context: MutableMapping[str, Any],
+    groups: list[dict[str, Any]],
+) -> str:
+    count_word = _count_word(len(groups))
+    specimen_description = _format_plural_specimen_description(context, groups)
+    specimen_items = [
+        _format_specimen_group_item(context, group)
+        for group in groups
+    ]
+    sentences = [
+        f"{_sentence_start(count_word)} {specimen_description} were used: {_natural_join(specimen_items)}."
+    ]
+
+    if _groups_share_collection_sentence(context, groups):
+        collection_sentence = _format_collection_sentence(
+            context,
+            groups[0]["representative"],
+            subject=f"All {count_word}",
+            be_verb="were",
+            object_pronoun="them",
+        )
+        if collection_sentence:
+            sentences.append(collection_sentence)
+    else:
+        for group in groups:
+            collection_sentence = _format_collection_sentence(
+                context,
+                group["representative"],
+                subject=_sentence_start(f"the {_format_group_specimen_noun(group['technologies'])}"),
+                be_verb="was",
+                object_pronoun="it",
+            )
+            if collection_sentence:
+                sentences.append(collection_sentence)
+
+    return " ".join(sentences)
+
+
+def _format_specimen_group_item(context: MutableMapping[str, Any], group: dict[str, Any]) -> str:
+    techs = group["technologies"]
+    label = _format_parenthetical_specimen_label(
+        context,
+        group["representative"],
+        include_figure="pacbio" in techs,
+    )
+    return f"the {_format_group_specimen_noun(techs)}{label}"
+
+
+def _format_singular_specimen_description(context: MutableMapping[str, Any], tech: str) -> str:
+    parts = [
+        _metadata_text(context.get(f"{tech}_lifestage")),
+        _metadata_text(context.get(f"{tech}_sex")) or _metadata_text(context.get("observed_sex")),
+    ]
+    descriptor = " ".join(part for part in parts if part)
+    species = _format_species(context)
+    noun_phrase = " ".join(part for part in (descriptor, species) if part)
+    if not noun_phrase:
+        noun_phrase = "specimen"
+    return f"{_indefinite_article(noun_phrase)} {noun_phrase}"
+
+
+def _format_plural_specimen_description(
+    context: MutableMapping[str, Any],
+    groups: list[dict[str, Any]],
+) -> str:
+    lifestage = _common_group_field(context, groups, "lifestage")
+    sex = _common_group_field(context, groups, "sex", fallback_key="observed_sex")
+    descriptor = " ".join(part for part in (lifestage, sex) if part)
+    species = _format_species(context)
+    return " ".join(part for part in (descriptor, species, "specimens") if part)
+
+
+def _common_group_field(
+    context: MutableMapping[str, Any],
+    groups: list[dict[str, Any]],
+    field_name: str,
+    *,
+    fallback_key: str | None = None,
+) -> str:
+    values: list[str] = []
+    for group in groups:
+        representative = group["representative"]
+        value = _metadata_text(context.get(f"{representative}_{field_name}"))
+        if not value and fallback_key:
+            value = _metadata_text(context.get(fallback_key))
+        values.append(value)
+
+    present_values = [value for value in values if value]
+    if len(present_values) != len(values):
+        return ""
+    first = present_values[0]
+    if all(value.casefold() == first.casefold() for value in present_values):
+        return first
+    return ""
+
+
+def _format_species(context: MutableMapping[str, Any]) -> str:
+    species = _metadata_text(context.get("species"))
+    if not species:
+        return ""
+    if species.startswith("*") and species.endswith("*"):
+        return species
+    return f"*{species}*"
+
+
+def _format_parenthetical_specimen_label(
+    context: MutableMapping[str, Any],
+    tech: str,
+    *,
+    include_figure: bool,
+) -> str:
+    parts = []
+    label = _metadata_text(context.get(f"{tech}_specimen_label"))
+    if label:
+        parts.append(label)
+    if include_figure:
+        parts.append("Figure [-@fig:Fig_1]")
+    if not parts:
+        return ""
+    return f" ({'; '.join(parts)})"
+
+
+def _format_group_specimen_noun(techs: list[str]) -> str:
+    labels = [
+        _TECHNOLOGY_SPECIMEN_LABELS[tech]
+        for tech in techs
+        if tech in _TECHNOLOGY_SPECIMEN_LABELS
+    ]
+    if not labels:
+        return "specimen"
+    return f"{_natural_join(labels)} specimen"
+
+
+def _format_technology_use_phrase(techs: list[str]) -> str:
+    labels = [
+        _TECHNOLOGY_USE_LABELS[tech]
+        for tech in techs
+        if tech in _TECHNOLOGY_USE_LABELS
+    ]
+    return _natural_join(labels)
+
+
+def _format_collection_sentence(
+    context: MutableMapping[str, Any],
+    tech: str,
+    *,
+    subject: str,
+    be_verb: str,
+    object_pronoun: str,
+) -> str:
+    collection_phrase = _format_collection_phrase(context, tech)
+    collector = _metadata_text(context.get(f"{tech}_collector_display"))
+    identifier = _metadata_text(context.get(f"{tech}_identifier_display"))
+    preserv_method = _metadata_text(context.get(f"{tech}_preserv_method"))
+
+    if collection_phrase:
+        sentence = f"{subject} {be_verb} collected {collection_phrase}"
+        if collector:
+            sentence += f" by {collector}"
+        if identifier:
+            if collector and collector.casefold() == identifier.casefold():
+                sentence += f", who also identified {object_pronoun}"
+            else:
+                sentence += f" and identified by {identifier}"
+        if preserv_method:
+            sentence += f" and preserved {preserv_method}"
+        return f"{sentence}."
+
+    actions: list[str] = []
+    if collector and identifier and collector.casefold() == identifier.casefold():
+        actions.append(f"collected and identified by {collector}")
+    else:
+        if collector:
+            actions.append(f"collected by {collector}")
+        if identifier:
+            actions.append(f"identified by {identifier}")
+    if preserv_method:
+        actions.append(f"preserved {preserv_method}")
+
+    if not actions:
+        return ""
+    return f"{subject} {be_verb} {_natural_join(actions)}."
+
+
+def _format_collection_phrase(context: MutableMapping[str, Any], tech: str) -> str:
+    location = _metadata_text(context.get(f"{tech}_coll_location"))
+    latitude = _metadata_text(context.get(f"{tech}_coll_lat_display")) or _metadata_text(
+        context.get(f"{tech}_coll_lat")
+    )
+    longitude = _metadata_text(context.get(f"{tech}_coll_long_display")) or _metadata_text(
+        context.get(f"{tech}_coll_long")
+    )
+    date = _metadata_text(context.get(f"{tech}_coll_date"))
+
+    phrase = ""
+    if location:
+        phrase = f"from {location}"
+        if latitude and longitude:
+            phrase += f" (latitude {latitude}, longitude {longitude})"
+    elif latitude and longitude:
+        phrase = f"from latitude {latitude}, longitude {longitude}"
+
+    if date:
+        phrase = f"{phrase} on {date}" if phrase else f"on {date}"
+    return phrase
+
+
+def _groups_share_collection_sentence(
+    context: MutableMapping[str, Any],
+    groups: list[dict[str, Any]],
+) -> bool:
+    representatives = [group["representative"] for group in groups]
+    compared_fields = ("collector_display", "identifier_display", "preserv_method")
+    collection_phrases = [_format_collection_phrase(context, tech) for tech in representatives]
+    field_values = [
+        [_metadata_text(context.get(f"{tech}_{field_name}")) for tech in representatives]
+        for field_name in compared_fields
+    ]
+
+    has_any_summary_detail = any(collection_phrases) or any(any(values) for values in field_values)
+    if not has_any_summary_detail:
+        return False
+
+    if any(collection_phrases):
+        first_collection = collection_phrases[0]
+        if not first_collection or any(phrase.casefold() != first_collection.casefold() for phrase in collection_phrases):
+            return False
+
+    for values in field_values:
+        present_values = [value for value in values if value]
+        if present_values and (
+            len(present_values) != len(values)
+            or any(value.casefold() != present_values[0].casefold() for value in present_values)
+        ):
+            return False
+
+    return True
+
+
+def _count_word(value: int) -> str:
+    words = {
+        1: "one",
+        2: "two",
+        3: "three",
+        4: "four",
+    }
+    return words.get(value, str(value))
+
+
+def _indefinite_article(phrase: str) -> str:
+    text = phrase.strip()
+    if not text:
+        return "a"
+    first_word = text.strip("*").split(maxsplit=1)[0]
+    return "an" if first_word[:1].casefold() in {"a", "e", "i", "o", "u"} else "a"
 
 
 def _relationship(context: MutableMapping[str, Any], left: str, right: str) -> str:
@@ -115,8 +460,8 @@ def _relationship(context: MutableMapping[str, Any], left: str, right: str) -> s
     shared_conflict = False
 
     for field_name in _IDENTITY_FIELDS:
-        left_value = _clean_string(context.get(f"{left}_{field_name}"))
-        right_value = _clean_string(context.get(f"{right}_{field_name}"))
+        left_value = _metadata_text(context.get(f"{left}_{field_name}"))
+        right_value = _metadata_text(context.get(f"{right}_{field_name}"))
         if not left_value or not right_value:
             continue
         if left_value.casefold() == right_value.casefold():
@@ -133,10 +478,10 @@ def _relationship(context: MutableMapping[str, Any], left: str, right: str) -> s
 
 def _format_specimen_label(context: MutableMapping[str, Any], tech: str) -> str:
     parts: list[str] = []
-    specimen_id = _clean_string(context.get(f"{tech}_specimen_id"))
-    tolid = _clean_string(context.get(f"{tech}_tolid"))
-    sample_accession = _clean_string(context.get(f"{tech}_sample_accession"))
-    source_individual = _clean_string(context.get(f"{tech}_sample_derived_from"))
+    specimen_id = _metadata_text(context.get(f"{tech}_specimen_id"))
+    tolid = _metadata_text(context.get(f"{tech}_tolid"))
+    sample_accession = _metadata_text(context.get(f"{tech}_sample_accession"))
+    source_individual = _metadata_text(context.get(f"{tech}_sample_derived_from"))
 
     if specimen_id:
         parts.append(f"specimen ID {specimen_id}")
@@ -150,10 +495,10 @@ def _format_specimen_label(context: MutableMapping[str, Any], tech: str) -> str:
 
 
 def _format_specimen_short_label(context: MutableMapping[str, Any], tech: str) -> str:
-    tolid = _clean_string(context.get(f"{tech}_tolid"))
-    specimen_id = _clean_string(context.get(f"{tech}_specimen_id"))
-    source_individual = _clean_string(context.get(f"{tech}_sample_derived_from"))
-    sample_accession = _clean_string(context.get(f"{tech}_sample_accession"))
+    tolid = _metadata_text(context.get(f"{tech}_tolid"))
+    specimen_id = _metadata_text(context.get(f"{tech}_specimen_id"))
+    source_individual = _metadata_text(context.get(f"{tech}_sample_derived_from"))
+    sample_accession = _metadata_text(context.get(f"{tech}_sample_accession"))
 
     if tolid:
         return f"{tolid} specimen"
@@ -172,15 +517,15 @@ def _preferred_short_label(
     *,
     fallback_tech: str | None = None,
 ) -> str:
-    if _clean_string(context.get(f"{tech}_tolid")) or _clean_string(context.get(f"{tech}_specimen_id")):
-        return _clean_string(context.get(f"{tech}_specimen_short_label"))
+    if _metadata_text(context.get(f"{tech}_tolid")) or _metadata_text(context.get(f"{tech}_specimen_id")):
+        return _metadata_text(context.get(f"{tech}_specimen_short_label"))
 
     if fallback_tech:
-        fallback_label = _clean_string(context.get(f"{fallback_tech}_specimen_short_label"))
+        fallback_label = _metadata_text(context.get(f"{fallback_tech}_specimen_short_label"))
         if fallback_label:
             return fallback_label
 
-    return _clean_string(context.get(f"{tech}_specimen_short_label"))
+    return _metadata_text(context.get(f"{tech}_specimen_short_label"))
 
 
 def _set_short_specimen_reference_fields(
@@ -196,8 +541,8 @@ def _set_short_specimen_reference_fields(
 
 
 def _same_collection_event(context: MutableMapping[str, Any], left: str, right: str) -> bool:
-    left_date = _clean_string(context.get(f"{left}_coll_date"))
-    right_date = _clean_string(context.get(f"{right}_coll_date"))
+    left_date = _metadata_text(context.get(f"{left}_coll_date"))
+    right_date = _metadata_text(context.get(f"{right}_coll_date"))
     if not left_date or not right_date or left_date != right_date:
         return False
 
@@ -321,3 +666,10 @@ def _sentence_start(text: str) -> str:
 
 def _clean_string(value: Any) -> str:
     return str(value).strip() if value is not None else ""
+
+
+def _metadata_text(value: Any) -> str:
+    text = _clean_string(value)
+    if text.casefold() in _MISSING_TEXT_VALUES:
+        return ""
+    return text

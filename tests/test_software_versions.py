@@ -68,6 +68,16 @@ genomescope_version: 2.0.1
 
         self.assertEqual(service.build_context(None), {})
 
+    def test_service_preserves_local_busco_version_separately(self) -> None:
+        service = SoftwareVersionService(
+            version_fetcher=lambda tolid, assets_root: {"busco_version": "5.7.1"}
+        )
+
+        versions = service.build_context("ixExample1")
+
+        self.assertEqual(versions["busco_version"], "5.7.1")
+        self.assertEqual(versions["local_busco_version"], "5.7.1")
+
     def test_table_uses_context_version_before_fallback(self) -> None:
         table = make_table5_rows({"species": "Example species", "treeval_version": "1.4.7"})
 
@@ -83,6 +93,24 @@ genomescope_version: 2.0.1
 
         self.assertIn("FastK,1.1", "\n".join(table["rows"]))
         self.assertNotIn("427104ea91c78c3b8b8b49f1a7d6bbeaa869ba1c", "\n".join(table["rows"]))
+
+    def test_table_always_displays_fastk_release(self) -> None:
+        table = make_table5_rows({"species": "Example species", "fastk_version": "1.2"})
+
+        self.assertIn("FastK,1.1", "\n".join(table["rows"]))
+        self.assertNotIn("FastK,1.2", "\n".join(table["rows"]))
+
+    def test_table_combines_btk_and_local_busco_versions(self) -> None:
+        table = make_table5_rows(
+            {
+                "species": "Example species",
+                "btk_busco_version": "5.8.0",
+                "busco_version": "5.8.0",
+                "local_busco_version": "5.7.1",
+            }
+        )
+
+        self.assertIn("BUSCO,5.8.0; 5.7.1", "\n".join(table["rows"]))
 
     def test_merquryfk_uses_manual_module_version_not_assembly_context(self) -> None:
         context = {"species": "Example species", "merquryfk_version": "assembly-derived-hash"}

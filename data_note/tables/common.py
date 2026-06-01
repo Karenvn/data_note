@@ -31,6 +31,19 @@ def software_version(context, key: str, fallback=None):
     return value
 
 
+def software_versions_used(context, *keys: str, fallback=None):
+    versions: list[str] = []
+    for key in keys:
+        value = context.get(key)
+        if value in (None, ""):
+            continue
+        for version in str(value).split(";"):
+            version = version.strip()
+            if version and version not in versions:
+                versions.append(version)
+    return "; ".join(versions) if versions else fallback
+
+
 def _looks_like_commit_hash(value) -> bool:
     return bool(re.fullmatch(r"[0-9a-fA-F]{7,40}", str(value).strip()))
 

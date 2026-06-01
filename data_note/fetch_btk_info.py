@@ -157,6 +157,7 @@ def fetch_software_versions(assembly_accession):
             "blobtk_version": sv.get("blobtk"),
             "blobtoolkit_version": sv.get("blobtoolkit"),
             "busco_version": sv.get("busco"),
+            "btk_busco_version": sv.get("busco"),
             "diamond_version": sv.get("diamond"),
             "minimap2_version": sv.get("minimap2"),
             "samtools_version": sv.get("samtools"),

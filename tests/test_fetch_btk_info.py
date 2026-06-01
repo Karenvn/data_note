@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 import requests
 
-from data_note.fetch_btk_info import fetch_and_parse_summary
+from data_note.fetch_btk_info import fetch_and_parse_summary, fetch_software_versions
 
 
 def _http_error(status_code: int) -> requests.exceptions.HTTPError:
@@ -44,6 +44,23 @@ class FetchBtkInfoTests(unittest.TestCase):
         self.assertEqual(result, {})
         output = "\n".join(logs.output)
         self.assertIn("Failed to fetch BTK summary for GCA_missing.1", output)
+
+    def test_software_versions_exposes_btk_busco_version(self) -> None:
+        response = Mock()
+        response.raise_for_status = Mock()
+        response.json.return_value = {
+            "release": "1.6.0",
+            "software_versions": {
+                "busco": "5.8.0",
+                "blobtoolkit": "4.2.1",
+            },
+        }
+
+        with patch("data_note.fetch_btk_info.requests.get", return_value=response):
+            versions = fetch_software_versions("GCA_1.1")
+
+        self.assertEqual(versions["busco_version"], "5.8.0")
+        self.assertEqual(versions["btk_busco_version"], "5.8.0")
 
 
 if __name__ == "__main__":

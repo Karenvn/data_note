@@ -13,4 +13,8 @@ class SoftwareVersionService:
     assets_root: str | Path | None = None
 
     def build_context(self, tolid: str | None) -> dict[str, Any]:
-        return self.version_fetcher(tolid, self.assets_root)
+        versions = dict(self.version_fetcher(tolid, self.assets_root))
+        busco_version = versions.get("busco_version")
+        if busco_version not in (None, ""):
+            versions.setdefault("local_busco_version", busco_version)
+        return versions

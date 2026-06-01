@@ -11,6 +11,7 @@ from data_note.models import (
     AssemblyRecord,
     AssemblySelection,
     BaseNoteInfo,
+    BtkSummary,
     NoteContext,
     NoteData,
     SequencingSummary,
@@ -128,6 +129,53 @@ class RenderContextBuilderTests(unittest.TestCase):
             self.assertEqual(context["ebp_reference_standard"], "6.C.Q40")
             self.assertTrue(context["ebp_reference_standard_met"])
             self.assertEqual(tuple(context["tables"].keys()), ("table1", "table2", "table3", "table4", "table5"))
+
+    def test_build_prefers_btk_busco_version_for_text_and_keeps_all_table_versions(self) -> None:
+        builder = RenderContextBuilder()
+        note_data = NoteData(
+            base=BaseNoteInfo.from_mapping(
+                {
+                    "bioproject": "PRJEB1",
+                    "tolid": "ixExample1",
+                    "assemblies_type": "prim_alt",
+                }
+            ),
+            taxonomy=TaxonomyInfo(
+                tax_id="9606",
+                species="Example species",
+                lineage="Eukaryota; Metazoa",
+            ),
+            assembly=AssemblyBundle(
+                selection=AssemblySelection(
+                    assemblies_type="prim_alt",
+                    primary=AssemblyRecord(
+                        accession="GCA_1.1",
+                        assembly_name="ixExample1.1",
+                        role="primary",
+                    ),
+                ),
+                datasets=_DatasetsStub(),
+                btk=BtkSummary(
+                    assemblies_type="prim_alt",
+                    shared_fields={
+                        "busco_version": "5.8.0",
+                        "btk_busco_version": "5.8.0",
+                    },
+                ),
+            ),
+            extra_sections=[
+                {
+                    "busco_version": "5.7.1",
+                    "local_busco_version": "5.7.1",
+                }
+            ],
+        )
+
+        context = builder.build(note_data, DarwinProfile())
+        versions = {row[0]: row[1] for row in context["tables"]["table5"]["native_rows"]}
+
+        self.assertEqual(context["busco_version"], "5.8.0")
+        self.assertEqual(versions["BUSCO"], "5.8.0; 5.7.1")
 
     def test_build_applies_haploid_context_override_and_suppresses_alt_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

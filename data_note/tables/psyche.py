@@ -13,6 +13,7 @@ from .common import (
     resolve_single_assembly_phrase,
     safe_str,
     software_version,
+    software_versions_used,
 )
 from .darwin import make_table2_rows as _make_table2_rows, make_table4_rows as _make_table4_rows
 
@@ -258,11 +259,11 @@ def make_table5_rows(context):
     software_list = [
         ("BLAST", software_version(context, "blast_version", "2.14.0"), "[ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/](ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/)"),
         ("BlobToolKit", context.get("blobtoolkit_version"), "[https://github.com/blobtoolkit/blobtoolkit](https://github.com/blobtoolkit/blobtoolkit)"),
-        ("BUSCO", context.get("busco_version"), "[https://gitlab.com/ezlab/busco](https://gitlab.com/ezlab/busco)"),
+        ("BUSCO", software_versions_used(context, "btk_busco_version", "busco_version", "local_busco_version"), "[https://gitlab.com/ezlab/busco](https://gitlab.com/ezlab/busco)"),
         ("bwa-mem2", software_version(context, "bwa_mem2_version", "2.2.1"), "[https://github.com/bwa-mem2/bwa-mem2](https://github.com/bwa-mem2/bwa-mem2)"),
         ("DIAMOND", context.get("diamond_version"), "[https://github.com/bbuchfink/diamond](https://github.com/bbuchfink/diamond)"),
         ("fasta_windows", software_version(context, "fasta_windows_version", "0.2.4"), "[https://github.com/tolkit/fasta_windows](https://github.com/tolkit/fasta_windows)"),
-        ("FastK", software_version(context, "fastk_version", "1.1"), "[https://github.com/thegenemyers/FASTK](https://github.com/thegenemyers/FASTK)"),
+        ("FastK", "1.1", "[https://github.com/thegenemyers/FASTK](https://github.com/thegenemyers/FASTK)"),
         ("GenomeScope2.0", software_version(context, "genomescope_version", "2.0.1"), "[https://github.com/tbenavi1/genomescope2.0](https://github.com/tbenavi1/genomescope2.0)"),
         ("Gfastats", software_version(context, "gfastats_version", "1.3.6"), "[https://github.com/vgl-hub/gfastats](https://github.com/vgl-hub/gfastats)"),
         ("Hifiasm", context.get("hifiasm_version"), "[https://github.com/chhylp123/hifiasm](https://github.com/chhylp123/hifiasm)"),
