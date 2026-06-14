@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from collections import Counter, defaultdict
+import csv
+import logging
 import os
 from pathlib import Path
 import re
@@ -29,6 +32,7 @@ GN_ASSETS_ROOT = Path(
 
 ACCESSION_RE = re.compile(r"^[A-Z]{1,4}_?\d{5,}(?:\.\d+)?$")
 CHROMOSOME_TITLE_RE = re.compile(r"\bchromosome:?\s*([^,;]+)", re.IGNORECASE)
+MERIAN_ELEMENTS = frozenset({"MZ", *(f"M{i}" for i in range(1, 32))})
 
 
 def _merian_tsv_candidates(tolid: str) -> tuple[Path, ...]:
@@ -36,6 +40,35 @@ def _merian_tsv_candidates(tolid: str) -> tuple[Path, ...]:
         GN_ASSETS_ROOT / "merian" / tolid / "all_location.tsv",
         GN_ASSETS_ROOT / "merians" / tolid / "all_location.tsv",
     )
+
+
+def _busco_table_candidates(tolid: str) -> tuple[Path, ...]:
+    configured_roots = [
+        os.getenv("DATA_NOTE_BUSCO_DIR"),
+        os.getenv("BUSCO_DIR"),
+        GN_ASSETS_ROOT / "busco",
+    ]
+    names = ("full_table_hap1.1.tsv", "full_table.hap1.1.tsv", "full_table.tsv")
+    candidates: list[Path] = []
+    for root in configured_roots:
+        if not root:
+            continue
+        root_path = Path(root)
+        for base in (root_path / tolid, root_path):
+            candidates.extend(base / name for name in names)
+    return tuple(dict.fromkeys(candidates))
+
+
+def _merian_reference_candidates() -> tuple[Path, ...]:
+    env_reference = os.getenv("DATA_NOTE_MERIAN_REFERENCE") or os.getenv("DATA_NOTE_MERIAN_REFERENCE_TABLE")
+    candidates = [
+        Path(env_reference) if env_reference else None,
+        GN_ASSETS_ROOT / "Merian_elements_full_table.tsv",
+        GN_ASSETS_ROOT / "merian" / "Merian_elements_full_table.tsv",
+        GN_ASSETS_ROOT / "merians" / "Merian_elements_full_table.tsv",
+        Path.home() / "Documents" / "Psyche_2026" / "scripts" / "merian_plotting" / "Merian_elements_full_table.tsv",
+    ]
+    return tuple(dict.fromkeys(candidate for candidate in candidates if candidate is not None))
 
 
 def chrom_to_merian(tsv_file: str | Path, threshold: int = 5) -> dict[str, str]:
@@ -53,6 +86,65 @@ def chrom_to_merian(tsv_file: str | Path, threshold: int = 5) -> dict[str, str]:
         .to_dict()
     )
     return _with_accession_aliases(assignments)
+
+
+def _read_merian_reference(reference_table: Path) -> dict[str, str]:
+    ref_map: dict[str, str] = {}
+    with reference_table.open(newline="") as handle:
+        reader = csv.reader(handle, delimiter="\t")
+        for row in reader:
+            if not row or row[0].startswith("#") or len(row) < 3:
+                continue
+            busco_id = row[0].strip()
+            merian = row[2].strip().upper()
+            if busco_id.lower().startswith("busco") or merian not in MERIAN_ELEMENTS:
+                continue
+            ref_map[busco_id] = merian
+    return ref_map
+
+
+def _chrom_to_merian_from_busco(
+    query_table: str | Path,
+    reference_table: str | Path,
+    threshold: int = 5,
+) -> dict[str, str]:
+    ref_map = _read_merian_reference(Path(reference_table))
+    if not ref_map:
+        return {}
+
+    counts: defaultdict[str, Counter[str]] = defaultdict(Counter)
+    with Path(query_table).open(newline="") as handle:
+        reader = csv.reader(handle, delimiter="\t")
+        for row in reader:
+            if not row or row[0].startswith("#") or len(row) < 5:
+                continue
+            status = row[1].strip()
+            if status not in {"Complete", "Duplicated"}:
+                continue
+            merian = ref_map.get(row[0].strip())
+            if not merian:
+                continue
+            chrom = _normalise_merian_key(row[2])
+            if chrom:
+                counts[chrom][merian] += 1
+
+    assignments = {
+        chrom: ";".join(sorted(merian for merian, count in counter.items() if count >= threshold))
+        for chrom, counter in counts.items()
+    }
+    return _with_accession_aliases({chrom: merian for chrom, merian in assignments.items() if merian})
+
+
+def _derive_merian_dict_from_busco(tolid: str, threshold: int = 5) -> dict[str, str]:
+    query_table = next((candidate for candidate in _busco_table_candidates(tolid) if candidate.is_file()), None)
+    reference_table = next((candidate for candidate in _merian_reference_candidates() if candidate.is_file()), None)
+    if not query_table or not reference_table:
+        return {}
+    try:
+        return _chrom_to_merian_from_busco(query_table, reference_table, threshold=threshold)
+    except Exception as exc:
+        logging.warning("Could not derive Merian assignments from BUSCO for %s: %s", tolid, exc)
+        return {}
 
 
 def _normalise_merian_key(value) -> str:
@@ -153,9 +245,9 @@ def merian_dict(tolid: str | None, threshold: int = 5) -> dict[str, str]:
         if candidate.is_file():
             try:
                 return chrom_to_merian(candidate, threshold=threshold)
-            except Exception:
-                return {}
-    return {}
+            except Exception as exc:
+                logging.warning("Could not read Merian assignment table %s: %s", candidate, exc)
+    return _derive_merian_dict_from_busco(tolid, threshold=threshold)
 
 
 def _format_read_count_cell(context: dict, prefix: str) -> str:

@@ -61,8 +61,18 @@ def copy_merqury_image(tolid, download_dir, output_stem="Fig_4_Merqury"):
         return None
 
 
+def merian_output_dir(tolid):
+    """Return the Merian output directory, accepting current and legacy names."""
+    base = Path(GN_ASSETS_ROOT)
+    for dirname in ("merians", "merian"):
+        candidate = base / dirname / tolid
+        if candidate.exists():
+            return candidate
+    return base / "merians" / tolid
+
+
 def copy_merian_image(tolid, download_dir, output_stem="Fig_3_Merian"):
-    merian_dir = Path(GN_ASSETS_ROOT) / "merian" / tolid
+    merian_dir = merian_output_dir(tolid)
     if not merian_dir.exists():
         logging.warning(f"Merian directory not found for {tolid}: {merian_dir}")
         return None

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -91,6 +93,48 @@ class PsycheTableTests(unittest.TestCase):
             table = make_table3_rows(context)
 
         self.assertEqual(table["native_rows"][0][-1], "M1;M19")
+
+    def test_make_table3_rows_derives_merian_assignments_from_busco_when_location_table_missing(self) -> None:
+        context = {
+            "assemblies_type": "hap_asm",
+            "species": "Caloptilia hemidactylella",
+            "tolid": "ilCalHemi2",
+            "hap1_assembly_level": "chromosome",
+            "hap2_assembly_level": "chromosome",
+            "chromosome_data": [
+                {
+                    "hap1_INSDC": "OZ253990.1",
+                    "hap1_molecule": "1",
+                    "hap1_length": "12.35",
+                    "hap1_GC": "38.50",
+                    "hap2_INSDC": "OZ253961.1",
+                    "hap2_molecule": "1",
+                    "hap2_length": "12.19",
+                    "hap2_GC": "38.50",
+                }
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            busco_dir = root / "busco" / "ilCalHemi2"
+            busco_dir.mkdir(parents=True)
+            (root / "Merian_elements_full_table.tsv").write_text(
+                "\n".join(f"{i}at7088\tComplete\tM8\t0\t1" for i in range(5)) + "\n"
+            )
+            (busco_dir / "full_table.tsv").write_text(
+                "# Busco id\tStatus\tSequence\tGene Start\tGene End\n"
+                + "\n".join(
+                    f"{i}at7088\tComplete\tOZ253990.1\t{100 + i}\t{200 + i}"
+                    for i in range(5)
+                )
+                + "\n"
+            )
+
+            with patch("data_note.tables.psyche.GN_ASSETS_ROOT", root):
+                table = make_table3_rows(context)
+
+        self.assertEqual(table["native_rows"][0][-1], "M8")
 
     def test_make_table3_rows_uses_ncbi_chromosome_alias_when_merian_accessions_changed(self) -> None:
         context = {
