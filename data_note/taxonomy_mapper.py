@@ -65,6 +65,10 @@ BTK_ACCESSION_OVERRIDES = {
         "accession": "GCA_964263255.1",
         "reason": "aLisVul1.2 adds mitochondrial sequence; BTK dataset is for the unchanged nuclear assembly in aLisVul1.1",
     },
+    "GCA_965112325.2": {
+        "accession": "GCA_965112325.1",
+        "reason": "PRJEB82199 uses cjHerHutc3.2 as the latest assembly; BTK dataset is available for cjHerHutc3.1",
+    },
 }
 
 def has_assembly_override(bioproject_id):

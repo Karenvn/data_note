@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import re
 
+from Bio import Entrez
 import pandas as pd
 
 from .common import (
@@ -25,6 +27,9 @@ GN_ASSETS_ROOT = Path(
     )
 )
 
+ACCESSION_RE = re.compile(r"^[A-Z]{1,4}_?\d{5,}(?:\.\d+)?$")
+CHROMOSOME_TITLE_RE = re.compile(r"\bchromosome:?\s*([^,;]+)", re.IGNORECASE)
+
 
 def _merian_tsv_candidates(tolid: str) -> tuple[Path, ...]:
     return (
@@ -35,18 +40,110 @@ def _merian_tsv_candidates(tolid: str) -> tuple[Path, ...]:
 
 def chrom_to_merian(tsv_file: str | Path, threshold: int = 5) -> dict[str, str]:
     df = pd.read_csv(tsv_file, sep="\t")
-    df["chrom"] = df["query_chr"].astype(str).str.split(":").str[0]
+    df["chrom"] = df["query_chr"].map(_normalise_merian_key)
     counts = (
         df.groupby(["chrom", "assigned_chr"])
         .size()
         .reset_index(name="n")
         .query("n >= @threshold")
     )
-    return (
+    assignments = (
         counts.groupby("chrom")["assigned_chr"]
         .apply(lambda s: ";".join(sorted(s.unique())))
         .to_dict()
     )
+    return _with_accession_aliases(assignments)
+
+
+def _normalise_merian_key(value) -> str:
+    if value in (None, ""):
+        return ""
+    return str(value).strip().split(":")[0]
+
+
+def _unversioned_accession(value: str) -> str:
+    return re.sub(r"\.\d+$", "", value.strip())
+
+
+def _candidate_lookup_keys(*values) -> tuple[str, ...]:
+    keys: list[str] = []
+    for value in values:
+        key = _normalise_merian_key(value)
+        if not key:
+            continue
+        keys.append(key)
+        keys.append(_unversioned_accession(key))
+        keys.append(key.upper())
+    return tuple(dict.fromkeys(keys))
+
+
+def _with_accession_aliases(assignments: dict[str, str]) -> dict[str, str]:
+    lookup = dict(assignments)
+    for key, value in assignments.items():
+        lookup.setdefault(_unversioned_accession(key), value)
+    return lookup
+
+
+def _ncbi_chromosome_aliases(accessions) -> dict[str, str]:
+    accession_list = sorted(
+        {
+            _normalise_merian_key(accession)
+            for accession in accessions
+            if ACCESSION_RE.fullmatch(_normalise_merian_key(accession))
+        }
+    )
+    if not accession_list:
+        return {}
+
+    if not Entrez.email:
+        Entrez.email = os.getenv("ENTREZ_EMAIL", "default_email")
+
+    aliases: dict[str, str] = {}
+    for index in range(0, len(accession_list), 100):
+        batch = accession_list[index : index + 100]
+        try:
+            with Entrez.esummary(db="nuccore", id=",".join(batch), retmode="xml") as handle:
+                summaries = Entrez.read(handle)
+        except Exception:
+            continue
+        for summary in summaries:
+            accession = str(summary.get("AccessionVersion") or "").strip()
+            title = str(summary.get("Title") or "")
+            match = CHROMOSOME_TITLE_RE.search(title)
+            if accession and match:
+                aliases[accession] = match.group(1).strip()
+    return aliases
+
+
+def _with_chromosome_aliases(lookup: dict[str, str]) -> dict[str, str]:
+    aliases = _ncbi_chromosome_aliases(lookup.keys())
+    if not aliases:
+        return lookup
+
+    expanded = dict(lookup)
+    for accession, molecule in aliases.items():
+        value = lookup.get(accession) or lookup.get(_unversioned_accession(accession))
+        if not value:
+            continue
+        for key in _candidate_lookup_keys(molecule):
+            expanded.setdefault(key, value)
+    return expanded
+
+
+def _lookup_merian(entry: dict, lookup: dict[str, str]) -> str | None:
+    for key in _candidate_lookup_keys(entry.get("INSDC"), entry.get("molecule")):
+        if key in lookup:
+            return lookup[key]
+    return None
+
+
+def _prepare_merian_lookup(tolid: str | None, chromosome_rows: list[dict]) -> dict[str, str]:
+    lookup = merian_dict(tolid)
+    if not lookup or not chromosome_rows:
+        return lookup
+    if any(_lookup_merian(entry, lookup) for entry in chromosome_rows):
+        return lookup
+    return _with_chromosome_aliases(lookup)
 
 
 def merian_dict(tolid: str | None, threshold: int = 5) -> dict[str, str]:
@@ -143,7 +240,6 @@ def make_table3_rows(context: dict) -> dict:
     species = context.get("species", "")
     tolid = context.get("tolid", "")
     assemblies_type = context.get("assemblies_type", "")
-    merian_lookup = merian_dict(tolid)
 
     def format_row(entry: dict, keys: list[str]) -> list[str]:
         return [flatten_cell(entry.get(k)) for k in keys]
@@ -187,9 +283,10 @@ def make_table3_rows(context: dict) -> dict:
                     "**Assigned Merian elements**",
                 ]
                 rows.append(",".join(native_headers))
+                merian_lookup = _prepare_merian_lookup(tolid, hap1_data)
                 for entry in hap1_data:
                     formatted = format_row(entry, ["INSDC", "molecule", "length", "GC"]) + [
-                        merian_lookup.get(entry.get("INSDC"), r"\-")
+                        _lookup_merian(entry, merian_lookup) or r"\-"
                     ]
                     rows.append(",".join(formatted))
                     native_rows.append(formatted)
@@ -220,9 +317,10 @@ def make_table3_rows(context: dict) -> dict:
             "**Assigned Merian elements**",
         ]
         rows.append(",".join(native_headers))
+        merian_lookup = _prepare_merian_lookup(tolid, chrom_data)
         for entry in chrom_data:
             formatted = format_row(entry, ["INSDC", "molecule", "length", "GC"]) + [
-                merian_lookup.get(entry.get("INSDC"), r"\-")
+                _lookup_merian(entry, merian_lookup) or r"\-"
             ]
             rows.append(",".join(formatted))
             native_rows.append(formatted)

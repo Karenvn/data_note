@@ -207,7 +207,7 @@ class AuthorService:
         given_names, family_name = self._split_person_name(
             row["given_names"], row["family_name"], row["canonical_name"]
         )
-        affiliation_names = self._load_affiliation_names(connection, int(row["person_id"]))
+        affiliation_details = self._load_affiliation_details(connection, int(row["person_id"]))
         return {
             "person_id": int(row["person_id"]),
             "canonical_name": row["canonical_name"],
@@ -215,8 +215,9 @@ class AuthorService:
             "family_name": family_name,
             "email": row["email"] or "",
             "orcid": row["orcid"] or "",
-            "affiliation_name": affiliation_names[0] if affiliation_names else "",
-            "affiliation_names": affiliation_names,
+            "affiliation_name": affiliation_details[0]["name"] if affiliation_details else "",
+            "affiliation_names": [d["name"] for d in affiliation_details],
+            "affiliation_details": affiliation_details,
             "credit_roles": [],
             "sample_roles": [],
             "source_slots": [],
@@ -326,6 +327,7 @@ class AuthorService:
         target["orcid"] = source.get("orcid", target["orcid"])
         target["affiliation_name"] = source.get("affiliation_name", target["affiliation_name"])
         target["affiliation_names"] = list(source.get("affiliation_names", target.get("affiliation_names", [])))
+        target["affiliation_details"] = list(source.get("affiliation_details", target.get("affiliation_details", [])))
         target["is_placeholder"] = False
 
     def _lookup_person_by_name(self, connection: sqlite3.Connection, raw_name: str) -> dict[str, Any] | None:
@@ -502,7 +504,7 @@ class AuthorService:
         given_names, family_name = self._split_person_name(
             row["given_names"], row["family_name"], row["canonical_name"]
         )
-        affiliation_names = self._load_affiliation_names(connection, int(row["person_id"]))
+        affiliation_details = self._load_affiliation_details(connection, int(row["person_id"]))
         return {
             "person_id": int(row["person_id"]),
             "canonical_name": row["canonical_name"],
@@ -510,8 +512,9 @@ class AuthorService:
             "family_name": family_name,
             "email": row["email"] or "",
             "orcid": row["orcid"] or "",
-            "affiliation_name": affiliation_names[0] if affiliation_names else "",
-            "affiliation_names": affiliation_names,
+            "affiliation_name": affiliation_details[0]["name"] if affiliation_details else "",
+            "affiliation_names": [d["name"] for d in affiliation_details],
+            "affiliation_details": affiliation_details,
             "credit_roles": [],
             "sample_roles": [],
             "source_slots": [],
@@ -530,6 +533,7 @@ class AuthorService:
             "orcid": "",
             "affiliation_name": "",
             "affiliation_names": [],
+            "affiliation_details": [],
             "credit_roles": [],
             "sample_roles": [],
             "source_slots": [],
@@ -537,10 +541,10 @@ class AuthorService:
             "raw_name": raw_name.strip(),
         }
 
-    def _load_affiliation_names(self, connection: sqlite3.Connection, person_id: int) -> list[str]:
+    def _load_affiliation_details(self, connection: sqlite3.Connection, person_id: int) -> list[dict[str, str]]:
         rows = connection.execute(
             """
-            SELECT a.name
+            SELECT a.name, a.institution, a.city, a.state, a.country
             FROM person_affiliation pa
             JOIN affiliation a ON a.affiliation_id = pa.affiliation_id
             WHERE pa.person_id = ?
@@ -549,15 +553,21 @@ class AuthorService:
             (person_id,),
         ).fetchall()
 
-        names: list[str] = []
+        details: list[dict[str, str]] = []
         seen: set[str] = set()
-        for (name,) in rows:
-            cleaned = str(name or "").strip()
-            if not cleaned or cleaned in seen:
+        for row in rows:
+            name = str(row[0] or "").strip()
+            if not name or name in seen:
                 continue
-            seen.add(cleaned)
-            names.append(cleaned)
-        return names
+            seen.add(name)
+            details.append({
+                "name": name,
+                "institution": str(row[1] or "").strip(),
+                "city": str(row[2] or "").strip(),
+                "state": str(row[3] or "").strip(),
+                "country": str(row[4] or "").strip(),
+            })
+        return details
 
     @staticmethod
     def _split_person_name(given_names: str | None, family_name: str | None, canonical_name: str | None) -> tuple[str, str]:
@@ -674,54 +684,31 @@ class AuthorService:
         by_name: dict[str, dict[str, Any]] = {}
 
         for author in authors:
-            for affiliation_name in author.get("affiliation_names", []):
-                cleaned_name = affiliation_name.strip()
-                if not cleaned_name:
+            for detail in author.get("affiliation_details", []):
+                name = detail["name"]
+                if not name or name in by_name:
                     continue
-                if cleaned_name not in by_name:
-                    affiliation_id = str(len(affiliations) + 1)
-                    parsed_affiliation = self._parse_affiliation(cleaned_name)
-                    record = {
-                        "name": cleaned_name,
-                        "id": affiliation_id,
-                        "yaml": {"id": affiliation_id, **parsed_affiliation},
-                    }
-                    by_name[cleaned_name] = record
-                    affiliations.append(record)
+                affiliation_id = str(len(affiliations) + 1)
+                yaml_entry: dict[str, Any] = {"id": affiliation_id}
+                if detail["institution"]:
+                    yaml_entry["organization"] = detail["institution"]
+                else:
+                    yaml_entry["organization"] = name
+                if detail["city"]:
+                    yaml_entry["city"] = detail["city"]
+                if detail["state"]:
+                    yaml_entry["state"] = detail["state"]
+                if detail["country"]:
+                    yaml_entry["country"] = detail["country"]
+                record = {
+                    "name": name,
+                    "id": affiliation_id,
+                    "yaml": yaml_entry,
+                }
+                by_name[name] = record
+                affiliations.append(record)
 
         return affiliations
-
-    @staticmethod
-    def _parse_affiliation(affiliation_name: str) -> dict[str, str]:
-        parts = [part.strip() for part in affiliation_name.split(",") if part.strip()]
-        if not parts:
-            return {"organization": affiliation_name}
-        if len(parts) >= 5:
-            organization = ", ".join(parts[:-4])
-            city = ", ".join(parts[-4:-2])
-            state, country = parts[-2:]
-            return {
-                "organization": organization,
-                "city": city,
-                "state": state,
-                "country": country,
-            }
-        if len(parts) >= 4:
-            organization = ", ".join(parts[:-3])
-            city, state, country = parts[-3:]
-            return {
-                "organization": organization,
-                "city": city,
-                "state": state,
-                "country": country,
-            }
-        if len(parts) == 3:
-            return {
-                "organization": parts[0],
-                "city": parts[1],
-                "country": parts[2],
-            }
-        return {"organization": affiliation_name}
 
     def _author_yaml_entries(
         self,

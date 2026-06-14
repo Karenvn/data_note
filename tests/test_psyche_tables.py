@@ -77,6 +77,41 @@ class PsycheTableTests(unittest.TestCase):
         self.assertEqual(table["native_rows"][0][0], "OZ220647.2")
         self.assertEqual(table["native_rows"][0][-1], "M1;M19")
 
+    def test_make_table3_rows_matches_unversioned_merian_accessions(self) -> None:
+        context = {
+            "assemblies_type": "prim_alt",
+            "species": "Example species",
+            "tolid": "ixExample1",
+            "chromosome_data": [
+                {"INSDC": "OZ220647.2", "molecule": "1", "length": "45.1", "GC": "39.8"},
+            ],
+        }
+
+        with patch("data_note.tables.psyche.merian_dict", return_value={"OZ220647": "M1;M19"}):
+            table = make_table3_rows(context)
+
+        self.assertEqual(table["native_rows"][0][-1], "M1;M19")
+
+    def test_make_table3_rows_uses_ncbi_chromosome_alias_when_merian_accessions_changed(self) -> None:
+        context = {
+            "assemblies_type": "hap_asm",
+            "species": "Erebia flavofasciata",
+            "tolid": "ilEreFlav1",
+            "hap1_assembly_level": "chromosome",
+            "hap2_assembly_level": "scaffold",
+            "hap1_chromosome_data": [
+                {"INSDC": "OZ321319.1", "molecule": "1", "length": "43.03", "GC": "37.50"},
+            ],
+        }
+
+        with (
+            patch("data_note.tables.psyche.merian_dict", return_value={"OZ182127.1": "M12;M17;M20"}),
+            patch("data_note.tables.psyche._ncbi_chromosome_aliases", return_value={"OZ182127.1": "1"}),
+        ):
+            table = make_table3_rows(context)
+
+        self.assertEqual(table["native_rows"][0][-1], "M12;M17;M20")
+
     def test_make_table3_rows_excludes_primary_sex_chromosome_when_not_reported(self) -> None:
         context = {
             "assemblies_type": "prim_alt",

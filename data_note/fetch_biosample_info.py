@@ -8,13 +8,14 @@ import re
 
 import pandas as pd
 import requests
-from .formatting_utils import format_with_nbsp, clean_numeric_string, safe_convert
+from .formatting_utils import format_with_nbsp, safe_convert
 
 logger = logging.getLogger(__name__)
 
 _PLACEHOLDER_COLLECTION_DATETIME_RE = re.compile(
     r"^(?P<date>\d{4}-\d{2}-\d{2})T(?:00:00:00|12:00:00)(?:\.0+)?(?:Z|[+-]\d{2}:\d{2})?$"
 )
+_MISSING_ELEVATION_VALUES = {"", "missing", "na", "n/a", "nan", "none", "not provided", "null"}
 
 
 def normalize_pipe_delimited_values(value):
@@ -70,6 +71,24 @@ def title_preserving_possessives(value):
     """
     titled = str(value or "").title()
     return re.sub(r"(?<=[A-Za-z])'S(?![a-z])", "'s", titled)
+
+
+def format_elevation_m(value):
+    """
+    Format a recorded elevation in metres without inventing a zero for missing values.
+    """
+    if value is None:
+        return ""
+
+    text = str(value).strip()
+    if text.casefold() in _MISSING_ELEVATION_VALUES:
+        return ""
+
+    match = re.search(r"-?\d+(?:\.\d+)?", text.replace(",", ""))
+    if match is None:
+        return ""
+
+    return format_with_nbsp(float(match.group(0)), as_int=True)
 
 
 def fetch_biosample_info(biosample_acc):
@@ -170,9 +189,7 @@ def process_biosamples_sample_dict(row, tech_prefix):
         f'{tech_prefix}_preserv_method': row.get('preservation_approach', '').lower(),
         f'{tech_prefix}_preservative_solution': row.get('preservative_solution', '').lower(),
         f'{tech_prefix}_species': row.get('scientific_name', ''),
-        f'{tech_prefix}_elevation_m': format_with_nbsp(
-            safe_convert(clean_numeric_string(row.get('elevation', '0')), float, 0.0),
-            as_int=True)
+        f'{tech_prefix}_elevation_m': format_elevation_m(row.get('elevation')),
     }
 
     # Explicitly get `{tech_prefix}_tolid`

@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from data_note.fetch_biosample_info import (
+    format_elevation_m,
     normalize_collection_date,
     normalize_pipe_delimited_values,
     process_biosamples_sample_dict,
@@ -81,6 +82,30 @@ class FetchBiosampleInfoTests(unittest.TestCase):
 
         self.assertEqual(processed["pacbio_identifier"], "David Lees")
         self.assertEqual(processed["pacbio_identifier_affiliation"], "Natural History Museum")
+
+    def test_format_elevation_m_preserves_recorded_zero(self) -> None:
+        self.assertEqual(format_elevation_m("0"), "0")
+        self.assertEqual(format_elevation_m("0.0 m"), "0")
+
+    def test_format_elevation_m_leaves_missing_values_blank(self) -> None:
+        for value in (None, "", "null", "not provided", "N/A"):
+            with self.subTest(value=value):
+                self.assertEqual(format_elevation_m(value), "")
+
+    def test_process_biosamples_sample_dict_does_not_default_missing_elevation_to_zero(self) -> None:
+        row = {
+            "geographic_location_(region_and_locality)": "Simo | Kuralanletto",
+            "geographic_location_(country_and/or_sea)": "Finland",
+            "geographic_location_(latitude)": "65.6132896",
+            "geographic_location_(longitude)": "24.9997768",
+            "elevation": "null",
+        }
+
+        processed = process_biosamples_sample_dict(row, "pacbio")
+
+        self.assertEqual(processed["pacbio_coll_lat"], 65.6133)
+        self.assertEqual(processed["pacbio_coll_long"], 24.9998)
+        self.assertEqual(processed["pacbio_elevation_m"], "")
 
 
 if __name__ == "__main__":

@@ -72,7 +72,9 @@ def _build_test_db(db_path: Path) -> None:
                 affiliation_id INTEGER PRIMARY KEY,
                 name TEXT,
                 ror_id TEXT,
-                department TEXT,
+                institution TEXT,
+                city TEXT,
+                state TEXT,
                 country TEXT
             );
 
@@ -172,12 +174,12 @@ def _build_test_db(db_path: Path) -> None:
         )
 
         connection.executemany(
-            "INSERT INTO affiliation(affiliation_id, name) VALUES (?, ?)",
+            "INSERT INTO affiliation(affiliation_id, name, institution, city, state, country) VALUES (?, ?, ?, ?, ?, ?)",
             [
-                (1, "Museum of Testing, London, England, GB"),
-                (2, "Institute of Examples, Edinburgh, Scotland, GB"),
-                (3, "University of Oxford, Oxford, Oxfordshire, England, GB"),
-                (4, "Independent researcher, Berkhamsted, Hertfordshire, England, GB"),
+                (1, "Museum of Testing, London, England, GB", "Museum of Testing", "London", "England", "GB"),
+                (2, "Institute of Examples, Edinburgh, Scotland, GB", "Institute of Examples", "Edinburgh", "Scotland", "GB"),
+                (3, "University of Oxford, Oxford, Oxfordshire, England, GB", "University of Oxford", "Oxford", "Oxfordshire", "GB"),
+                (4, "Independent researcher, Berkhamsted, Hertfordshire, England, GB", "Independent researcher", "Berkhamsted", "Hertfordshire", "GB"),
             ],
         )
 
@@ -317,8 +319,8 @@ class AuthorServiceTests(unittest.TestCase):
             {
                 "id": "2",
                 "organization": "Independent researcher",
-                "city": "Berkhamsted, Hertfordshire",
-                "state": "England",
+                "city": "Berkhamsted",
+                "state": "Hertfordshire",
                 "country": "GB",
             },
         )
@@ -494,20 +496,6 @@ class AuthorServiceTests(unittest.TestCase):
 
         self.assertEqual(result.people, [])
         self.assertEqual(yaml.safe_load(result.yaml_block), {"author": [], "affiliation": []})
-
-    def test_parses_five_part_affiliations_with_city_and_county_together(self) -> None:
-        parsed = self.service._parse_affiliation(
-            "Wellcome Sanger Institute, Hinxton, Cambridgeshire, England, GB"
-        )
-        self.assertEqual(
-            parsed,
-            {
-                "organization": "Wellcome Sanger Institute",
-                "city": "Hinxton, Cambridgeshire",
-                "state": "England",
-                "country": "GB",
-            },
-        )
 
 
 if __name__ == "__main__":
