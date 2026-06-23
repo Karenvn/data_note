@@ -104,6 +104,7 @@ class SequencingWorkflowServiceTests(unittest.TestCase):
                 {"pacbio_collector": "Collector A"},
                 {"rna_collector": "Collector B"},
                 {"hic_collector": "Collector C"},
+                {"chromium_collector": "Collector E"},
                 {"isoseq_collector": "Collector D"},
             ),
             progress_printer=lambda message: None,
@@ -129,9 +130,11 @@ class SequencingWorkflowServiceTests(unittest.TestCase):
         self.assertIs(note_data.sequencing, sequencing_summary)
         self.assertIsInstance(note_data.sampling, SamplingInfo)
         self.assertEqual(note_data.sampling.pacbio.collector, "Collector A")
+        self.assertEqual(note_data.sampling.chromium.collector, "Collector E")
         self.assertIsNotNone(note_data.author)
         self.assertEqual(context["jira"], "RC-1000")
         self.assertEqual(context["pacbio_collector"], "Collector A")
+        self.assertEqual(context["chromium_collector"], "Collector E")
         self.assertEqual(context["author_people"][0]["given-names"], "Alice")
 
     def test_build_sections_logs_curation_failure_and_continues(self) -> None:

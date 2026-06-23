@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import unittest
 
-from data_note.table_rows import flatten_cell, make_table1_rows, make_table2_rows, make_table3_rows, make_table4_rows
+from data_note.table_rows import (
+    flatten_cell,
+    make_table1_rows,
+    make_table2_rows,
+    make_table3_rows,
+    make_table4_rows,
+    make_table5_rows,
+)
 
 
 class TableRowsTests(unittest.TestCase):
@@ -66,6 +73,42 @@ class TableRowsTests(unittest.TestCase):
         self.assertEqual(read_count_row[1], "10 million reads")
         self.assertEqual(read_count_row[2], "20 million read pairs")
 
+    def test_make_table1_rows_includes_chromium_column_when_present(self) -> None:
+        context = {
+            "species": "Filipendula ulmaria",
+            "bioproject": "PRJEB46853",
+            "tolid": "drFilUlma1",
+            "hic_tolid": "drFilUlma1",
+            "chromium_tolid": "drFilUlma1",
+            "pacbio_sample_accession": "SAMEA7522118",
+            "hic_sample_accession": "SAMEA7522118",
+            "chromium_sample_accession": "SAMEA7522118",
+            "pacbio_instrument": "Sequel II",
+            "hic_instrument": "Illumina NovaSeq 6000",
+            "chromium_instrument": "Illumina NovaSeq 6000",
+            "pacbio_run_accessions": "ERR6939255; ERR6939256",
+            "hic_run_accessions": "ERR6688645",
+            "chromium_run_accessions": "ERR6688646; ERR6688647; ERR6688648; ERR6688649",
+            "pacbio_reads_millions": "1.04",
+            "hic_reads_millions": "353.21",
+            "chromium_reads_millions": "267.52",
+            "hic_read_count_unit": "read pairs",
+            "chromium_read_count_unit": "read pairs",
+            "pacbio_bases_gb": "14.46",
+            "hic_bases_gb": "106.67",
+            "chromium_bases_gb": "80.79",
+        }
+
+        table = make_table1_rows(context)
+
+        self.assertIn("**10X Chromium**", table["native_headers"])
+        self.assertEqual(table["alignment"], "LLLL")
+        self.assertEqual(table["width"], [0.25, 0.25, 0.25, 0.25])
+        read_count_row = next(row for row in table["native_rows"] if row[0] == "**Read count total**")
+        self.assertEqual(read_count_row[3], "267.52 million read pairs")
+        run_row = next(row for row in table["native_rows"] if row[0] == "**Run accessions**")
+        self.assertEqual(run_row[3], "ERR6688646; ERR6688647; ERR6688648; ERR6688649")
+
     def test_flatten_cell_unbolds_plain_somatic_tissue_terms(self) -> None:
         self.assertEqual(flatten_cell("**other somatic animal tissue**"), "other somatic animal tissue")
         self.assertEqual(flatten_cell("other somatic **body** tissue"), "other somatic body tissue")
@@ -94,6 +137,26 @@ class TableRowsTests(unittest.TestCase):
 
         tissue_row = next(row for row in table["native_rows"] if row[0] == "**Tissue**")
         self.assertEqual(tissue_row[-1], "other somatic animal tissue")
+
+    def test_make_table5_rows_includes_legacy_10x_software_versions(self) -> None:
+        table = make_table5_rows(
+            {
+                "species": "Filipendula ulmaria",
+                "hifiasm_version": "0.14-r312",
+                "purge_dups_version": "1.2.3",
+                "longranger_version": "2.2.2",
+                "freebayes_version": "v1.3.1-17-gaa2ace8",
+                "salsa_version": "v2.2",
+            }
+        )
+
+        versions = {row[0]: row[1] for row in table["native_rows"]}
+
+        self.assertEqual(versions["Hifiasm"], "0.14-r312")
+        self.assertEqual(versions["purge_dups"], "1.2.3")
+        self.assertEqual(versions["Long Ranger"], "2.2.2")
+        self.assertEqual(versions["freebayes"], "v1.3.1-17-gaa2ace8")
+        self.assertEqual(versions["SALSA2"], "v2.2")
 
     def test_make_table2_rows_includes_supernumerary_row_only_when_present(self) -> None:
         context = {

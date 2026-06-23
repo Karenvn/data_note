@@ -30,16 +30,23 @@ class SamplingModelTests(unittest.TestCase):
                 "hic_collector": "Bob Baker",
                 "hic_specimen_id": "SPEC-2",
             },
+            chromium={
+                "chromium_collector": "Cara Clark",
+                "chromium_specimen_id": "SPEC-3",
+            },
         )
 
         context = sampling.to_context_dict()
 
         self.assertIsNotNone(sampling.record("pacbio"))
         self.assertIsNotNone(sampling.record("hic"))
+        self.assertIsNotNone(sampling.record("chromium"))
         self.assertEqual(context["pacbio_collector"], "Alice Able")
         self.assertEqual(context["pacbio_specimen_id"], "SPEC-1")
         self.assertEqual(context["hic_collector"], "Bob Baker")
         self.assertEqual(context["hic_specimen_id"], "SPEC-2")
+        self.assertEqual(context["chromium_collector"], "Cara Clark")
+        self.assertEqual(context["chromium_specimen_id"], "SPEC-3")
 
 
 if __name__ == "__main__":

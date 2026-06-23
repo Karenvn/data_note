@@ -33,6 +33,7 @@ RUN_GROUP_NAMES: tuple[str, ...] = tuple(rule[3] for rule in TECHNOLOGY_RULES)
 RUN_ACCESSION_GROUPS: tuple[tuple[str, str], ...] = (
     ("PacBio", "pacbio"),
     ("Hi-C", "hic"),
+    ("Chromium", "chromium"),
     ("RNA", "rna"),
 )
 TECHNOLOGY_LABELS: dict[str, str] = {
@@ -808,6 +809,8 @@ class SequencingService:
             "pacbio_total_bases": 0,
             "hic_total_reads": 0,
             "hic_total_bases": 0,
+            "chromium_total_reads": 0,
+            "chromium_total_bases": 0,
             "rna_total_reads": 0,
             "rna_total_bases": 0,
         }
@@ -825,6 +828,9 @@ class SequencingService:
             elif tech_name == "hic":
                 totals["hic_total_reads"] += read_count
                 totals["hic_total_bases"] += base_count
+            elif tech_name == "chromium":
+                totals["chromium_total_reads"] += read_count
+                totals["chromium_total_bases"] += base_count
             elif tech_name == "rna":
                 totals["rna_total_reads"] += read_count
                 totals["rna_total_bases"] += base_count
@@ -842,7 +848,7 @@ class SequencingService:
             extras["sequencing_qc_filter_applied"] = True
             extras["sequencing_qc_excluded_runs"] = "; ".join(qc_filter_excluded_runs or [])
             extras["sequencing_qc_excluded_portal_runs"] = "; ".join(qc_filter_excluded_portal_runs or [])
-        for tech_name in ("pacbio", "hic", "rna"):
+        for tech_name in ("pacbio", "hic", "chromium", "rna"):
             unit = SequencingService._first_technology_value(df, tech_name, "read_count_unit")
             read_source = SequencingService._first_technology_value(df, tech_name, "read_count_source")
             base_source = SequencingService._first_technology_value(df, tech_name, "base_count_source")
@@ -872,6 +878,7 @@ class SequencingService:
 
         pacbio = technology_records.get("pacbio", TechnologyRecord(name="pacbio"))
         hic = technology_records.get("hic", TechnologyRecord(name="hic"))
+        chromium = technology_records.get("chromium", TechnologyRecord(name="chromium"))
         rna = technology_records.get("rna", TechnologyRecord(name="rna"))
 
         return SequencingTotals(
@@ -887,6 +894,12 @@ class SequencingService:
             hic_bases_gb=format_with_nbsp(totals["hic_total_bases"] / 1e9),
             hic_sample_accession=hic.sample_accession or "",
             hic_instrument=hic.instrument_model or "",
+            chromium_total_reads=format_with_nbsp(totals["chromium_total_reads"]),
+            chromium_total_bases=format_with_nbsp(totals["chromium_total_bases"]),
+            chromium_reads_millions=format_with_nbsp(totals["chromium_total_reads"] / 1e6),
+            chromium_bases_gb=format_with_nbsp(totals["chromium_total_bases"] / 1e9),
+            chromium_sample_accession=chromium.sample_accession or "",
+            chromium_instrument=chromium.instrument_model or "",
             rna_total_reads=format_with_nbsp(totals["rna_total_reads"]),
             rna_total_bases=format_with_nbsp(totals["rna_total_bases"]),
             rna_reads_millions=format_with_nbsp(totals["rna_total_reads"] / 1e6),

@@ -236,6 +236,7 @@ def create_biosample_dict(technology_data):
         'pacbio': 'pacbio_sample_accession',
         'rna': 'rna_sample_accession',
         'hic': 'hic_sample_accession',
+        'chromium': 'chromium_sample_accession',
         'isoseq': 'isoseq_sample_accession'
     }
 
@@ -291,5 +292,6 @@ def create_biosample_dict(technology_data):
         sample_dicts.get('pacbio', {}),
         sample_dicts.get('rna', {}),
         sample_dicts.get('hic', {}),
+        sample_dicts.get('chromium', {}),
         sample_dicts.get('isoseq', {})
     )

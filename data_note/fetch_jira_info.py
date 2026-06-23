@@ -498,35 +498,53 @@ def download_jira_attachment(jira_ticket_id, directory):
 
 
 
+PIPELINE_SOFTWARE_KEYS = {
+    "hifiasm": "hifiasm_version",
+    "mitohifi": "mitohifi_version",
+    "yahs": "yahs_version",
+    "purge_dups": "purge_dups_version",
+    "purge-dups": "purge_dups_version",
+    "mbg": "mbg_version",
+    "oatk": "oatk_version",
+    "longranger": "longranger_version",
+    "freebayes": "freebayes_version",
+    "salsa": "salsa_version",
+    "salsa2": "salsa_version",
+}
+PIPELINE_ENTRY_RE = re.compile(r"^\s*([A-Za-z0-9_.+-]+)\s*(?:\(\s*(.*?)\s*\))?\s*$")
+
+
+def _parse_pipeline_entry(entry):
+    if not isinstance(entry, str):
+        return None, None
+    match = PIPELINE_ENTRY_RE.match(entry)
+    if not match:
+        return None, None
+    software, version = match.groups()
+    key = PIPELINE_SOFTWARE_KEYS.get(software.lower())
+    if key is None:
+        return None, None
+    if version:
+        version = re.sub(r"^version\s*[:=]?\s*", "", version.strip(), flags=re.IGNORECASE)
+    return key, version or None
+
+
 def parse_yaml_attachment(yaml_content):
     """Parse the YAML content and extract pipeline software versions."""
-    yaml_data = {
-        'hifiasm_version': None,
-        'mitohifi_version': None,
-        'yahs_version': None,
-        'purge_dups_version': None,
-        'mbg_version': None,
-        'oatk_version': None,
-    }
+    yaml_data = {key: None for key in dict.fromkeys(PIPELINE_SOFTWARE_KEYS.values())}
 
     try:
         parsed_yaml = yaml.safe_load(yaml_content)
         if not isinstance(parsed_yaml, dict):
             return yaml_data
-        if 'pipeline' in parsed_yaml:
-            for entry in parsed_yaml['pipeline']:
-                # Update the regex to handle software names with/without spaces before the version
-                match = re.match(r"(\w+)\s*\(version\s+([\w\.\-]+)\)", entry)
-                if match:
-                    software, version = match.groups()
-                    key = f"{software.lower()}_version"
-                    if key in yaml_data:
-                        yaml_data[key] = version
-                else:
-                    # If only software name is mentioned without version
-                    key = f"{entry.lower()}_version"
-                    if key in yaml_data:
-                        yaml_data[key] = None
+        pipeline = parsed_yaml.get("pipeline")
+        if isinstance(pipeline, str):
+            pipeline = [pipeline]
+        if isinstance(pipeline, list):
+            for entry in pipeline:
+                key, version = _parse_pipeline_entry(entry)
+                if key in yaml_data:
+                    yaml_data[key] = version
     except yaml.YAMLError as e:
         logger.warning("Error parsing YAML: %s", e)
 

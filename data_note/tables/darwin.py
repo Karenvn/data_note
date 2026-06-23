@@ -99,6 +99,38 @@ def _format_read_count_cell(context: dict, prefix: str) -> str:
     return f"{value} million"
 
 
+def _table1_widths(num_cols: int) -> list[float]:
+    if num_cols == 3:
+        return [0.25, 0.25, 0.25]
+    return [1 / num_cols] * num_cols
+
+
+def _append_table1_technology_column(
+    context: dict,
+    headers: list[str],
+    rows: list[list[str]],
+    *,
+    prefix: str,
+    label: str,
+) -> None:
+    if not context.get(f"{prefix}_sample_accession"):
+        return
+    headers.append(label)
+    values = [
+        flatten_cell(context.get(f"{prefix}_tolid")),
+        flatten_cell(context.get(f"{prefix}_specimen_id")),
+        flatten_cell(context.get(f"{prefix}_sample_derived_from")),
+        flatten_cell(context.get(f"{prefix}_sample_accession")),
+        flatten_cell(context.get(f"{prefix}_organism_part")),
+        flatten_cell(context.get(f"{prefix}_instrument")),
+        flatten_cell(context.get(f"{prefix}_run_accessions")),
+        _format_read_count_cell(context, prefix),
+        f"{flatten_cell(context.get(f'{prefix}_bases_gb'))} Gb",
+    ]
+    for index, value in enumerate(values):
+        rows[index].append(value)
+
+
 def _format_percent_cell(value) -> str:
     percent = flatten_cell(value)
     return f"{percent}%" if percent else r"\-"
@@ -118,6 +150,14 @@ def make_table1_rows(context):
         ["**Read count total**", _format_read_count_cell(context, "pacbio"), _format_read_count_cell(context, "hic")],
         ["**Base count total**", f"{flatten_cell(context.get('pacbio_bases_gb'))} Gb", f"{flatten_cell(context.get('hic_bases_gb'))} Gb"],
     ]
+
+    _append_table1_technology_column(
+        context,
+        headers,
+        rows,
+        prefix="chromium",
+        label="**10X Chromium**",
+    )
 
     if context.get("isoseq_sample_accession"):
         headers.append("**Iso-Seq**")
@@ -158,7 +198,7 @@ def make_table1_rows(context):
         "caption": f"Specimen and sequencing data for *{safe_str(context.get('species'))}* (BioProject {flatten_cell(context.get('bioproject'))})",
         "label": "tbl:table1",
         "alignment": "L" * num_cols,
-        "width": [0.25] * num_cols if num_cols == 4 else ([0.20] * num_cols if num_cols == 5 else [0.25, 0.25, 0.25]),
+        "width": _table1_widths(num_cols),
         "rows": [",".join(headers)] + [",".join(r) for r in rows],
         **native_table,
     }
@@ -488,6 +528,8 @@ def make_table5_rows(context: dict) -> dict:
         ("Gfastats", software_version(context, "gfastats_version", "1.3.6"), "[https://github.com/vgl-hub/gfastats](https://github.com/vgl-hub/gfastats)"),
         ("Hifiasm", context.get("hifiasm_version"), "[https://github.com/chhylp123/hifiasm](https://github.com/chhylp123/hifiasm)"),
         ("HiGlass", software_version(context, "higlass_version", "1.13.4"), "[https://github.com/higlass/higlass](https://github.com/higlass/higlass)"),
+        ("Long Ranger", context.get("longranger_version"), "[https://support.10xgenomics.com/genome-exome/software/pipelines/latest/advanced/other-pipelines](https://support.10xgenomics.com/genome-exome/software/pipelines/latest/advanced/other-pipelines)"),
+        ("freebayes", context.get("freebayes_version"), "[https://github.com/freebayes/freebayes](https://github.com/freebayes/freebayes)"),
         ("MerquryFK", "1.1.0-c1", "[https://github.com/thegenemyers/MERQURY.FK](https://github.com/thegenemyers/MERQURY.FK)"),
         ("Minimap2", context.get("minimap2_version"), "[https://github.com/lh3/minimap2](https://github.com/lh3/minimap2)"),
         ("MitoHiFi", context.get("mitohifi_version"), "[https://github.com/marcelauliano/MitoHiFi](https://github.com/marcelauliano/MitoHiFi)"),
@@ -498,6 +540,7 @@ def make_table5_rows(context: dict) -> dict:
         ("PretextView", software_version(context, "pretextview_version", "1.0.3"), "[https://github.com/sanger-tol/PretextView](https://github.com/sanger-tol/PretextView)"),
         ("purge_dups", context.get("purge_dups_version"), "[https://github.com/dfguan/purge_dups](https://github.com/dfguan/purge_dups)"),
         ("samtools", context.get("samtools_version"), "[https://github.com/samtools/samtools](https://github.com/samtools/samtools)"),
+        ("SALSA2", context.get("salsa_version"), "[https://github.com/marbl/SALSA](https://github.com/marbl/SALSA)"),
         ("sanger-tol/ascc", software_version(context, "ascc_version", "0.1.0"), "[https://github.com/sanger-tol/ascc](https://github.com/sanger-tol/ascc)"),
         ("sanger-tol/blobtoolkit", context.get("btk_pipeline_version"), "[https://github.com/sanger-tol/blobtoolkit](https://github.com/sanger-tol/blobtoolkit)"),
         ("sanger-tol/curationpretext", software_version(context, "curationpretext_version", "1.4.2"), "[https://github.com/sanger-tol/curationpretext](https://github.com/sanger-tol/curationpretext)"),

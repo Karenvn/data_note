@@ -138,6 +138,12 @@ class SequencingTotals:
     hic_bases_gb: Any = None
     hic_sample_accession: str | None = None
     hic_instrument: str | None = None
+    chromium_total_reads: Any = None
+    chromium_total_bases: Any = None
+    chromium_reads_millions: Any = None
+    chromium_bases_gb: Any = None
+    chromium_sample_accession: str | None = None
+    chromium_instrument: str | None = None
     rna_total_reads: Any = None
     rna_total_bases: Any = None
     rna_reads_millions: Any = None
@@ -161,6 +167,12 @@ class SequencingTotals:
             "hic_bases_gb",
             "hic_sample_accession",
             "hic_instrument",
+            "chromium_total_reads",
+            "chromium_total_bases",
+            "chromium_reads_millions",
+            "chromium_bases_gb",
+            "chromium_sample_accession",
+            "chromium_instrument",
             "rna_total_reads",
             "rna_total_bases",
             "rna_reads_millions",
@@ -181,6 +193,12 @@ class SequencingTotals:
             hic_bases_gb=data.get("hic_bases_gb"),
             hic_sample_accession=data.get("hic_sample_accession"),
             hic_instrument=data.get("hic_instrument"),
+            chromium_total_reads=data.get("chromium_total_reads"),
+            chromium_total_bases=data.get("chromium_total_bases"),
+            chromium_reads_millions=data.get("chromium_reads_millions"),
+            chromium_bases_gb=data.get("chromium_bases_gb"),
+            chromium_sample_accession=data.get("chromium_sample_accession"),
+            chromium_instrument=data.get("chromium_instrument"),
             rna_total_reads=data.get("rna_total_reads"),
             rna_total_bases=data.get("rna_total_bases"),
             rna_reads_millions=data.get("rna_reads_millions"),
@@ -205,6 +223,12 @@ class SequencingTotals:
             "hic_bases_gb",
             "hic_sample_accession",
             "hic_instrument",
+            "chromium_total_reads",
+            "chromium_total_bases",
+            "chromium_reads_millions",
+            "chromium_bases_gb",
+            "chromium_sample_accession",
+            "chromium_instrument",
             "rna_total_reads",
             "rna_total_bases",
             "rna_reads_millions",

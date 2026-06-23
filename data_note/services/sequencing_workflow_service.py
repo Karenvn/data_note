@@ -28,7 +28,7 @@ class SequencingWorkflowService:
     curation_service: CurationService = field(default_factory=CurationService)
     author_service: AuthorService = field(default_factory=AuthorService)
     render_context_builder: RenderContextBuilder = field(default_factory=RenderContextBuilder)
-    biosample_dict_builder: Callable[[dict[str, Any]], tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]] = (
+    biosample_dict_builder: Callable[[dict[str, Any]], tuple[dict[str, Any], ...]] = (
         create_biosample_dict
     )
     warning_logger: Callable[..., None] = logger.warning
@@ -70,13 +70,23 @@ class SequencingWorkflowService:
 
     def build_sampling(self, technology_data: dict[str, Any]) -> SamplingInfo:
         self.progress_printer("Accessing BioSample information from BioSamples.")
-        pacbio_sample_dict, rna_sample_dict, hic_sample_dict, isoseq_sample_dict = self.biosample_dict_builder(
-            technology_data
-        )
+        sample_dicts = self.biosample_dict_builder(technology_data)
+        if len(sample_dicts) == 4:
+            pacbio_sample_dict, rna_sample_dict, hic_sample_dict, isoseq_sample_dict = sample_dicts
+            chromium_sample_dict = {}
+        else:
+            (
+                pacbio_sample_dict,
+                rna_sample_dict,
+                hic_sample_dict,
+                chromium_sample_dict,
+                isoseq_sample_dict,
+            ) = sample_dicts
         return SamplingInfo.from_legacy_dicts(
             pacbio=pacbio_sample_dict,
             rna=rna_sample_dict,
             hic=hic_sample_dict,
+            chromium=chromium_sample_dict,
             isoseq=isoseq_sample_dict,
         )
 

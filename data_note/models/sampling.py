@@ -100,6 +100,7 @@ class SamplingInfo:
     pacbio: SampleMetadataRecord | None = None
     rna: SampleMetadataRecord | None = None
     hic: SampleMetadataRecord | None = None
+    chromium: SampleMetadataRecord | None = None
     isoseq: SampleMetadataRecord | None = None
 
     @classmethod
@@ -109,12 +110,14 @@ class SamplingInfo:
         pacbio: dict[str, Any] | None = None,
         rna: dict[str, Any] | None = None,
         hic: dict[str, Any] | None = None,
+        chromium: dict[str, Any] | None = None,
         isoseq: dict[str, Any] | None = None,
     ) -> "SamplingInfo":
         return cls(
             pacbio=SampleMetadataRecord.from_mapping("pacbio", pacbio or {}) if pacbio else None,
             rna=SampleMetadataRecord.from_mapping("rna", rna or {}) if rna else None,
             hic=SampleMetadataRecord.from_mapping("hic", hic or {}) if hic else None,
+            chromium=SampleMetadataRecord.from_mapping("chromium", chromium or {}) if chromium else None,
             isoseq=SampleMetadataRecord.from_mapping("isoseq", isoseq or {}) if isoseq else None,
         )
 
@@ -123,7 +126,7 @@ class SamplingInfo:
 
     def to_context_dict(self) -> dict[str, Any]:
         context: dict[str, Any] = {}
-        for record in (self.pacbio, self.rna, self.hic, self.isoseq):
+        for record in (self.pacbio, self.rna, self.hic, self.chromium, self.isoseq):
             if record is not None:
                 context.update(record.to_context_dict())
         return context

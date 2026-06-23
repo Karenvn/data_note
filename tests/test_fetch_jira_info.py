@@ -207,6 +207,10 @@ busco_lineage: eudicots_odb10
 pipeline:
   - hifiasm (version 0.16.1-r375)
   - purge_dups (version 1.2.3)
+  - longranger (version 2.2.2)
+  - freebayes (v1.3.1-17-gaa2ace8)
+  - OATK (v2 singularity)
+  - salsa (v2.2)
 stats: |
   merqury QV (CCS): 59.4
   merqury KMER completeness (CCS): 99.00
@@ -217,11 +221,35 @@ stats: |
 
         self.assertEqual(parsed["hifiasm_version"], "0.16.1-r375")
         self.assertEqual(parsed["purge_dups_version"], "1.2.3")
+        self.assertEqual(parsed["longranger_version"], "2.2.2")
+        self.assertEqual(parsed["freebayes_version"], "v1.3.1-17-gaa2ace8")
+        self.assertEqual(parsed["oatk_version"], "v2 singularity")
+        self.assertEqual(parsed["salsa_version"], "v2.2")
         self.assertNotIn("yaml_BUSCO_lineage", parsed)
         self.assertNotIn("yaml_BUSCO_n", parsed)
         self.assertNotIn("yaml_BUSCO_string", parsed)
         self.assertNotIn("yaml_merqury_QV", parsed)
         self.assertNotIn("yaml_merqury_kmer_completeness", parsed)
+
+    def test_parse_yaml_attachment_accepts_legacy_pipeline_version_syntax(self) -> None:
+        yaml_content = """\
+pipeline:
+  - hifiasm (0.14-r312)
+  - purge_dups (version 1.2.3)
+  - longranger (version 2.2.2)
+  - freebayes (v1.3.1-17-gaa2ace8)
+  - OATK (v2 singularity)
+  - salsa (v2.2)
+"""
+
+        parsed = parse_yaml_attachment(yaml_content)
+
+        self.assertEqual(parsed["hifiasm_version"], "0.14-r312")
+        self.assertEqual(parsed["purge_dups_version"], "1.2.3")
+        self.assertEqual(parsed["longranger_version"], "2.2.2")
+        self.assertEqual(parsed["freebayes_version"], "v1.3.1-17-gaa2ace8")
+        self.assertEqual(parsed["oatk_version"], "v2 singularity")
+        self.assertEqual(parsed["salsa_version"], "v2.2")
 
     @patch("data_note.fetch_jira_info.get_auth", return_value=sentinel.auth)
     @patch("data_note.fetch_jira_info.get_yaml_for_ticket", return_value=None)

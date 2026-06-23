@@ -135,6 +135,60 @@ class SequencingServiceTests(unittest.TestCase):
         self.assertEqual(context["pacbio_protocols"], ["PROTO1"])
         self.assertEqual(context["pacbio_run_accessions"], "ERR1")
 
+    def test_build_context_promotes_chromium_totals_and_run_accessions(self) -> None:
+        runinfo_df = pd.DataFrame(
+            [
+                {
+                    "study_accession": "PRJEB1",
+                    "run_accession": "ERR_CHR1",
+                    "sample_accession": "SAMEA1",
+                    "fastq_bytes": 100,
+                    "submitted_bytes": 100,
+                    "read_count": 115_000_000,
+                    "instrument_model": "Illumina NovaSeq 6000",
+                    "base_count": 34_840_000_000,
+                    "instrument_platform": "ILLUMINA",
+                    "library_strategy": "WGS",
+                    "library_name": "",
+                    "library_construction_protocol": "Chromium genome",
+                    "library_layout": "PAIRED",
+                    "read_count_basis": "spots",
+                },
+                {
+                    "study_accession": "PRJEB1",
+                    "run_accession": "ERR_CHR2",
+                    "sample_accession": "SAMEA1",
+                    "fastq_bytes": 100,
+                    "submitted_bytes": 100,
+                    "read_count": 42_300_000,
+                    "instrument_model": "Illumina NovaSeq 6000",
+                    "base_count": 12_780_000_000,
+                    "instrument_platform": "ILLUMINA",
+                    "library_strategy": "WGS",
+                    "library_name": "",
+                    "library_construction_protocol": "Chromium genome",
+                    "library_layout": "PAIRED",
+                    "read_count_basis": "spots",
+                },
+            ]
+        )
+        service = SequencingService(
+            fetch_service=StubSequencingFetchService(runinfo_df),
+            biosample_tolid_getter=lambda biosamples: {"SAMEA1": "ixFooBar1"},
+            sequencing_source="public",
+        )
+
+        summary = service.build_context(["PRJEB1"], "ixFooBar1")
+        context = summary.to_context_dict()
+
+        self.assertEqual(summary.totals.chromium_reads_millions, "157.30")
+        self.assertEqual(summary.totals.chromium_bases_gb, "47.62")
+        self.assertEqual(summary.totals.chromium_sample_accession, "SAMEA1")
+        self.assertEqual(context["chromium_reads_millions"], "157.30")
+        self.assertEqual(context["chromium_bases_gb"], "47.62")
+        self.assertEqual(context["chromium_read_count_unit"], "read pairs")
+        self.assertEqual(context["chromium_run_accessions"], "ERR_CHR1; ERR_CHR2")
+
     def test_build_context_filters_pacbio_rows_by_tolid(self) -> None:
         runinfo_df = pd.DataFrame(
             [
