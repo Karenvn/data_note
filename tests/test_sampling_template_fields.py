@@ -201,8 +201,27 @@ class SamplingTemplateFieldsTests(unittest.TestCase):
 
         self.assertEqual(context["pacbio_coll_long_display"], "\u22124.4362")
         self.assertEqual(context["hic_coll_long_display"], "\u22124.4362")
+        self.assertEqual(context["pacbio_coll_long"], "\u22124.4362")
+        self.assertEqual(context["hic_coll_long"], "\u22124.4362")
         self.assertTrue(context["hic_collection_same_as_pacbio"])
         self.assertFalse(context["rna_collection_same_as_hic"])
+
+    def test_formats_negative_latitude_for_display_and_raw_template_fields(self) -> None:
+        context = {
+            "species": "Example species",
+            "pacbio_coll_location": "Southern Ocean",
+            "pacbio_coll_lat": "-52.9871",
+            "pacbio_coll_long": "24.1234",
+        }
+
+        populate_sampling_template_fields(context)
+
+        self.assertEqual(context["pacbio_coll_lat_display"], "\u221252.9871")
+        self.assertEqual(context["pacbio_coll_lat"], "\u221252.9871")
+        self.assertIn(
+            "from Southern Ocean (latitude \u221252.9871, longitude 24.1234)",
+            context["sampling_specimen_paragraph"],
+        )
 
     def test_formats_organism_part_as_tissue_phrase(self) -> None:
         context = {

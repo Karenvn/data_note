@@ -65,8 +65,8 @@ def _populate_display_fields(context: MutableMapping[str, Any], tech: str) -> No
         tech,
         _format_specimen_short_label(context, tech),
     )
-    context[f"{tech}_coll_lat_display"] = _format_coordinate(context.get(f"{tech}_coll_lat"))
-    context[f"{tech}_coll_long_display"] = _format_coordinate(context.get(f"{tech}_coll_long"))
+    _set_coordinate_display_fields(context, tech, "coll_lat")
+    _set_coordinate_display_fields(context, tech, "coll_long")
 
     # Backfill the legacy template typo with a readable value.
     context[f"{tech}_coll_institute"] = context[f"{tech}_collector_institute_text"]
@@ -577,6 +577,16 @@ def _format_coordinate(value: Any) -> str:
     if text.startswith("-"):
         return "\u2212" + text[1:]
     return text
+
+
+def _set_coordinate_display_fields(context: MutableMapping[str, Any], tech: str, field_name: str) -> None:
+    key = f"{tech}_{field_name}"
+    display_key = f"{key}_display"
+    raw_value = context.get(key)
+    display_value = _format_coordinate(raw_value)
+    context[display_key] = display_value
+    if display_value and display_value != _clean_string(raw_value):
+        context[key] = display_value
 
 
 def _format_tissue_phrase(organism_part: Any) -> str:
