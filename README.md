@@ -113,6 +113,10 @@ Optional additions (separate from `auto_text`):
 - the flag `--include-gbif-distribution` adds a `distribution_text` paragraph based on GBIF occurrence data when a matching GBIF usage key can be resolved (slow)
 - the flag `--include-bold-barcode` adds a `barcode_text` paragraph from the bundled BOLD barcode workflow for a single BioProject run (very slow)
 
+Optional additions to `auto_text`:
+
+- the flag `--include-bold-bin` appends a BOLD portal BIN paragraph when public COI-5P records for the species resolve to a single BIN
+
 ### Wet lab protocol notes
 
 `data_note` keeps a local copy of the published Sanger Tree of Life Wet Laboratory Protocol Collection V.3 in [data_note/wet_lab_protocols.py](data_note/wet_lab_protocols.py). During rendering, it adds likely protocol matches to the context and templates can insert `wet_lab_protocol_editor_comment` into the generated Markdown. This comment text lists the source metadata, likely protocol choices, any warnings, and the full published protocol catalogue, so the methods prose can still be corrected by hand.

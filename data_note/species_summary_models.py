@@ -45,11 +45,22 @@ class GbifDistributionSummary:
 
 
 @dataclass(slots=True)
+class BoldBinSummary:
+    bin_uri: str
+    doi: str | None = None
+    sequence_count: int = 0
+    marker_code: str = "COI-5P"
+    avg_distance: float | None = None
+    max_distance: float | None = None
+
+
+@dataclass(slots=True)
 class SpeciesSummary:
     species_taxid: str
     species: str
     genus: str
     family: str
+    common_name: str | None = None
     genus_taxid: int | str | None = None
     family_taxid: int | str | None = None
     genus_genome_count: int = 0
@@ -58,5 +69,6 @@ class SpeciesSummary:
     other_species_assemblies: list[GenomeAssemblyReport] = field(default_factory=list)
     gbif_usage_key: str | None = None
     gbif_distribution: GbifDistributionSummary | None = None
+    bold_bin: BoldBinSummary | None = None
     intro_text: str = ""
     distribution_text: str = ""

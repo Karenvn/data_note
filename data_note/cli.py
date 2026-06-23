@@ -44,6 +44,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Fetch and render an additional GBIF distribution summary. Disabled by default because it adds extra API calls.",
     )
     parser.add_argument(
+        "--include-bold-bin",
+        action="store_true",
+        help=(
+            "Fetch BOLD portal BIN metadata and append a BIN summary to auto_text when "
+            "the species has a single public COI-5P BIN. Disabled by default."
+        ),
+    )
+    parser.add_argument(
         "--include-bold-barcode",
         action="store_true",
         help="Run the heavier external BOLD barcode workflow and render a barcode result paragraph. Disabled by default.",
@@ -73,6 +81,8 @@ def main(argv: list[str] | None = None) -> int:
         config.profile_name = args.profile.strip().lower()
     if args.include_gbif_distribution:
         config.include_gbif_distribution = True
+    if args.include_bold_bin:
+        config.include_bold_bin = True
     if args.include_bold_barcode:
         config.include_bold_barcode = True
     if args.sequencing_source:

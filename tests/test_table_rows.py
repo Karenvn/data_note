@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from data_note.table_rows import make_table1_rows, make_table2_rows, make_table3_rows, make_table4_rows
+from data_note.table_rows import flatten_cell, make_table1_rows, make_table2_rows, make_table3_rows, make_table4_rows
 
 
 class TableRowsTests(unittest.TestCase):
@@ -65,6 +65,35 @@ class TableRowsTests(unittest.TestCase):
         read_count_row = next(row for row in table["native_rows"] if row[0] == "**Read count total**")
         self.assertEqual(read_count_row[1], "10 million reads")
         self.assertEqual(read_count_row[2], "20 million read pairs")
+
+    def test_flatten_cell_unbolds_plain_somatic_tissue_terms(self) -> None:
+        self.assertEqual(flatten_cell("**other somatic animal tissue**"), "other somatic animal tissue")
+        self.assertEqual(flatten_cell("other somatic **body** tissue"), "other somatic body tissue")
+        self.assertEqual(flatten_cell("<strong>other somatic animal tissue</strong>"), "other somatic animal tissue")
+
+    def test_make_table1_rows_unbolds_somatic_tissue_terms(self) -> None:
+        context = {
+            "species": "Tytthaspis sedecimpunctata",
+            "bioproject": "PRJEB73900",
+            "tolid": "icTytSede3",
+            "hic_tolid": "icTytSede6",
+            "rna_tolid": "icTytSede4",
+            "pacbio_organism_part": "whole organism",
+            "hic_organism_part": "whole organism",
+            "rna_sample_accession": "SAMEA11025073",
+            "rna_organism_part": "**other somatic animal tissue**",
+            "pacbio_reads_millions": "2.19",
+            "hic_reads_millions": "952.49",
+            "rna_reads_millions": "84.29",
+            "pacbio_bases_gb": "24.66",
+            "hic_bases_gb": "287.65",
+            "rna_bases_gb": "25.45",
+        }
+
+        table = make_table1_rows(context)
+
+        tissue_row = next(row for row in table["native_rows"] if row[0] == "**Tissue**")
+        self.assertEqual(tissue_row[-1], "other somatic animal tissue")
 
     def test_make_table2_rows_includes_supernumerary_row_only_when_present(self) -> None:
         context = {

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from data_note.models import AssemblySelectionInput, BaseNoteInfo, NoteData
 from data_note.orchestrator import ProcessedGenomeNote
@@ -9,6 +9,31 @@ from data_note.pipeline import DataNotePipeline
 
 
 class PipelineTests(unittest.TestCase):
+    def test_orchestrator_instance_passes_bold_bin_config(self) -> None:
+        config = Mock()
+        config.profile_name = "darwin"
+        config.include_gbif_distribution = False
+        config.include_bold_bin = True
+        config.include_bold_barcode = False
+        config.sequencing_source = "public-with-portal"
+        config.illumina_count_unit = "read_pairs"
+        config.assembly_selection_input.return_value = None
+        pipeline = DataNotePipeline(config=config)
+
+        with patch("data_note.pipeline.DataNoteOrchestrator") as orchestrator_cls:
+            pipeline._orchestrator_instance()
+
+        config.apply_environment.assert_called_once_with()
+        orchestrator_cls.assert_called_once_with(
+            profile="darwin",
+            include_gbif_distribution=False,
+            include_bold_bin=True,
+            include_bold_barcode=False,
+            sequencing_source="public-with-portal",
+            illumina_count_unit="read_pairs",
+            assembly_selection_input=None,
+        )
+
     def test_run_rejects_assembly_override_for_bioproject_list(self) -> None:
         config = Mock()
         config.assembly_selection_input.return_value = AssemblySelectionInput(

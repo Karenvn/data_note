@@ -18,7 +18,7 @@ class OrchestratorProfileTests(unittest.TestCase):
             species="Example species",
             tolid="ixExamSpec1",
             assemblies_type="prim_alt",
-            extras={"pacbio_specimen_id": "SPEC-001"},
+            extras={"common_name": "example moth", "pacbio_specimen_id": "SPEC-001"},
         )
         final_context = NoteContext(
             bioproject="PRJEB1",
@@ -42,6 +42,7 @@ class OrchestratorProfileTests(unittest.TestCase):
         orchestrator.taxonomy_service.build_context.return_value = TaxonomyInfo(
             tax_id="9606",
             species="Example species",
+            common_name="example moth",
         )
 
         flow_cytometry_service = Mock()
@@ -115,6 +116,22 @@ class OrchestratorProfileTests(unittest.TestCase):
         orchestrator.bold_result_service.build_text.assert_called_once_with(
             "GCA_123456789.1",
             "Example species",
+        )
+
+    def test_bold_bin_summary_is_passed_into_auto_intro_when_enabled(self) -> None:
+        orchestrator, _ = self._build_orchestrator("darwin")
+        orchestrator.include_bold_bin = True
+
+        with patch("data_note.orchestrator.taxonomy_mapper.has_tax_id_override", return_value=False):
+            orchestrator.process_bioproject("PRJEB1")
+
+        orchestrator.species_summary_service.build_summary.assert_called_once_with(
+            "9606",
+            orchestrator.assembly_workflow_service.build_bundle.return_value[0].selection,
+            tolid="ixExamSpec1",
+            include_distribution=False,
+            include_bold_bin=True,
+            common_name="example moth",
         )
 
 

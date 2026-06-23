@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from data_note.gbif_occurrence_client import GbifOccurrenceClient
 from data_note.models import AssemblyRecord, AssemblySelection
-from data_note.species_summary_models import GbifDistributionSummary, SpeciesSummary
+from data_note.species_summary_models import BoldBinSummary, GbifDistributionSummary, SpeciesSummary
 from data_note.species_summary_service import SpeciesSummaryService, _normalise_assembly_input
 
 
@@ -123,6 +123,19 @@ class _StubGbifOccurrenceClient(GbifOccurrenceClient):
         return f"Distribution for {summary.usage_key}"
 
 
+class _StubBoldPortalClient:
+    def fetch_species_bin_summary(self, species_name: str) -> BoldBinSummary | None:
+        if species_name != "Example species":
+            return None
+        return BoldBinSummary(
+            bin_uri="BOLD:AAF0863",
+            doi="10.5883/BOLD:AAF0863",
+            sequence_count=44,
+            avg_distance=0.7771446,
+            max_distance=2.4077046,
+        )
+
+
 class SpeciesSummaryServiceTests(unittest.TestCase):
     def test_normalise_assembly_input_accepts_assembly_selection(self) -> None:
         selection = AssemblySelection(
@@ -189,6 +202,57 @@ class SpeciesSummaryServiceTests(unittest.TestCase):
         self.assertIn("RefSeq representative assembly", summary.intro_text)
         self.assertEqual(summary.gbif_usage_key, "999")
         self.assertEqual(summary.distribution_text, "Distribution for 999")
+
+    def test_build_summary_appends_bold_bin_paragraph_when_enabled(self) -> None:
+        service = SpeciesSummaryService(
+            taxonomy_client=_StubTaxonomyClient(),
+            datasets_client=_StubDatasetsClient(),
+            gbif_fetcher=lambda species, tax_id: {},
+            gbif_occurrence_client=_StubGbifOccurrenceClient(),
+            bold_portal_client=_StubBoldPortalClient(),
+        )
+        selection = AssemblySelection(
+            assemblies_type="prim_alt",
+            primary=AssemblyRecord(accession="GCA_1.1", assembly_name="ixExample1.1", role="primary"),
+        )
+
+        summary = service.build_summary(
+            12345,
+            selection,
+            tolid="ixExample1",
+            include_bold_bin=True,
+            common_name="Black-spotted Chestnut",
+        )
+
+        self.assertIsNotNone(summary.bold_bin)
+        self.assertIn("\n\nPublic BOLD records for the Black-spotted Chestnut", summary.intro_text)
+        self.assertIn("single Barcode Index Number (BIN), BOLD:AAF0863", summary.intro_text)
+        self.assertIn("(doi.org/10.5883/BOLD:AAF0863)", summary.intro_text)
+        self.assertIn("44 COI-5P sequences", summary.intro_text)
+        self.assertIn("average within-BIN pairwise divergence of 0.77%", summary.intro_text)
+        self.assertIn("maximum divergence of 2.40% [@ratnasBarcode2007]", summary.intro_text)
+
+    def test_render_bold_bin_paragraph_uses_species_when_common_name_missing(self) -> None:
+        summary = SpeciesSummary(
+            species_taxid="12345",
+            species="Example species",
+            genus="Examplegenus",
+            family="Exampleidae",
+            bold_bin=BoldBinSummary(
+                bin_uri="BOLD:AAF0863",
+                doi=None,
+                sequence_count=2,
+                avg_distance=0.1,
+                max_distance=0.2,
+            ),
+        )
+
+        paragraph = SpeciesSummaryService.render_bold_bin_paragraph(summary)
+
+        self.assertIsNotNone(paragraph)
+        assert paragraph is not None
+        self.assertIn("for the species *Example species*", paragraph)
+        self.assertNotIn("doi.org/", paragraph)
 
 
 if __name__ == "__main__":

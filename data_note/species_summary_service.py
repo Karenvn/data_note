@@ -3,12 +3,14 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal, ROUND_DOWN
 import logging
 import re
 from typing import Any, Callable, Mapping
 
 from num2words import num2words
 
+from .bold_portal_client import BoldPortalClient
 from .gbif_taxonomy_client import GbifTaxonomyClient
 from .gbif_occurrence_client import GbifOccurrenceClient
 from .models import AssemblySelection
@@ -49,6 +51,7 @@ class SpeciesSummaryService:
         default_factory=lambda: _DEFAULT_GBIF_TAXONOMY_CLIENT.fetch_species_metadata
     )
     gbif_occurrence_client: GbifOccurrenceClient = field(default_factory=GbifOccurrenceClient)
+    bold_portal_client: BoldPortalClient = field(default_factory=BoldPortalClient)
 
     def build_summary(
         self,
@@ -57,6 +60,8 @@ class SpeciesSummaryService:
         *,
         tolid: str | None = None,
         include_distribution: bool = False,
+        include_bold_bin: bool = False,
+        common_name: str | None = None,
     ) -> SpeciesSummary:
         assembly_dict = _normalise_assembly_input(assembly_input)
         lineage = self.taxonomy_client.fetch_lineage_and_ranks(str(species_taxid))
@@ -82,6 +87,7 @@ class SpeciesSummaryService:
             species=lineage["species"],
             genus=lineage["genus"],
             family=lineage["family"],
+            common_name=common_name or lineage.get("common_name_ncbi"),
             genus_taxid=lineage.get("genus_taxid"),
             family_taxid=lineage.get("family_taxid"),
             genus_genome_count=len(genus_grouped),
@@ -89,6 +95,13 @@ class SpeciesSummaryService:
             refseq_category=refseq_category,
             other_species_assemblies=other_species_assemblies,
         )
+
+        if include_bold_bin:
+            try:
+                summary.bold_bin = self.bold_portal_client.fetch_species_bin_summary(summary.species)
+            except Exception as exc:
+                logger.warning("BOLD BIN enrichment failed for %s: %s", summary.species, exc)
+
         summary.intro_text = self.render_intro(summary)
 
         if include_distribution:
@@ -232,6 +245,10 @@ class SpeciesSummaryService:
         refseq_note = self.refseq_note(summary.refseq_category)
         if refseq_note:
             sentence += refseq_note
+
+        bold_bin_paragraph = self.render_bold_bin_paragraph(summary)
+        if bold_bin_paragraph:
+            sentence = f"{sentence}\n\n{bold_bin_paragraph}"
         return sentence
 
     @staticmethod
@@ -241,6 +258,43 @@ class SpeciesSummaryService:
         if refseq_category == "representative genome":
             return " This assembly is the RefSeq representative assembly for this species."
         return ""
+
+    @staticmethod
+    def render_bold_bin_paragraph(summary: SpeciesSummary) -> str | None:
+        bold_bin = summary.bold_bin
+        if not bold_bin:
+            return None
+        if (
+            not bold_bin.bin_uri
+            or bold_bin.sequence_count <= 0
+            or bold_bin.avg_distance is None
+            or bold_bin.max_distance is None
+        ):
+            return None
+
+        subject = SpeciesSummaryService._bold_subject(summary)
+        doi_clause = f" (doi.org/{bold_bin.doi})" if bold_bin.doi else ""
+        marker_code = bold_bin.marker_code or "COI-5P"
+        return (
+            f"Public BOLD records for {subject} currently place its {marker_code} barcodes "
+            f"in a single Barcode Index Number (BIN), {bold_bin.bin_uri}{doi_clause}. "
+            f"The BIN is represented by {bold_bin.sequence_count:,} {marker_code} sequences "
+            f"and has an average within-BIN pairwise divergence of "
+            f"{SpeciesSummaryService._format_percent(bold_bin.avg_distance)}% and a maximum "
+            f"divergence of {SpeciesSummaryService._format_percent(bold_bin.max_distance)}% "
+            "[@ratnasBarcode2007]."
+        )
+
+    @staticmethod
+    def _bold_subject(summary: SpeciesSummary) -> str:
+        common_name = str(summary.common_name or "").strip()
+        if common_name:
+            return f"the {common_name}"
+        return f"the species *{summary.species}*"
+
+    @staticmethod
+    def _format_percent(value: float) -> str:
+        return f"{Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_DOWN):.2f}"
 
 
 __all__ = ["SpeciesSummaryService", "_normalise_assembly_input"]

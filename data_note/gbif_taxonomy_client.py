@@ -6,6 +6,12 @@ from typing import Any, Callable
 
 import requests
 
+from .taxonomic_authority import (
+    find_earliest_original_combination,
+    format_taxonomic_authority,
+    genus_from_name,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -126,18 +132,88 @@ class GbifTaxonomyClient:
             str(primary_record.get("authorship") or "").strip()
             or str(support.get("authorship") or "").strip()
         )
+        source_authorship = authorship
+        original_combination, original_authorship = self._fetch_original_combination(
+            species_name,
+            primary_record,
+            usage_key,
+        )
+        if not authorship and original_authorship:
+            authorship = original_authorship
+        formatted_authority = format_taxonomic_authority(
+            authorship,
+            current_name=species_name,
+            original_name=original_combination,
+        )
         common_name = (
             self._extract_common_name(primary_record)
             or self._extract_common_name(support)
         )
-        return {
-            "tax_auth": authorship,
+        metadata = {
+            "tax_auth": formatted_authority.authority,
             "common_name": common_name,
             "gbif_url": f"https://www.gbif.org/species/{usage_key}" if usage_key else "",
             "gbif_usage_key": usage_key or "",
             "gbif_match_strategy": strategy,
             "gbif_taxonomic_status": primary_record.get("taxonomicStatus") or support.get("taxonomicStatus"),
         }
+        if original_combination:
+            metadata["original_combination"] = original_combination
+            metadata["tax_auth_gbif_verification"] = formatted_authority.status
+        if source_authorship and formatted_authority.authority != source_authorship:
+            metadata["gbif_tax_auth_raw"] = source_authorship
+        return metadata
+
+    def _fetch_original_combination(
+        self,
+        species_name: str,
+        primary_record: dict[str, Any],
+        usage_key: Any,
+    ) -> tuple[str | None, str | None]:
+        current_genus = genus_from_name(species_name)
+        basionym_key = primary_record.get("basionymKey")
+        if basionym_key and str(basionym_key) != str(usage_key):
+            try:
+                basionym_record = self._fetch_species_record(basionym_key)
+            except requests.RequestException as exc:
+                logger.warning("GBIF basionym lookup failed for %s: %s", species_name, exc)
+            else:
+                original_name = (
+                    str(basionym_record.get("canonicalName") or "").strip()
+                    or str(basionym_record.get("species") or "").strip()
+                    or str(basionym_record.get("scientificName") or "").strip()
+                )
+                original_genus = genus_from_name(original_name)
+                if original_name and original_genus and current_genus:
+                    return original_name, str(basionym_record.get("authorship") or "").strip() or None
+
+        if not usage_key:
+            return None, None
+        try:
+            synonym_records = self._fetch_synonyms(usage_key)
+        except requests.RequestException as exc:
+            logger.warning("GBIF synonym lookup failed for %s: %s", species_name, exc)
+            return None, None
+
+        original_name = find_earliest_original_combination(synonym_records, species_name)
+        if not original_name:
+            return None, None
+        original_authorship = ""
+        for synonym in synonym_records:
+            if str(synonym.get("canonicalName") or "").strip() == original_name:
+                original_authorship = str(synonym.get("authorship") or "").strip()
+                break
+        return original_name, original_authorship or None
+
+    def _fetch_synonyms(self, usage_key: int | str) -> list[dict[str, Any]]:
+        response = self.request_get(
+            f"https://api.gbif.org/v1/species/{usage_key}/synonyms",
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        data = response.json() or {}
+        results = data.get("results", [])
+        return results if isinstance(results, list) else []
 
     @staticmethod
     def _extract_common_name(record: dict[str, Any]) -> str:

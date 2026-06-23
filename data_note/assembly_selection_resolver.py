@@ -70,6 +70,13 @@ class AssemblySelectionResolver:
             selection.validate()
             return selection
 
+        if not relevant_assemblies:
+            available_tax_ids = sorted({assembly.tax_id for assembly in assembly_candidates if assembly.tax_id})
+            available = ", ".join(available_tax_ids) if available_tax_ids else "none"
+            raise ValueError(
+                f"No assemblies matched tax_id {tax_id} after filtering; available assembly tax_ids: {available}"
+            )
+
         assemblies_type = self.mode_detector.detect(relevant_assemblies)
 
         if assemblies_type == "hap_asm":

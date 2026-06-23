@@ -6,10 +6,16 @@ import unittest
 from pathlib import Path
 
 from data_note.profiles import AsgProfile, PsycheProfile
-from data_note.services.rendering_service import RenderingService
+from data_note.services.rendering_service import RenderingService, collapse_spaces
 
 
 class RenderingServiceTests(unittest.TestCase):
+    def test_collapse_spaces_preserves_narrow_no_break_spaces(self) -> None:
+        self.assertEqual(
+            collapse_spaces("The assembly has  1\u202f009.86 megabases.\n  Most of it is scaffolded."),
+            "The assembly has 1\u202f009.86 megabases. Most of it is scaffolded.",
+        )
+
     def test_resolve_btk_accession_prefers_primary_then_hap1(self) -> None:
         self.assertEqual(
             RenderingService._resolve_btk_accession(

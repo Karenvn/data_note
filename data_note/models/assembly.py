@@ -81,15 +81,18 @@ class AssemblySelection:
 
     def validate(self) -> None:
         if self.assemblies_type == "prim_alt":
-            if self.primary is not None:
-                self.primary.validate()
+            if self.primary is None:
+                raise ValueError("Primary/alternate assembly selection requires a primary assembly")
+            self.primary.validate()
             if self.alternate is not None:
                 self.alternate.validate()
         elif self.assemblies_type == "hap_asm":
-            if self.hap1 is not None:
-                self.hap1.validate()
-            if self.hap2 is not None:
-                self.hap2.validate()
+            if self.hap1 is None:
+                raise ValueError("Haplotype assembly selection requires a hap1 assembly")
+            if self.hap2 is None:
+                raise ValueError("Haplotype assembly selection requires a hap2 assembly")
+            self.hap1.validate()
+            self.hap2.validate()
 
     def to_context_dict(self) -> dict[str, Any]:
         context = {"assemblies_type": self.assemblies_type, **self.extras}

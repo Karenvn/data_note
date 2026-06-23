@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 import os
+import re
 from typing import Any, Callable
 
 from jinja2 import Environment, FileSystemLoader
@@ -15,6 +16,10 @@ from .figure_service import FigureService
 from ..text_utils import replace_special_characters, text_num
 
 logger = logging.getLogger(__name__)
+
+
+def collapse_spaces(value: Any) -> str:
+    return re.sub(r"[ \t\r\n]+", " ", str(value)).strip()
 
 
 @dataclass(slots=True)
@@ -46,6 +51,7 @@ class RenderingService:
 
         env = Environment(loader=FileSystemLoader(searchpath=os.path.dirname(template_file)))
         env.filters["text_num"] = text_num
+        env.filters["collapse_spaces"] = collapse_spaces
         tpl = env.get_template(os.path.basename(template_file))
 
         output_dir = os.path.join(os.getcwd(), species_name.replace(" ", "_"))

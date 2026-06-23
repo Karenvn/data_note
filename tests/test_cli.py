@@ -46,6 +46,7 @@ class CliTests(unittest.TestCase):
         fake_config = Mock()
         fake_config.profile_name = "darwin"
         fake_config.include_bold_barcode = False
+        fake_config.include_bold_bin = False
         fake_config.include_gbif_distribution = False
         fake_pipeline = Mock()
         fake_pipeline.run.return_value = 0
@@ -58,6 +59,24 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         self.assertTrue(fake_config.include_bold_barcode)
+
+    def test_main_passes_bold_bin_flag_into_config(self) -> None:
+        fake_config = Mock()
+        fake_config.profile_name = "darwin"
+        fake_config.include_bold_barcode = False
+        fake_config.include_bold_bin = False
+        fake_config.include_gbif_distribution = False
+        fake_pipeline = Mock()
+        fake_pipeline.run.return_value = 0
+
+        with (
+            patch("data_note.cli.load_config", return_value=fake_config),
+            patch("data_note.cli.DataNotePipeline", return_value=fake_pipeline),
+        ):
+            result = main(["--include-bold-bin", "PRJEB12345"])
+
+        self.assertEqual(result, 0)
+        self.assertTrue(fake_config.include_bold_bin)
 
     def test_main_passes_sequencing_source_flags_into_config(self) -> None:
         fake_config = Mock()

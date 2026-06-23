@@ -39,6 +39,8 @@ class GbifTaxonomyClientTests(unittest.TestCase):
                         "vernacularName": "human",
                     }
                 )
+            if url.endswith("/species/2436436/synonyms"):
+                return _Response({"results": []})
             raise AssertionError(f"Unexpected URL: {url}")
 
         client = GbifTaxonomyClient(request_get=fake_get)
@@ -84,6 +86,8 @@ class GbifTaxonomyClientTests(unittest.TestCase):
                         "canonicalName": "Neogale vison",
                     }
                 )
+            if url.endswith("/species/177671599/synonyms"):
+                return _Response({"results": []})
             raise AssertionError(f"Unexpected URL: {url}")
 
         client = GbifTaxonomyClient(request_get=fake_get)
@@ -93,6 +97,133 @@ class GbifTaxonomyClientTests(unittest.TestCase):
         self.assertEqual(metadata["common_name"], "American mink")
         self.assertEqual(metadata["tax_auth"], "(Schreber, 1777)")
         self.assertEqual(metadata["gbif_match_strategy"], "GBIF_SEARCH_EXACT")
+
+    def test_fetch_species_metadata_adds_brackets_when_basionym_genus_differs(self) -> None:
+        def fake_get(url, *, params=None, timeout=None):
+            del timeout
+            if url.endswith("/species/match"):
+                return _Response(
+                    {
+                        "usageKey": 1,
+                        "canonicalName": "Current species",
+                        "rank": "SPECIES",
+                        "matchType": "EXACT",
+                    }
+                )
+            if url.endswith("/species/1"):
+                return _Response(
+                    {
+                        "key": 1,
+                        "canonicalName": "Current species",
+                        "authorship": "Author, 1900",
+                        "basionymKey": 2,
+                    }
+                )
+            if url.endswith("/species/2"):
+                return _Response(
+                    {
+                        "key": 2,
+                        "canonicalName": "Original species",
+                        "authorship": "Author, 1900",
+                    }
+                )
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        client = GbifTaxonomyClient(request_get=fake_get)
+        metadata = client.fetch_species_metadata("Current species")
+
+        self.assertEqual(metadata["tax_auth"], "(Author, 1900)")
+        self.assertEqual(metadata["original_combination"], "Original species")
+        self.assertEqual(metadata["tax_auth_gbif_verification"], "SOURCE_MISSING_BRACKETS")
+        self.assertEqual(metadata["gbif_tax_auth_raw"], "Author, 1900")
+
+    def test_fetch_species_metadata_removes_brackets_when_basionym_genus_matches(self) -> None:
+        def fake_get(url, *, params=None, timeout=None):
+            del timeout
+            if url.endswith("/species/match"):
+                return _Response(
+                    {
+                        "usageKey": 1,
+                        "canonicalName": "Current species",
+                        "rank": "SPECIES",
+                        "matchType": "EXACT",
+                    }
+                )
+            if url.endswith("/species/1"):
+                return _Response(
+                    {
+                        "key": 1,
+                        "canonicalName": "Current species",
+                        "authorship": "(Author, 1900)",
+                        "basionymKey": 2,
+                    }
+                )
+            if url.endswith("/species/2"):
+                return _Response(
+                    {
+                        "key": 2,
+                        "canonicalName": "Current species",
+                        "authorship": "Author, 1900",
+                    }
+                )
+            if url.endswith("/species/1/synonyms"):
+                return _Response({"results": []})
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        client = GbifTaxonomyClient(request_get=fake_get)
+        metadata = client.fetch_species_metadata("Current species")
+
+        self.assertEqual(metadata["tax_auth"], "Author, 1900")
+        self.assertEqual(metadata["original_combination"], "Current species")
+        self.assertEqual(metadata["tax_auth_gbif_verification"], "SOURCE_UNNEEDED_BRACKETS")
+        self.assertEqual(metadata["gbif_tax_auth_raw"], "(Author, 1900)")
+
+    def test_fetch_species_metadata_uses_synonym_history_for_original_combination(self) -> None:
+        def fake_get(url, *, params=None, timeout=None):
+            del timeout
+            if url.endswith("/species/match"):
+                return _Response({"matchType": "NONE"})
+            if url.endswith("/species/search"):
+                return _Response(
+                    {
+                        "results": [
+                            {
+                                "key": 318679642,
+                                "canonicalName": "Maea johnstoni",
+                                "rank": "SPECIES",
+                                "taxonomicStatus": "ACCEPTED",
+                            }
+                        ]
+                    }
+                )
+            if url.endswith("/species/318679642"):
+                return _Response(
+                    {
+                        "key": 318679642,
+                        "canonicalName": "Maea johnstoni",
+                        "authorship": "Fiege, Licher & Mackie, 2000",
+                    }
+                )
+            if url.endswith("/species/318679642/synonyms"):
+                return _Response(
+                    {
+                        "results": [
+                            {
+                                "canonicalName": "Magelona johnstoni",
+                                "authorship": "Fiege, Licher & Mackie, 2000",
+                                "taxonomicStatus": "SYNONYM",
+                            }
+                        ]
+                    }
+                )
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        client = GbifTaxonomyClient(request_get=fake_get)
+        metadata = client.fetch_species_metadata("Maea johnstoni")
+
+        self.assertEqual(metadata["tax_auth"], "(Fiege, Licher & Mackie, 2000)")
+        self.assertEqual(metadata["original_combination"], "Magelona johnstoni")
+        self.assertEqual(metadata["tax_auth_gbif_verification"], "SOURCE_MISSING_BRACKETS")
 
 
 if __name__ == "__main__":

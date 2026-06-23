@@ -76,6 +76,7 @@ class DataNoteOrchestrator:
         self,
         profile: ProgrammeProfile | str | None = None,
         include_gbif_distribution: bool = False,
+        include_bold_bin: bool = False,
         include_bold_barcode: bool = False,
         sequencing_source: str = "public-with-portal",
         illumina_count_unit: str = "read_pairs",
@@ -85,6 +86,7 @@ class DataNoteOrchestrator:
         Entrez.api_key = os.getenv("ENTREZ_API_KEY", "default_api_key")
         self.profile = profile if isinstance(profile, ProgrammeProfile) else get_profile(profile)
         self.include_gbif_distribution = include_gbif_distribution
+        self.include_bold_bin = include_bold_bin
         self.include_bold_barcode = include_bold_barcode
         self.sequencing_source = sequencing_source
         self.illumina_count_unit = illumina_count_unit
@@ -205,6 +207,8 @@ class DataNoteOrchestrator:
                 assembly_selection,
                 tolid=tolid,
                 include_distribution=self.include_gbif_distribution,
+                include_bold_bin=self.include_bold_bin,
+                common_name=context.get("common_name"),
             )
             note_data.base.auto_text = species_summary.intro_text
             note_data.base.distribution_text = species_summary.distribution_text or None

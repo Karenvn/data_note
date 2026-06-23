@@ -71,6 +71,27 @@ class AssemblyModelTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             selection.validate()
 
+    def test_validation_rejects_missing_primary_selection(self) -> None:
+        selection = AssemblySelection(assemblies_type="prim_alt")
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Primary/alternate assembly selection requires a primary assembly",
+        ):
+            selection.validate()
+
+    def test_validation_rejects_incomplete_haplotype_selection(self) -> None:
+        selection = AssemblySelection(
+            assemblies_type="hap_asm",
+            hap1=AssemblyRecord(accession="GCA_h1", assembly_name="ixFooBar1.hap1.1", role="hap1"),
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Haplotype assembly selection requires a hap2 assembly",
+        ):
+            selection.validate()
+
     def test_coverage_input_from_primary_selection_and_context(self) -> None:
         selection = AssemblySelection(
             assemblies_type="prim_alt",

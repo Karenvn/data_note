@@ -4,6 +4,12 @@ import re
 
 
 SEX_CHROMOSOME_LABELS = frozenset({"X", "X1", "X2", "Y", "W", "Z", "Z1", "Z2"})
+PLAIN_TEXT_BOLD_PHRASES = frozenset(
+    {
+        "other somatic animal tissue",
+        "other somatic body tissue",
+    }
+)
 
 
 def na(value):
@@ -63,7 +69,17 @@ def flatten_cell(value, digits=2):
                 return f"{float(value):,.{digits}f}".replace(",", "\u202f")
         except Exception:
             pass
-    return str(value)
+    return unbold_plain_text_phrase(str(value))
+
+
+def unbold_plain_text_phrase(value: str) -> str:
+    """Remove emphasis markup from known source terms that should stay plain."""
+    unbolded = re.sub(r"</?\s*(?:strong|b)\s*>", "", value, flags=re.IGNORECASE)
+    unbolded = unbolded.replace("**", "").replace("__", "")
+    normalized = re.sub(r"\s+", " ", unbolded).strip().lower()
+    if normalized in PLAIN_TEXT_BOLD_PHRASES:
+        return unbolded
+    return value
 
 
 def native_cell(value):

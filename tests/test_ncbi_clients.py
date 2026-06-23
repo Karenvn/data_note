@@ -125,6 +125,58 @@ class NcbiTaxonomyClientTests(unittest.TestCase):
         self.assertEqual(taxonomy["tax_auth_ncbi"], "Linnaeus, 1758")
         self.assertEqual(taxonomy["common_name_ncbi"], "human")
 
+    def test_parse_taxonomy_report_adds_brackets_when_basionym_genus_differs(self) -> None:
+        taxonomy = NcbiTaxonomyClient.parse_taxonomy_report(
+            {
+                "taxonomy": {
+                    "tax_id": 3698974,
+                    "current_scientific_name": {
+                        "name": "Maea johnstoni",
+                        "authority": "Fiege, Licher & Mackie, 2000",
+                        "basionym": {
+                            "name": "Magelona johnstoni",
+                            "authority": "Fiege, Licher & Mackie, 2000",
+                        },
+                    },
+                    "classification": {
+                        "family": {"name": "Magelonidae", "id": 2700},
+                        "genus": {"name": "Maea", "id": 1},
+                        "species": {"name": "Maea johnstoni", "id": 3698974},
+                    },
+                }
+            }
+        )
+
+        self.assertEqual(taxonomy["tax_auth_ncbi"], "(Fiege, Licher & Mackie, 2000)")
+        self.assertEqual(taxonomy["original_combination_ncbi"], "Magelona johnstoni")
+        self.assertEqual(taxonomy["tax_auth_ncbi_verification"], "SOURCE_MISSING_BRACKETS")
+        self.assertEqual(taxonomy["tax_auth_ncbi_raw"], "Fiege, Licher & Mackie, 2000")
+
+    def test_parse_taxonomy_report_removes_brackets_when_basionym_genus_matches(self) -> None:
+        taxonomy = NcbiTaxonomyClient.parse_taxonomy_report(
+            {
+                "taxonomy": {
+                    "tax_id": 12345,
+                    "current_scientific_name": {
+                        "name": "Example species",
+                        "authority": "(Author, 1900)",
+                        "basionym": {
+                            "name": "Example species",
+                            "authority": "Author, 1900",
+                        },
+                    },
+                    "classification": {
+                        "genus": {"name": "Example", "id": 1},
+                        "species": {"name": "Example species", "id": 12345},
+                    },
+                }
+            }
+        )
+
+        self.assertEqual(taxonomy["tax_auth_ncbi"], "Author, 1900")
+        self.assertEqual(taxonomy["tax_auth_ncbi_verification"], "SOURCE_UNNEEDED_BRACKETS")
+        self.assertEqual(taxonomy["tax_auth_ncbi_raw"], "(Author, 1900)")
+
     def test_parse_taxonomy_report_falls_back_to_classification_lineage(self) -> None:
         taxonomy = NcbiTaxonomyClient.parse_taxonomy_report(
             {
@@ -151,6 +203,52 @@ class NcbiTaxonomyClientTests(unittest.TestCase):
                 "Eukaryota; Metazoa; Chordata; Mammalia; Primates; "
                 "Hominidae; *Homo*; *Homo sapiens*"
             ),
+        )
+        self.assertEqual(taxonomy["lineage_source"], "ncbi_datasets_classification")
+
+    def test_parse_taxonomy_report_italicises_subgenus_from_parent_lineage(self) -> None:
+        taxonomy = NcbiTaxonomyClient.parse_taxonomy_report(
+            {
+                "taxonomy": {
+                    "tax_id": 373668,
+                    "current_scientific_name": {"name": "Tipula scripta"},
+                    "classification": {
+                        "genus": {"name": "Tipula", "id": 4000},
+                        "species": {"name": "Tipula scripta", "id": 373668},
+                    },
+                }
+            },
+            lineage_records=[
+                {"tax_id": "4000", "rank": "GENUS", "name": "Tipula"},
+                {"tax_id": "4001", "rank": "SUBGENUS", "name": "Vestiplex"},
+                {"tax_id": "373668", "rank": "SPECIES", "name": "Tipula scripta"},
+            ],
+        )
+
+        self.assertEqual(
+            taxonomy["lineage"],
+            "*Tipula*; *Vestiplex*; *Tipula scripta*",
+        )
+        self.assertEqual(taxonomy["lineage_source"], "ncbi_datasets_parents")
+
+    def test_parse_taxonomy_report_includes_and_italicises_subgenus_from_classification(self) -> None:
+        taxonomy = NcbiTaxonomyClient.parse_taxonomy_report(
+            {
+                "taxonomy": {
+                    "tax_id": 373668,
+                    "current_scientific_name": {"name": "Tipula scripta"},
+                    "classification": {
+                        "genus": {"name": "Tipula", "id": 4000},
+                        "subgenus": {"name": "Vestiplex", "id": 4001},
+                        "species": {"name": "Tipula scripta", "id": 373668},
+                    },
+                }
+            }
+        )
+
+        self.assertEqual(
+            taxonomy["lineage"],
+            "*Tipula*; *Vestiplex*; *Tipula scripta*",
         )
         self.assertEqual(taxonomy["lineage_source"], "ncbi_datasets_classification")
 

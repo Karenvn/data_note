@@ -43,6 +43,12 @@ TAX_ID_MAPPINGS = {
     "2884248": {
         "allowed_tax_ids": ["3458737"],
         "reason": "Assemblies use updated tax_id 3458737; umbrella project lists 2884248"
+    },
+
+    # Maea johnstoni / Magelona johnstoni (PRJEB71422) - umbrella and assembly records use duplicate species tax_ids
+    "1436028": {
+        "allowed_tax_ids": ["3698974"],
+        "reason": "Assemblies use duplicate species tax_id 3698974; umbrella project lists 1436028"
     }
 }
 

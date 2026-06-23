@@ -7,6 +7,7 @@ from typing import Any, Callable
 import requests
 
 from .ncbi_datasets_client import safe_ncbi_request
+from .taxonomic_authority import format_taxonomic_authority
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,22 @@ class NcbiTaxonomyClient:
             lineage_parts = cls._lineage_parts_from_classification(classification)
 
         current_name = taxonomy.get("current_scientific_name", {})
+        species_name = classification.get("species", {}).get("name") or current_name.get("name")
+        basionym = current_name.get("basionym", {})
+        if not isinstance(basionym, dict):
+            basionym = {}
+        authority = format_taxonomic_authority(
+            current_name.get("authority") or basionym.get("authority"),
+            current_name=species_name,
+            original_name=basionym.get("name"),
+        )
+        authority_extras = {}
+        if authority.original_combination:
+            authority_extras["original_combination_ncbi"] = authority.original_combination
+            authority_extras["tax_auth_ncbi_verification"] = authority.status
+        raw_authority = current_name.get("authority")
+        if raw_authority and authority.authority != str(raw_authority).strip():
+            authority_extras["tax_auth_ncbi_raw"] = raw_authority
         return {
             "tax_id": str(taxonomy.get("tax_id")) if taxonomy.get("tax_id") is not None else None,
             "lineage": "; ".join(lineage_parts),
@@ -114,16 +131,17 @@ class NcbiTaxonomyClient:
             "family_taxid": classification.get("family", {}).get("id"),
             "genus": classification.get("genus", {}).get("name"),
             "genus_taxid": classification.get("genus", {}).get("id"),
-            "species": classification.get("species", {}).get("name") or current_name.get("name"),
+            "species": species_name,
             "species_taxid": classification.get("species", {}).get("id") or taxonomy.get("tax_id"),
             "domain": classification.get("domain", {}).get("name"),
             "domain_taxid": classification.get("domain", {}).get("id"),
             "kingdom": classification.get("kingdom", {}).get("name"),
             "kingdom_taxid": classification.get("kingdom", {}).get("id"),
-            "tax_auth_ncbi": current_name.get("authority"),
+            "tax_auth_ncbi": authority.authority,
             "common_name_ncbi": taxonomy.get("curator_common_name"),
             "group_name_ncbi": taxonomy.get("group_name"),
             "rank_ncbi": taxonomy.get("rank"),
+            **authority_extras,
         }
 
     @classmethod
@@ -147,6 +165,7 @@ class NcbiTaxonomyClient:
             "order",
             "family",
             "genus",
+            "subgenus",
             "species",
         ):
             taxon = classification.get(rank, {})
@@ -162,7 +181,7 @@ class NcbiTaxonomyClient:
     @staticmethod
     def _format_lineage_name(name: str, rank: str | None) -> str:
         normalized_rank = str(rank or "").lower().replace("_", " ")
-        if normalized_rank in {"genus", "species"}:
+        if normalized_rank in {"genus", "subgenus", "species"}:
             return f"*{name}*"
         return name
 

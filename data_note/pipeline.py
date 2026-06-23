@@ -64,6 +64,7 @@ class DataNotePipeline:
             self._orchestrator = DataNoteOrchestrator(
                 profile=self.config.profile_name,
                 include_gbif_distribution=self.config.include_gbif_distribution,
+                include_bold_bin=self.config.include_bold_bin,
                 include_bold_barcode=self.config.include_bold_barcode,
                 sequencing_source=self.config.sequencing_source,
                 illumina_count_unit=self.config.illumina_count_unit,

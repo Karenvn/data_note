@@ -52,6 +52,7 @@ class AppConfig:
     yaml_ssh_host: str | None
     yaml_ssh_identity_file: Path
     include_gbif_distribution: bool = False
+    include_bold_bin: bool = False
     include_bold_barcode: bool = False
     sequencing_source: str = "public-with-portal"
     illumina_count_unit: str = "read_pairs"
@@ -108,6 +109,10 @@ class AppConfig:
                 env.get("DATA_NOTE_INCLUDE_GBIF_DISTRIBUTION"),
                 default=False,
             ),
+            include_bold_bin=_env_bool(
+                env.get("DATA_NOTE_INCLUDE_BOLD_BIN"),
+                default=False,
+            ),
             include_bold_barcode=_env_bool(
                 env.get("DATA_NOTE_INCLUDE_BOLD_BARCODE"),
                 default=False,
@@ -137,6 +142,10 @@ class AppConfig:
         self._set(
             "DATA_NOTE_INCLUDE_GBIF_DISTRIBUTION",
             "1" if self.include_gbif_distribution else "0",
+        )
+        self._set(
+            "DATA_NOTE_INCLUDE_BOLD_BIN",
+            "1" if self.include_bold_bin else "0",
         )
         self._set(
             "DATA_NOTE_INCLUDE_BOLD_BARCODE",

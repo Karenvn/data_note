@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from data_note import taxonomy_mapper
 from data_note.assembly_candidate_filter import AssemblyCandidateFilter
 from data_note.assembly_mode_detector import AssemblyModeDetector
 from data_note.assembly_pair_selector import AssemblyPairSelector
@@ -328,6 +329,21 @@ class AssemblySelectionResolverTests(unittest.TestCase):
         self.assertEqual(relevant[0].accession, "GCA_KEEP.1")
         self.assertEqual(relevant[0].assembly_name, "ixExample1.1")
 
+    def test_build_selection_reports_available_tax_ids_when_filtering_removes_all_assemblies(self) -> None:
+        resolver = AssemblySelectionResolver(
+            taxonomy_mapper_module=_MapperStub(),
+            contiguity_fetcher=lambda accession: {},
+        )
+        assembly_dicts = [
+            {"assembly_name": "ixExample1.1", "assembly_set_accession": "GCA_OTHER.1", "tax_id": "wrong-tax"},
+        ]
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "No assemblies matched tax_id 1234 after filtering; available assembly tax_ids: wrong-tax",
+        ):
+            resolver.build_selection(assembly_dicts, "1234")
+
     def test_build_selection_honours_requested_primary_assembly_input(self) -> None:
         metrics = {
             "GCA_ALT_OLD.1": {"assembly_level": "chromosome", "scaffold_N50": 60.0, "contig_N50": 5.0},
@@ -479,6 +495,11 @@ class NcbiAssemblyParsingTests(unittest.TestCase):
             NcbiDatasetsClient.extract_linked_assemblies(report),
             ["GCA_111111111.1", "GCA_222222222.1"],
         )
+
+
+class TaxonomyMapperTests(unittest.TestCase):
+    def test_maea_johnstoni_duplicate_species_tax_id_is_allowed_for_prjeb71422(self) -> None:
+        self.assertIn("3698974", taxonomy_mapper.get_allowed_tax_ids("1436028"))
 
 
 if __name__ == "__main__":
