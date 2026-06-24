@@ -165,6 +165,10 @@ class ProfileRegressionTests(unittest.TestCase):
         rendered, context, generated_files = self._render_profile(DarwinProfile())
 
         self._assert_snapshot_equal(rendered, DARWIN_SNAPSHOT)
+        self.assertEqual(
+            context["assigned_chromosomes_phrase"],
+            "the X sex chromosome and the B1 supernumerary chromosome",
+        )
         self.assertEqual(tuple(context["tables"].keys()), ("table1", "table2", "table3", "table4", "table5"))
         self.assertIn("Fig_4_Merqury", context)
         self.assertIn("Fig_5_Snail", context)
@@ -180,6 +184,10 @@ class ProfileRegressionTests(unittest.TestCase):
         rendered, context, generated_files = self._render_profile(PsycheProfile())
 
         self._assert_snapshot_equal(rendered, PSYCHE_SNAPSHOT)
+        self.assertEqual(
+            context["assigned_chromosomes_phrase"],
+            "the X sex chromosome and the B1 supernumerary chromosome",
+        )
         self.assertEqual(tuple(context["tables"].keys()), ("table1", "table2", "table3", "table4", "table5"))
         self.assertIn("Fig_4_Merian", context)
         self.assertIn("Fig_5_Merqury", context)

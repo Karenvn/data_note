@@ -112,6 +112,25 @@ class FlowCytometryServiceTests(unittest.TestCase):
         self.assertEqual(result.flow_pg, 0.25)
         self.assertEqual(result.flow_dtol_specimen_id, "KDTOL10137")
 
+    def test_build_context_matches_species_epithet_when_family_is_unambiguous(self) -> None:
+        tsv_content = (
+            "Project\tFamily\tGenus\tSpecies \tStandard\tBuffer\tGS pg (1C)\t1C/Gbp\tDToL Specimen ID\n"
+            "DTOL\tAsteraceae\tFilago\tminima\t<Solanum\tGPB3%PVP\t0.62\t0.60\t\n"
+            "DTOL\tRosaceae\tSorbus\tminima\t<Petro\tGPB\t1.36\t1.33\t\n"
+        )
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "cyto_info.tsv"
+            path.write_text(tsv_content)
+            service = FlowCytometryService(tsv_path=path)
+
+            result = service.build_context("Logfia minima", family_name="Asteraceae")
+
+        self.assertIsInstance(result, FlowCytometryInfo)
+        assert result is not None
+        self.assertEqual(result.flow_pg, 0.62)
+        self.assertEqual(result.flow_mb, "600.00")
+        self.assertEqual(result.flow_project, "DTOL")
+
 
 if __name__ == "__main__":
     unittest.main()

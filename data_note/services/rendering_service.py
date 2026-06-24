@@ -10,6 +10,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from ..asset_images import copy_gscope_image, copy_merian_image, copy_merqury_image
 from ..btk_images import download_and_process_btk
+from ..formatting_utils import populate_assigned_chromosome_phrases
 from ..pretext_images import label_pretext_map
 from ..profiles.base import ProgrammeProfile
 from .figure_service import FigureService
@@ -59,6 +60,7 @@ class RenderingService:
 
         self._populate_images(profile, tolid, output_dir, context)
 
+        populate_assigned_chromosome_phrases(context)
         self._replace_context_text(context)
         self._ensure_tables(context)
 

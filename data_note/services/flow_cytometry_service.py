@@ -38,6 +38,7 @@ class FlowCytometryService:
         species_name: str | None,
         *,
         identifier_candidates: Sequence[str] | None = None,
+        family_name: str | None = None,
     ) -> FlowCytometryInfo | None:
         normalized_identifiers = self._normalize_identifier_candidates(identifier_candidates)
         if not species_name and not normalized_identifiers:
@@ -53,7 +54,13 @@ class FlowCytometryService:
                 return None
             matches = dataframe[dataframe["species_name"].str.lower() == species_name.lower()]
             if matches.empty:
-                return None
+                matches = self._match_species_epithet_with_family(
+                    dataframe,
+                    species_name,
+                    family_name,
+                )
+                if matches.empty:
+                    return None
 
         row = self._select_preferred_match(matches).iloc[0]
         buffer_code = self._string_value(row.get("Buffer"))
@@ -85,7 +92,7 @@ class FlowCytometryService:
         dataframe.columns = (
             dataframe.columns.str.strip().str.replace(r"\s+", " ", regex=True)
         )
-        for column in ("Genus", "Species", "Project", "DToL Specimen ID"):
+        for column in ("Genus", "Species", "Family", "Project", "DToL Specimen ID"):
             if column not in dataframe.columns:
                 dataframe[column] = ""
         dataframe["Genus"] = dataframe["Genus"].fillna("").astype(str).str.strip()
@@ -129,6 +136,41 @@ class FlowCytometryService:
             matches = dataframe[normalized_specimen_ids.eq(identifier)]
             if not matches.empty:
                 return matches
+        return dataframe.iloc[0:0]
+
+    @staticmethod
+    def _match_species_epithet_with_family(
+        dataframe: pd.DataFrame,
+        species_name: str,
+        family_name: str | None,
+    ) -> pd.DataFrame:
+        parts = species_name.split()
+        if len(parts) < 2 or not family_name:
+            return dataframe.iloc[0:0]
+
+        species_epithet = parts[1].casefold()
+        if not species_epithet:
+            return dataframe.iloc[0:0]
+
+        family_matches = dataframe[
+            dataframe["Family"].fillna("").astype(str).str.strip().str.casefold()
+            == family_name.strip().casefold()
+        ]
+        if family_matches.empty:
+            return dataframe.iloc[0:0]
+
+        epithet_matches = family_matches[
+            family_matches["Species"].fillna("").astype(str).str.strip().str.casefold()
+            == species_epithet
+        ]
+        if len(epithet_matches) == 1:
+            logger.warning(
+                "Flow cytometry matched %r to %r by species epithet and family %r",
+                species_name,
+                epithet_matches.iloc[0]["species_name"],
+                family_name,
+            )
+            return epithet_matches
         return dataframe.iloc[0:0]
 
     @staticmethod

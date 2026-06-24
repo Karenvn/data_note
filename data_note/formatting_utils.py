@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+import re
+
 
 def safe_convert(value, to_type, default):
     try:
@@ -29,6 +31,81 @@ def format_sex_chromosomes(sex_chromosomes):
     if len(sex_chromosomes) == 2:
         return f"{sex_chromosomes[0]} and {sex_chromosomes[1]}"
     return ", ".join(sex_chromosomes[:-1]) + f", and {sex_chromosomes[-1]}"
+
+
+def format_assigned_chromosomes_phrase(
+    sex_chromosomes=None,
+    supernumerary_chromosomes=None,
+):
+    phrases = []
+    sex_phrase = _format_chromosome_kind_phrase(sex_chromosomes, "sex")
+    supernumerary_phrase = _format_chromosome_kind_phrase(supernumerary_chromosomes, "supernumerary")
+    if sex_phrase:
+        phrases.append(sex_phrase)
+    if supernumerary_phrase:
+        phrases.append(supernumerary_phrase)
+    return " and ".join(phrases) if phrases else None
+
+
+def populate_assigned_chromosome_phrases(context):
+    if not context.get("assigned_chromosomes_phrase"):
+        context["assigned_chromosomes_phrase"] = format_assigned_chromosomes_phrase(
+            context.get("sex_chromosomes"),
+            context.get("supernumerary_chromosomes"),
+        )
+    if not context.get("hap1_assigned_chromosomes_phrase"):
+        context["hap1_assigned_chromosomes_phrase"] = format_assigned_chromosomes_phrase(
+            context.get("hap1_sex_chromosomes"),
+            context.get("hap1_supernumerary_chromosomes"),
+        )
+    if not context.get("hap2_assigned_chromosomes_phrase"):
+        context["hap2_assigned_chromosomes_phrase"] = format_assigned_chromosomes_phrase(
+            context.get("hap2_sex_chromosomes"),
+            context.get("hap2_supernumerary_chromosomes"),
+        )
+    if not context.get("all_assigned_chromosomes_phrase"):
+        context["all_assigned_chromosomes_phrase"] = format_assigned_chromosomes_phrase(
+            context.get("all_sex_chromosomes"),
+            context.get("all_supernumerary_chromosomes"),
+        )
+    return context
+
+
+def _format_chromosome_kind_phrase(chromosomes, chromosome_kind):
+    labels = _split_chromosome_labels(chromosomes)
+    if not labels:
+        return None
+    label_text = format_sex_chromosomes(labels)
+    plural = "" if len(labels) == 1 else "s"
+    return f"the {label_text} {chromosome_kind} chromosome{plural}"
+
+
+def _split_chromosome_labels(chromosomes):
+    if not chromosomes:
+        return []
+    if isinstance(chromosomes, (list, tuple, set)):
+        labels = []
+        for chromosome in chromosomes:
+            labels.extend(_split_chromosome_labels(chromosome))
+        return _dedupe_chromosome_labels(labels)
+
+    parts = re.split(r",|;|\band\b", str(chromosomes), flags=re.IGNORECASE)
+    return _dedupe_chromosome_labels(part.strip() for part in parts)
+
+
+def _dedupe_chromosome_labels(labels):
+    deduped = []
+    seen = set()
+    for label in labels:
+        normalized = str(label).strip()
+        if not normalized:
+            continue
+        key = normalized.upper()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(normalized)
+    return deduped
 
 
 def format_scientific(value):

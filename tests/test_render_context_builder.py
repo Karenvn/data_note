@@ -38,6 +38,47 @@ class _DatasetsStub:
 
 
 class RenderContextBuilderTests(unittest.TestCase):
+    def test_chromosome_rendering_context_combines_sex_and_supernumerary_chromosomes(self) -> None:
+        context = NoteContext.from_mapping(
+            {
+                "sex_chromosomes": "Z",
+                "supernumerary_chromosomes": "B1",
+            }
+        )
+
+        RenderContextBuilder._apply_chromosome_rendering_context(context)
+
+        self.assertEqual(
+            context["assigned_chromosomes_phrase"],
+            "the Z sex chromosome and the B1 supernumerary chromosome",
+        )
+
+    def test_chromosome_rendering_context_handles_haplotype_specific_chromosomes(self) -> None:
+        context = NoteContext.from_mapping(
+            {
+                "hap1_sex_chromosomes": "W and Z",
+                "hap1_supernumerary_chromosomes": "B1 and B2",
+                "hap2_supernumerary_chromosomes": "B2",
+                "all_sex_chromosomes": "W and Z",
+                "all_supernumerary_chromosomes": "B1 and B2",
+            }
+        )
+
+        RenderContextBuilder._apply_chromosome_rendering_context(context)
+
+        self.assertEqual(
+            context["hap1_assigned_chromosomes_phrase"],
+            "the W and Z sex chromosomes and the B1 and B2 supernumerary chromosomes",
+        )
+        self.assertEqual(
+            context["hap2_assigned_chromosomes_phrase"],
+            "the B2 supernumerary chromosome",
+        )
+        self.assertEqual(
+            context["all_assigned_chromosomes_phrase"],
+            "the W and Z sex chromosomes and the B1 and B2 supernumerary chromosomes",
+        )
+
     def test_derive_note_fields_updates_parent_projects_and_tolid(self) -> None:
         builder = RenderContextBuilder()
         note_data = NoteData(

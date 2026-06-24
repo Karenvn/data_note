@@ -243,6 +243,7 @@ class DataNoteOrchestrator:
                 note_data.flow_cytometry = self.flow_cytometry_service.build_context(
                     species,
                     identifier_candidates=self._flow_identifier_candidates(context),
+                    family_name=context.get("family"),
                 )
             except Exception as exc:
                 logger.warning("Failed to process flow cytometry data for %r: %s", species, exc)

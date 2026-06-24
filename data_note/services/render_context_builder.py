@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from ..calculate_metrics import calc_ebp_metric, evaluate_ebp_reference_standard
+from ..formatting_utils import populate_assigned_chromosome_phrases
 from ..io_utils import load_and_apply_corrections
 from ..models import NoteContext, NoteData
 from ..sampling_template_fields import populate_sampling_template_fields
@@ -65,6 +66,7 @@ class RenderContextBuilder:
             self.correction_loader(note_context, corrections_file)
         self._prefer_btk_busco_version(note_context)
         self._apply_assembly_rendering_context(note_context)
+        self._apply_chromosome_rendering_context(note_context)
         populate_sampling_template_fields(note_context)
         note_context.update(self.wet_lab_protocol_builder(note_context))
         note_context["ebp_metric"] = self.ebp_metric_calculator(note_context)
@@ -103,6 +105,10 @@ class RenderContextBuilder:
         if not note_context["has_alternate_assembly"]:
             for key in ("alt_accession", "alt_assembly_name", "alt_QV", "alt_kmer_completeness"):
                 note_context.pop(key, None)
+
+    @staticmethod
+    def _apply_chromosome_rendering_context(note_context: NoteContext) -> None:
+        populate_assigned_chromosome_phrases(note_context)
 
     @staticmethod
     def _prefer_btk_busco_version(note_context: NoteContext) -> None:

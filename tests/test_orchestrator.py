@@ -98,6 +98,7 @@ class OrchestratorProfileTests(unittest.TestCase):
         flow_cytometry_service.build_context.assert_called_once_with(
             "Example species",
             identifier_candidates=["SPEC-001", "ixExamSpec1"],
+            family_name=None,
         )
 
     def test_darwin_profile_skips_flow_cytometry_enrichment(self) -> None:
