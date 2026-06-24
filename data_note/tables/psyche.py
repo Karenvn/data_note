@@ -82,7 +82,7 @@ def chrom_to_merian(tsv_file: str | Path, threshold: int = 5) -> dict[str, str]:
     )
     assignments = (
         counts.groupby("chrom")["assigned_chr"]
-        .apply(lambda s: ";".join(sorted(s.unique())))
+        .apply(lambda s: "; ".join(sorted(s.unique())))
         .to_dict()
     )
     return _with_accession_aliases(assignments)
@@ -129,7 +129,7 @@ def _chrom_to_merian_from_busco(
                 counts[chrom][merian] += 1
 
     assignments = {
-        chrom: ";".join(sorted(merian for merian, count in counter.items() if count >= threshold))
+        chrom: "; ".join(sorted(merian for merian, count in counter.items() if count >= threshold))
         for chrom, counter in counts.items()
     }
     return _with_accession_aliases({chrom: merian for chrom, merian in assignments.items() if merian})
