@@ -254,9 +254,12 @@ class BtkServiceTests(unittest.TestCase):
 
         self.assertIsInstance(summary, BtkSummary)
         self.assertEqual(context["hap1_summary_accession"], "GCA_h1")
+        self.assertEqual(context["summary_accession"], "GCA_h1")
         self.assertEqual(context["software_accession"], "GCA_h1")
         self.assertEqual(context["hap1_view_url"], "view:GCA_h1")
+        self.assertEqual(context["view_url"], "view:GCA_h1")
         self.assertEqual(context["hap1_download_url"], "download:GCA_h1")
+        self.assertEqual(context["download_url"], "download:GCA_h1")
         self.assertEqual(context["hap2_summary_accession"], "GCA_h2")
         self.assertEqual(context["hap2_view_url"], "view:GCA_h2")
         self.assertEqual(context["hap2_download_url"], "download:GCA_h2")

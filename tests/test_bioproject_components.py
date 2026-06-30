@@ -312,6 +312,27 @@ class AssemblySelectionResolverTests(unittest.TestCase):
         self.assertEqual(selection.hap1.accession, "GCA_H1_BEST.1")
         self.assertEqual(selection.hap2.accession, "GCA_H2_LINKED.1")
 
+    def test_build_selection_matches_haplotype_pair_when_revision_suffixes_differ(self) -> None:
+        metrics = {
+            "GCA_H1.2": {"assembly_level": "chromosome", "scaffold_N50": 120.0, "contig_N50": 10.0},
+            "GCA_H2.1": {"assembly_level": "chromosome", "scaffold_N50": 110.0, "contig_N50": 9.0},
+        }
+        resolver = AssemblySelectionResolver(
+            taxonomy_mapper_module=_MapperStub(),
+            contiguity_fetcher=lambda accession: metrics.get(accession, {}),
+        )
+        assembly_dicts = [
+            {"assembly_name": "dhQueIlex1.hap2.1", "assembly_set_accession": "GCA_H2.1", "tax_id": "58334"},
+            {"assembly_name": "dhQueIlex1.hap2.1", "assembly_set_accession": "GCA_H2.1", "tax_id": "58334"},
+            {"assembly_name": "dhQueIlex1.hap1.2", "assembly_set_accession": "GCA_H1.2", "tax_id": "58334"},
+            {"assembly_name": "dhQueIlex1.hap1.2", "assembly_set_accession": "GCA_H1.2", "tax_id": "58334"},
+        ]
+
+        selection = resolver.build_selection(assembly_dicts, "58334")
+
+        self.assertEqual(selection.hap1.accession, "GCA_H1.2")
+        self.assertEqual(selection.hap2.accession, "GCA_H2.1")
+
     def test_filter_relevant_assemblies_applies_tax_id_and_name_filters(self) -> None:
         resolver = AssemblySelectionResolver(
             taxonomy_mapper_module=_MapperStub(),
@@ -500,6 +521,11 @@ class NcbiAssemblyParsingTests(unittest.TestCase):
 class TaxonomyMapperTests(unittest.TestCase):
     def test_maea_johnstoni_duplicate_species_tax_id_is_allowed_for_prjeb71422(self) -> None:
         self.assertIn("3698974", taxonomy_mapper.get_allowed_tax_ids("1436028"))
+
+    def test_quercus_ilex_new_hap1_revision_uses_existing_btk_dataset(self) -> None:
+        override = taxonomy_mapper.get_btk_accession_override("GCA_964341325.2")
+
+        self.assertEqual(override["accession"], "GCA_964341325.1")
 
 
 if __name__ == "__main__":

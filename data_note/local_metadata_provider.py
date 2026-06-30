@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import logging
+import os
+from pathlib import Path
 from datetime import timezone
-from typing import Iterable
+from collections.abc import Mapping
+from typing import Any, Iterable
 
 from dateutil.parser import parse as parse_date
+import yaml
 
 from .local_metadata import LocalMetadataProvider, NullLocalMetadataProvider
 
@@ -107,6 +111,18 @@ class PortalCurationMetadataProvider:
 
         return None
 
+    def lookup_project_provenance(
+        self,
+        bioproject: str,
+        *,
+        tolid: str | None = None,
+        species: str | None = None,
+    ) -> Mapping[str, Any] | None:
+        # The portal should ultimately be the source of truth for this. Until the
+        # relevant object/attribute is stable, keep the method explicit and let
+        # file-backed metadata supply the structured values.
+        return None
+
     @staticmethod
     def _select_identifier(curations: Iterable) -> str | None:
         candidates = []
@@ -122,8 +138,80 @@ class PortalCurationMetadataProvider:
         return getattr(selected, "id", None) or (selected.attributes or {}).get("identifier")
 
 
+class FileProjectProvenanceMetadataProvider:
+    def __init__(self, path: str | Path) -> None:
+        self.path = Path(path).expanduser()
+        self._data: Mapping[str, Any] | None = None
+
+    def lookup_jira_ticket(
+        self,
+        accession: str,
+        *,
+        tolid: str | None = None,
+        assembly_name: str | None = None,
+    ) -> str | None:
+        return None
+
+    def lookup_project_provenance(
+        self,
+        bioproject: str,
+        *,
+        tolid: str | None = None,
+        species: str | None = None,
+    ) -> Mapping[str, Any] | None:
+        data = self._load()
+        for scope, value in (
+            ("bioproject", bioproject),
+            ("tolid", tolid),
+            ("species", species),
+        ):
+            if not value:
+                continue
+            scoped = data.get(scope)
+            if isinstance(scoped, Mapping):
+                match = scoped.get(value)
+                if isinstance(match, Mapping):
+                    return match
+        return None
+
+    def _load(self) -> Mapping[str, Any]:
+        if self._data is not None:
+            return self._data
+        if not self.path.is_file():
+            self._data = {}
+            return self._data
+        with self.path.open(encoding="utf-8") as handle:
+            payload = yaml.safe_load(handle) or {}
+        if not isinstance(payload, Mapping):
+            logger.warning("Ignoring project provenance file %s: top-level value is not a mapping", self.path)
+            payload = {}
+        self._data = payload
+        return self._data
+
+
+def _project_provenance_path_from_env() -> Path | None:
+    explicit = os.getenv("DATA_NOTE_PROJECT_PROVENANCE_FILE")
+    if explicit:
+        return Path(explicit).expanduser()
+
+    assets_root = os.getenv("DATA_NOTE_GN_ASSETS") or os.getenv("DATA_NOTE_SERVER_DATA")
+    if not assets_root:
+        return None
+
+    root = Path(assets_root).expanduser()
+    for filename in ("project_provenance.yaml", "project_provenance.yml", "project_provenance.json"):
+        candidate = root / filename
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def get_local_metadata_provider() -> LocalMetadataProvider:
     providers: list[LocalMetadataProvider] = []
+    provenance_path = _project_provenance_path_from_env()
+    if provenance_path is not None:
+        providers.append(FileProjectProvenanceMetadataProvider(provenance_path))
+
     if portal is not None and DataSourceFilter is not None:
         providers.append(PortalCurationMetadataProvider())
 
@@ -153,4 +241,21 @@ class CompositeLocalMetadataProvider:
             )
             if jira_ticket:
                 return jira_ticket
+        return None
+
+    def lookup_project_provenance(
+        self,
+        bioproject: str,
+        *,
+        tolid: str | None = None,
+        species: str | None = None,
+    ) -> Mapping[str, Any] | None:
+        for provider in self.providers:
+            provenance = provider.lookup_project_provenance(
+                bioproject,
+                tolid=tolid,
+                species=species,
+            )
+            if provenance:
+                return provenance
         return None

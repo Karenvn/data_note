@@ -75,6 +75,10 @@ BTK_ACCESSION_OVERRIDES = {
         "accession": "GCA_965112325.1",
         "reason": "PRJEB82199 uses cjHerHutc3.2 as the latest assembly; BTK dataset is available for cjHerHutc3.1",
     },
+    "GCA_964341325.2": {
+        "accession": "GCA_964341325.1",
+        "reason": "PRJEB81053 uses dhQueIlex1.hap1.2 as the latest assembly; BTK dataset is available for dhQueIlex1.hap1.1",
+    },
 }
 
 def has_assembly_override(bioproject_id):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+import re
 from typing import Any, Callable
 
 from .ncbi_datasets_client import NcbiDatasetsClient
@@ -9,6 +10,7 @@ from .models import AssemblyCandidate, AssemblyRecord
 
 logger = logging.getLogger(__name__)
 _DEFAULT_DATASETS_CLIENT = NcbiDatasetsClient()
+_TERMINAL_HAPLOTYPE_SUFFIX = re.compile(r"[._-]hap[12](?:[._-]?\d+)?$")
 
 
 @dataclass(slots=True)
@@ -282,6 +284,9 @@ class AssemblyPairSelector:
         if assemblies_type == "prim_alt":
             return lower.replace(" alternate haplotype", "").strip()
         if assemblies_type == "hap_asm":
+            normalized = _TERMINAL_HAPLOTYPE_SUFFIX.sub("", lower).rstrip("._- ")
+            if normalized != lower:
+                return " ".join(normalized.split())
             for token in ("hap1", "hap2"):
                 lower = lower.replace(token, "")
             return " ".join(lower.replace("..", ".").split())

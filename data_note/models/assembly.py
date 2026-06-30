@@ -368,10 +368,20 @@ class BtkSummary:
         if self.primary is not None:
             context.update(self.primary.to_context_dict())
         if self.hap1 is not None:
-            context.update(self.hap1.to_context_dict())
+            hap1_context = self.hap1.to_context_dict()
+            context.update(self._unprefixed_context(hap1_context, "hap1_"))
+            context.update(hap1_context)
         if self.hap2 is not None:
             context.update(self.hap2.to_context_dict())
         return context
+
+    @staticmethod
+    def _unprefixed_context(context: dict[str, Any], prefix: str) -> dict[str, Any]:
+        return {
+            key.removeprefix(prefix): value
+            for key, value in context.items()
+            if key.startswith(prefix)
+        }
 
 
 @dataclass(slots=True)

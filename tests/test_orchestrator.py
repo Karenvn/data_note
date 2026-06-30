@@ -70,6 +70,8 @@ class OrchestratorProfileTests(unittest.TestCase):
         }
         orchestrator.bioproject_client.fetch_child_accessions.return_value = ["PRJEB1"]
         orchestrator.bioproject_client.fetch_parent_projects.return_value = {}
+        orchestrator.project_provenance_service = Mock()
+        orchestrator.project_provenance_service.build_context.return_value = {}
         orchestrator.species_summary_service = Mock()
         orchestrator.species_summary_service.build_summary.return_value = SpeciesSummary(
             species_taxid="9606",

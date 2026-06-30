@@ -4,6 +4,8 @@ from collections.abc import Iterator, MutableMapping
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
+from ..project_provenance import format_project_list, project_accession, split_parent_projects
+
 
 @dataclass(slots=True)
 class NoteContext(MutableMapping[str, Any]):
@@ -19,6 +21,17 @@ class NoteContext(MutableMapping[str, Any]):
     distribution_text: str | None = None
     barcode_text: str | None = None
     formatted_parent_projects: str | None = None
+    supplemental_parent_projects: list[dict[str, Any]] | None = None
+    formatted_supplemental_parent_projects: str | None = None
+    funding_projects: list[dict[str, Any]] | None = None
+    formatted_funding_projects: str | None = None
+    data_reuse_projects: list[dict[str, Any]] | None = None
+    formatted_data_reuse_projects: str | None = None
+    programme_projects: list[dict[str, Any]] | None = None
+    formatted_programme_projects: str | None = None
+    funding_statement: str | None = None
+    project_provenance_note: str | None = None
+    project_provenance_source: str | None = None
     child_bioprojects: list[str] | None = None
     parent_projects: list[dict[str, Any]] | None = None
     extras: dict[str, Any] = field(default_factory=dict)
@@ -36,6 +49,17 @@ class NoteContext(MutableMapping[str, Any]):
         "distribution_text",
         "barcode_text",
         "formatted_parent_projects",
+        "supplemental_parent_projects",
+        "formatted_supplemental_parent_projects",
+        "funding_projects",
+        "formatted_funding_projects",
+        "data_reuse_projects",
+        "formatted_data_reuse_projects",
+        "programme_projects",
+        "formatted_programme_projects",
+        "funding_statement",
+        "project_provenance_note",
+        "project_provenance_source",
         "child_bioprojects",
         "parent_projects",
     )
@@ -107,12 +131,20 @@ class NoteContext(MutableMapping[str, Any]):
     ) -> None:
         parent_projects = self.parent_projects or []
         if parent_projects:
-            formatted_list = [f"{proj['project_name']} ({proj['accession']})" for proj in parent_projects]
-            if len(formatted_list) == 1:
-                self.formatted_parent_projects = formatted_list[0]
-            elif len(formatted_list) == 2:
-                self.formatted_parent_projects = " and ".join(formatted_list)
+            explicit_accessions = {
+                project_accession(project)
+                for project in (self.funding_projects or []) + (self.programme_projects or [])
+            }
+            primary_projects, supplemental_projects = split_parent_projects(
+                parent_projects,
+                explicit_project_accessions=explicit_accessions,
+            )
+            if supplemental_projects:
+                self.supplemental_parent_projects = supplemental_projects
+                self.formatted_supplemental_parent_projects = format_project_list(supplemental_projects)
+            if primary_projects:
+                self.formatted_parent_projects = format_project_list(primary_projects)
             else:
-                self.formatted_parent_projects = ", ".join(formatted_list[:-1]) + " and " + formatted_list[-1]
+                self.formatted_parent_projects = default_text
             return
         self.formatted_parent_projects = default_text

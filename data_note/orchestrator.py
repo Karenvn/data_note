@@ -28,6 +28,7 @@ from .services import (
     NcbiDatasetsService,
     BoldResultService,
     OrganelleProvenanceService,
+    ProjectProvenanceService,
     RenderContextBuilder,
     RenderingService,
     SequencingService,
@@ -128,6 +129,7 @@ class DataNoteOrchestrator:
         self.server_data_service = ServerDataService()
         self.software_version_service = SoftwareVersionService()
         self.organelle_provenance_service = OrganelleProvenanceService()
+        self.project_provenance_service = ProjectProvenanceService()
         self.species_summary_service = SpeciesSummaryService()
         self.annotation_quality_workflow_service = AnnotationQualityWorkflowService(
             annotation_service=self.annotation_service,
@@ -201,6 +203,13 @@ class DataNoteOrchestrator:
         assemblies_type = assembly_bundle.assemblies_type
 
         tolid = context.tolid
+        note_data.base.update(
+            self.project_provenance_service.build_context(
+                bioproject,
+                tolid=tolid,
+                species=species,
+            )
+        )
         try:
             species_summary = self.species_summary_service.build_summary(
                 tax_id,

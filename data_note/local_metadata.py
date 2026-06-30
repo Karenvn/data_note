@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Protocol
+from collections.abc import Mapping
+from typing import Any, Protocol
 
 
 class LocalMetadataProvider(Protocol):
@@ -13,6 +14,15 @@ class LocalMetadataProvider(Protocol):
     ) -> str | None:
         ...
 
+    def lookup_project_provenance(
+        self,
+        bioproject: str,
+        *,
+        tolid: str | None = None,
+        species: str | None = None,
+    ) -> Mapping[str, Any] | None:
+        ...
+
 
 class NullLocalMetadataProvider:
     def lookup_jira_ticket(
@@ -22,4 +32,13 @@ class NullLocalMetadataProvider:
         tolid: str | None = None,
         assembly_name: str | None = None,
     ) -> str | None:
+        return None
+
+    def lookup_project_provenance(
+        self,
+        bioproject: str,
+        *,
+        tolid: str | None = None,
+        species: str | None = None,
+    ) -> Mapping[str, Any] | None:
         return None
